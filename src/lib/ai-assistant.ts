@@ -25,6 +25,34 @@ export function stripFallbackMarkers(content: string): string {
   return content.replace(/\[م:[^\]]+\]/g, "").trim();
 }
 
+export function parseAIResponse(raw: string, source: "primary" | "backup" | "fallback"): AIChatResult {
+  const clean = raw.trim();
+  const jsonMatch = clean.match(/\{[\s\S]*\}/);
+  if (jsonMatch) {
+    try {
+      const parsed = JSON.parse(jsonMatch[0]);
+      if (parsed && typeof parsed === "object") {
+        const messageStr = typeof parsed.message === "string" ? parsed.message : typeof parsed.text === "string" ? parsed.text : "";
+        if (messageStr) {
+          return {
+            message: stripFallbackMarkers(messageStr),
+            actions: Array.isArray(parsed.actions) ? parsed.actions : [],
+            source,
+          };
+        }
+      }
+    } catch {
+      // Fallback to plain text
+    }
+  }
+
+  return {
+    message: stripFallbackMarkers(clean),
+    actions: [],
+    source,
+  };
+}
+
 export interface ChatMessage {
   role: "user" | "assistant" | "system";
   content: string;
@@ -168,11 +196,7 @@ async function callGroq(messages: ChatMessage[]): Promise<AIChatResult | null> {
     const data = (await res.json()) as { choices: Array<{ message: { content: string } }> };
     const raw = data.choices[0]?.message?.content || "";
     if (!raw) return null;
-    return {
-      message: raw,
-      actions: [],
-      source: "primary",
-    };
+    return parseAIResponse(raw, "primary");
   } catch (err) {
     console.error("Groq AI error:", err);
     return null;
@@ -207,7 +231,7 @@ async function callPrimary(messages: ChatMessage[]): Promise<AIChatResult | null
     const data = (await res.json()) as { choices: Array<{ message: { content: string } }> };
     const raw = data.choices[0]?.message?.content || "";
     if (!raw) return null;
-    return { message: raw, actions: [], source: "primary" };
+    return parseAIResponse(raw, "primary");
   } catch (err) {
     console.error("Primary AI error:", err);
     return null;
@@ -244,7 +268,7 @@ async function callBackup(messages: ChatMessage[]): Promise<AIChatResult | null>
       const data = (await res.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
       const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
       if (!raw) continue;
-      return { message: raw, actions: [], source: "backup" };
+      return parseAIResponse(raw, "backup");
     } catch (err) {
       console.warn("Gemini key error:", err);
     }
@@ -666,7 +690,7 @@ async function callResolvedProvider(provider: ResolvedProvider, messages: ChatMe
       const data = await res.json();
       const raw = data.content?.[0]?.text || "";
       if (!raw) return null;
-      return { message: raw, actions: [], source: "primary" };
+      return parseAIResponse(raw, "primary");
 
     } else {
       const res = await fetch(`${provider.baseUrl}/chat/completions`, {
@@ -690,7 +714,7 @@ async function callResolvedProvider(provider: ResolvedProvider, messages: ChatMe
       const data = await res.json();
       const raw = data.choices?.[0]?.message?.content || "";
       if (!raw) return null;
-      return { message: raw, actions: [], source: "primary" };
+      return parseAIResponse(raw, "primary");
     }
   } catch (err) {
     console.error(`[callResolvedProvider] Provider ${provider.name} failed:`, err);

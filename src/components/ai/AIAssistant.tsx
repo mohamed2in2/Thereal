@@ -223,8 +223,24 @@ export function AIAssistant() {
           <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gradient-to-b from-purple-50/40 via-white to-white dark:from-slate-900 dark:via-slate-900 dark:to-slate-900">
             {messages.length === 0 && <div className="text-center text-gray-400 text-sm py-8">ابدأ الحوار...</div>}
             {messages.map((m, idx) => {
-              const actions: ChatAction[] = m.actions ? (() => { try { return JSON.parse(m.actions!); } catch { return []; } })() : [];
-              const cleanText = m.content.replace(/\[م:[^\]]+\]/g, "").trim();
+              let actions: ChatAction[] = m.actions ? (() => { try { return JSON.parse(m.actions!); } catch { return []; } })() : [];
+              let cleanText = m.content.replace(/\[م:[^\]]+\]/g, "").trim();
+              const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
+              if (jsonMatch) {
+                try {
+                  const parsed = JSON.parse(jsonMatch[0]);
+                  if (parsed && typeof parsed === "object") {
+                    if (typeof parsed.message === "string") {
+                      cleanText = parsed.message.replace(/\[م:[^\]]+\]/g, "").trim();
+                    }
+                    if (actions.length === 0 && Array.isArray(parsed.actions)) {
+                      actions = parsed.actions;
+                    }
+                  }
+                } catch {
+                  // Keep as plain text
+                }
+              }
               return (
                 <div key={idx} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
                   <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap leading-relaxed ${
