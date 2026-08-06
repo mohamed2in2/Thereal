@@ -198,6 +198,10 @@ class WhatsAppClientManager {
     this.qrCodeDataUrl = null;
   }
 
+  public async reconnect(): Promise<void> {
+    return this.forceReconnect();
+  }
+
   public async forceReconnect(): Promise<void> {
     logger.info("Force reconnecting WhatsApp socket");
     if (this.reconnectTimer) {
