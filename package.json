@@ -31,7 +31,7 @@
     "confbox": "^0.2.4",
     "firebase": "^12.14.0",
     "framer-motion": "^12.40.0",
-    "jimp": "^0.22.12",
+    "jimp": "^1.6.0",
     "jose": "^6.2.3",
     "libsql": "^0.5.29",
     "lightningcss": "^1.32.0",
