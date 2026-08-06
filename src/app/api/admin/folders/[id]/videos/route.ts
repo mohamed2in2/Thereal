@@ -8,7 +8,7 @@ import { getConfigNumber, getConfigNumberClamped } from "@/lib/config";
 import { triggerPlanSyncForCourse } from "@/lib/plan-lesson-matcher";
 
 const MAX_TITLE_LENGTH = 100;
-const VALID_PROVIDERS: VideoProvider[] = ["vdocipher", "bunny", "youtube"];
+const VALID_PROVIDERS: VideoProvider[] = ["vdocipher", "bunny", "youtube", "alasly"];
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {

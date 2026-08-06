@@ -4,8 +4,9 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { SecurePlayer } from "@/components/ui/SecurePlayer";
+import { VideoGuard } from "@/components/ui/VideoGuard";
 
-type VideoProvider = "vdocipher" | "bunny" | "youtube";
+type VideoProvider = "vdocipher" | "bunny" | "youtube" | "alasly";
 
 interface WatchSessionData {
   sessionId: string;
@@ -495,16 +496,23 @@ export default function VideoWatchPage() {
               </button>
             </div>
 
-            {/* The player — provider-aware, watermark-safe in fullscreen */}
+            {/* The player — provider-aware, watermark-safe in fullscreen, protected by VideoGuard */}
             {iframeSrc && resumeLoaded ? (
-              <SecurePlayer
-                embedUrl={iframeSrc}
-                title={session.video.title}
-                watermark={wmLabel}
-                provider={session.video.videoProvider}
-                startSeconds={resumeSeconds}
-                onProgress={saveProgress}
-              />
+              <VideoGuard
+                studentName={wmLabel}
+                studentPhone={wmLabel}
+                videoId={videoId}
+                onExit={handleReturn}
+              >
+                <SecurePlayer
+                  embedUrl={iframeSrc}
+                  title={session.video.title}
+                  watermark={wmLabel}
+                  provider={session.video.videoProvider}
+                  startSeconds={resumeSeconds}
+                  onProgress={saveProgress}
+                />
+              </VideoGuard>
             ) : (
               <div style={{ paddingTop: "56.25%" }} className="relative bg-slate-900">
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-slate-900">
@@ -549,13 +557,15 @@ export default function VideoWatchPage() {
                     ? "border-orange-500/20 bg-orange-500/10 text-orange-400"
                     : session.video.videoProvider === "youtube"
                     ? "border-red-500/20 bg-red-500/10 text-red-400"
+                    : session.video.videoProvider === "alasly"
+                    ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
                     : "border-blue-500/20 bg-blue-500/10 text-blue-400"
                 }`}>
                   <span>
-                    {session.video.videoProvider === "bunny" ? "🐰" : session.video.videoProvider === "youtube" ? "▶️" : "🔐"}
+                    {session.video.videoProvider === "bunny" ? "🐰" : session.video.videoProvider === "youtube" ? "▶️" : session.video.videoProvider === "alasly" ? "🛡️" : "🔐"}
                   </span>
                   <span>
-                    {session.video.videoProvider === "bunny" ? "Bunny" : session.video.videoProvider === "youtube" ? "YouTube" : "VdoCipher"}
+                    {session.video.videoProvider === "bunny" ? "Bunny" : session.video.videoProvider === "youtube" ? "YouTube" : session.video.videoProvider === "alasly" ? "Alasly" : "VdoCipher"}
                   </span>
                 </div>
               </div>

@@ -1209,11 +1209,12 @@ export default function TeacherDashboardPage() {
                           <input type="text" value={newVideo.title} onChange={(e) => setNewVideo({ ...newVideo, title: e.target.value })} placeholder="عنوان الفيديو" className={input} />
 
                           {/* Provider selector */}
-                          <div className="grid grid-cols-3 gap-2">
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                             {([
-                              { value: "vdocipher", label: "VdoCipher", badge: "محمي" },
+                              { value: "vdocipher", label: "VdoCipher", badge: "DRM" },
                               { value: "bunny", label: "Bunny", badge: "CDN" },
                               { value: "youtube", label: "YouTube", badge: "خاص" },
+                              { value: "alasly", label: "منصة الأصلي", badge: "محمي" },
                             ] as const).map(({ value, label: pl, badge }) => {
                               const active = newVideo.videoProvider === value;
                               return (
@@ -1239,6 +1240,7 @@ export default function TeacherDashboardPage() {
                               {newVideo.videoProvider === "vdocipher" && "VdoCipher Video ID"}
                               {newVideo.videoProvider === "bunny" && "Bunny Stream Video GUID"}
                               {newVideo.videoProvider === "youtube" && "YouTube Video ID (11 حرف)"}
+                              {newVideo.videoProvider === "alasly" && "معرف درس منصة الأصلي (Alasly Lesson ID)"}
                             </label>
                             <input
                               type="text"

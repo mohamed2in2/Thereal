@@ -69,6 +69,7 @@ model User {
   overallIQ           Int                      @default(1000)
   folderPurchases     FolderPurchase[]
   videoPurchases      VideoPurchase[]
+  securityViolations  SecurityViolation[]
 
   // ── Plans (الخطط الدراسية) System Reverse Relations ──
   planEnrollments         PlanEnrollment[]
@@ -1429,6 +1430,24 @@ model ParentAccessLog {
 
   @@index([studentId, accessedAt])
   @@index([ip])
+}
+
+/// Video Anti-Piracy Security Violation Log
+model SecurityViolation {
+  id        String   @id @default(cuid())
+  studentId String
+  videoId   String?
+  type      String   // DEVTOOLS | SCREENSHOT | SCREEN_RECORD | TAB_SWITCH | CONTEXT_MENU
+  details   String?
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  student User @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+  @@index([type])
+  @@index([createdAt])
 }
 
 

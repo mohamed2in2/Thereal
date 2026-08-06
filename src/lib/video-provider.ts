@@ -6,8 +6,9 @@
 import { getVdoCipherOtp } from "./vdocipher";
 import { getBunnyEmbedUrl } from "./bunny";
 import { getYouTubeEmbedUrl } from "./youtube";
+import { getAlaslyPlaybackToken } from "./alasly";
 
-export type VideoProvider = "vdocipher" | "bunny" | "youtube";
+export type VideoProvider = "vdocipher" | "bunny" | "youtube" | "alasly";
 
 export interface VideoEmbedResult {
   embedUrl: string;
@@ -35,6 +36,10 @@ export async function resolveEmbedUrl(video: {
   }
 
   switch (provider) {
+    case "alasly": {
+      const result = await getAlaslyPlaybackToken(id);
+      return { embedUrl: result.embedUrl, provider, signed: true, expiresInSeconds: result.expiresInSeconds };
+    }
     case "bunny": {
       const result = await getBunnyEmbedUrl(id);
       return { embedUrl: result.embedUrl, provider, signed: result.signed, expiresInSeconds: result.expiresInSeconds };
@@ -55,6 +60,7 @@ export const PROVIDER_LABELS: Record<VideoProvider, string> = {
   vdocipher: "VdoCipher",
   bunny: "Bunny Stream",
   youtube: "YouTube Private",
+  alasly: "منصة الأصلي (Alasly Protected)",
 };
 
 /** Validates a provider ID format per provider rules */
@@ -62,6 +68,9 @@ export function validateProviderId(provider: VideoProvider, id: string): string 
   if (!id || !id.trim()) return "معرف الفيديو مطلوب";
 
   switch (provider) {
+    case "alasly":
+      if (!/^[a-z0-9-]+$/i.test(id)) return "معرف درس منصة الأصلي يجب أن يكون UUID صالحاً";
+      break;
     case "vdocipher":
       if (!/^[a-z0-9-]+$/i.test(id)) return "معرف VdoCipher يحتوي على أحرف وأرقام وشرطات فقط";
       break;
