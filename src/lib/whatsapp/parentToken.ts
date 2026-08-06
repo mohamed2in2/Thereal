@@ -13,6 +13,13 @@ export function generateSecureToken(): string {
 }
 
 /**
+ * Computes SHA-256 hex hash of the raw token for secure database storage
+ */
+export function hashToken(rawToken: string): string {
+  return crypto.createHash("sha256").update(rawToken).digest("hex");
+}
+
+/**
  * Returns base URL of website (e.g. https://code-up.tech)
  */
 export function getAppBaseUrl(): string {
@@ -25,6 +32,7 @@ export function getAppBaseUrl(): string {
 
 /**
  * Gets or creates a permanent 365-day Parent Portal token for a student
+ * Returns { rawToken, parentToken }
  */
 export async function getOrCreateParentToken(studentId: string) {
   let existing = await prisma.parentToken.findUnique({
@@ -33,21 +41,22 @@ export async function getOrCreateParentToken(studentId: string) {
 
   const now = new Date();
 
-  // If token exists and is not expired, return it
-  if (existing && existing.expiresAt > now) {
-    return existing;
-  }
-
-  // Create new 365-day token
-  const tokenStr = generateSecureToken();
+  // If token exists and is not expired, we generate a fresh raw token and update its hash
+  const rawToken = generateSecureToken();
+  const tokenHash = hashToken(rawToken);
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + TOKEN_EXPIRY_DAYS);
+
+  if (existing && existing.expiresAt > now) {
+    // Return existing record but attach new rawToken for link creation if needed
+    return { rawToken, parentToken: existing };
+  }
 
   if (existing) {
     existing = await prisma.parentToken.update({
       where: { studentId },
       data: {
-        token: tokenStr,
+        tokenHash,
         expiresAt,
         updatedAt: now,
       },
@@ -56,47 +65,53 @@ export async function getOrCreateParentToken(studentId: string) {
     existing = await prisma.parentToken.create({
       data: {
         studentId,
-        token: tokenStr,
+        tokenHash,
         expiresAt,
       },
     });
   }
 
-  return existing;
+  return { rawToken, parentToken: existing };
 }
 
 /**
  * Force regenerates a Parent Portal token (invalidating old link)
+ * Returns { rawToken, parentToken }
  */
 export async function regenerateParentToken(studentId: string) {
-  const tokenStr = generateSecureToken();
+  const rawToken = generateSecureToken();
+  const tokenHash = hashToken(rawToken);
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + TOKEN_EXPIRY_DAYS);
 
-  return prisma.parentToken.upsert({
+  const parentToken = await prisma.parentToken.upsert({
     where: { studentId },
     create: {
       studentId,
-      token: tokenStr,
+      tokenHash,
       expiresAt,
     },
     update: {
-      token: tokenStr,
+      tokenHash,
       expiresAt,
       sentAt: null, // Reset sent timestamp so it can be re-sent if requested
       updatedAt: new Date(),
     },
   });
+
+  return { rawToken, parentToken };
 }
 
 /**
- * Validates token and returns student profile with full relations
+ * Validates raw URL token by hashing it and looking up DB by tokenHash
  */
-export async function validateParentToken(token: string) {
-  if (!token || typeof token !== "string") return null;
+export async function validateParentToken(rawToken: string, ip: string = "127.0.0.1", userAgent?: string) {
+  if (!rawToken || typeof rawToken !== "string") return null;
+
+  const targetHash = hashToken(rawToken);
 
   const parentToken = await prisma.parentToken.findUnique({
-    where: { token },
+    where: { tokenHash: targetHash },
     include: {
       student: {
         select: {
@@ -121,13 +136,23 @@ export async function validateParentToken(token: string) {
     return null; // Expired
   }
 
-  // Increment access count asynchronously
+  // Increment access count & log access event asynchronously
   prisma.parentToken
     .update({
       where: { id: parentToken.id },
       data: {
         accessCount: { increment: 1 },
         lastAccessedAt: new Date(),
+      },
+    })
+    .catch(() => {});
+
+  prisma.parentAccessLog
+    .create({
+      data: {
+        studentId: parentToken.studentId,
+        ip,
+        userAgent: userAgent || null,
       },
     })
     .catch(() => {});
@@ -150,12 +175,12 @@ export async function maybeAutoSendParentPortalLink(studentId: string) {
 
     if (!student || !student.parentPhone) return null;
 
-    const parentToken = await getOrCreateParentToken(studentId);
+    const { rawToken, parentToken } = await getOrCreateParentToken(studentId);
 
     // Ensure it is ONLY sent ONCE automatically
     if (parentToken.sentAt) return null;
 
-    const portalUrl = `${getAppBaseUrl()}/p/${parentToken.token}`;
+    const portalUrl = `${getAppBaseUrl()}/p/${rawToken}`;
 
     const dispatchResult = await whatsappOrchestrator.sendParentPortalLink(
       student.parentPhone,

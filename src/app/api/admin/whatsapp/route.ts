@@ -161,8 +161,8 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "الطالب أو رقم ولي الأمر غير موجود" }, { status: 400 });
       }
 
-      const tokenObj = await regenerateParentToken(studentId);
-      const link = `${getAppBaseUrl()}/p/${tokenObj.token}`;
+      const { rawToken } = await regenerateParentToken(studentId);
+      const link = `${getAppBaseUrl()}/p/${rawToken}`;
 
       const res = await whatsappOrchestrator.sendParentPortalLink(student.parentPhone, student.name, link);
 

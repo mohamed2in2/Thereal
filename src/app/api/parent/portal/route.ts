@@ -23,8 +23,9 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "رابط ولي الأمر غير صالح" }, { status: 400 });
     }
 
-    // 2. Validate Token
-    const parentToken = await validateParentToken(token);
+    // 2. Validate Token (Hashed DB lookup + Audit log)
+    const userAgent = req.headers.get("user-agent") || undefined;
+    const parentToken = await validateParentToken(token, ip, userAgent);
     if (!parentToken || !parentToken.student) {
       return NextResponse.json({ error: "رابط ولي الأمر غير صالح أو منتهي الصلاحية" }, { status: 404 });
     }

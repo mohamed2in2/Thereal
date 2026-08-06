@@ -243,8 +243,13 @@ export function WhatsAppSection() {
                     <p className="text-xs text-slate-400">محرك إرسال مباشر وسريع عبر واتساب ويب</p>
                   </div>
                 </div>
-                <span className={`text-xs px-3 py-1 rounded-full font-bold border ${baileys?.connected ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-400" : "bg-rose-500/15 border-rose-500/30 text-rose-400"}`}>
-                  {baileys?.statusText || "جاري التقييم..."}
+                <span className={`text-xs px-3 py-1 rounded-full font-bold border flex items-center gap-1.5 ${
+                  baileys?.connected
+                    ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-400"
+                    : "bg-rose-500/15 border-rose-500/30 text-rose-400"
+                }`}>
+                  <span>{baileys?.connected ? "🟢 Healthy" : "🔴 Offline"}</span>
+                  <span className="text-[11px] text-slate-300">({baileys?.statusText || "جاري التقييم..."})</span>
                 </span>
               </div>
 
@@ -313,8 +318,12 @@ export function WhatsAppSection() {
                     <p className="text-xs text-slate-400">واجهة ميتا الرسمية لإرسال القوالب والأكواد الموثوقة</p>
                   </div>
                 </div>
-                <span className={`text-xs px-3 py-1 rounded-full font-bold border ${meta?.connected ? "bg-sky-500/15 border-sky-500/30 text-sky-400" : "bg-amber-500/15 border-amber-500/30 text-amber-400"}`}>
-                  {meta?.statusText || "معطّل"}
+                <span className={`text-xs px-3 py-1 rounded-full font-bold border flex items-center gap-1.5 ${
+                  meta?.connected
+                    ? "bg-sky-500/15 border-sky-500/30 text-sky-400"
+                    : "bg-amber-500/15 border-amber-500/30 text-amber-400"
+                }`}>
+                  <span>{meta?.connected ? "🟢 Healthy" : "🔴 Pending Credentials (.env)"}</span>
                 </span>
               </div>
 
@@ -330,7 +339,10 @@ export function WhatsAppSection() {
                     style={{ width: `${metaPercent}%` }}
                   />
                 </div>
-                <p className="text-[11px] text-slate-400 text-left dir-ltr">{metaPercent}% used today</p>
+                <div className="flex items-center justify-between text-[11px] text-slate-400">
+                  <span>المتبقي اليوم: {metaLimit - metaTotalToday} رسالة</span>
+                  <span className="dir-ltr">{metaPercent}% used today</span>
+                </div>
               </div>
 
               {/* Official Meta Message Categories Breakdown */}
@@ -589,7 +601,7 @@ export function WhatsAppSection() {
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-300">انقر لإضافة المتغيرات المتاحة:</label>
                 <div className="flex flex-wrap gap-2">
-                  {["{{studentName}}", "{{otp}}", "{{minutes}}", "{{school}}"].map((v) => (
+                  {["{{studentName}}", "{{otp}}", "{{minutes}}", "{{expirationTime}}", "{{school}}", "{{platform}}", "{{supportNumber}}"].map((v) => (
                     <button
                       key={v}
                       type="button"

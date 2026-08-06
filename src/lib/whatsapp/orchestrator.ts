@@ -99,7 +99,13 @@ class WhatsAppOrchestrator {
   /**
    * Format OTP text using DB template or fallback
    */
-  public async formatOTP(studentName: string, otp: string, minutes: number = 5, school: string = "Code-UP"): Promise<string> {
+  public async formatOTP(
+    studentName: string,
+    otp: string,
+    minutes: number = 5,
+    school: string = "Code-UP",
+    supportNumber: string = "01012345678"
+  ): Promise<string> {
     const config = await this.getConfig();
     let template = config.baileysOtpTemplate || DEFAULT_OTP_TEMPLATE;
 
@@ -107,7 +113,10 @@ class WhatsAppOrchestrator {
       .replace(/{{studentName}}/g, studentName || "عزيزي الطالب")
       .replace(/{{otp}}/g, otp)
       .replace(/{{minutes}}/g, String(minutes))
-      .replace(/{{school}}/g, school);
+      .replace(/{{expirationTime}}/g, `${minutes} دقائق`)
+      .replace(/{{school}}/g, school)
+      .replace(/{{platform}}/g, school)
+      .replace(/{{supportNumber}}/g, supportNumber);
   }
 
   /**

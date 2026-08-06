@@ -1402,12 +1402,12 @@ model WhatsAppDailyCounter {
   @@unique([date, provider])
 }
 
-/// Cryptographically Secure 365-Day Permanent Parent Portal Token
+/// Cryptographically Secure 365-Day Permanent Parent Portal Token (SHA-256 Hashed)
 model ParentToken {
   id             String    @id @default(cuid())
   studentId      String    @unique
   student        User      @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  token          String    @unique // 128-bit entropy cryptographically random token
+  tokenHash      String    @unique // SHA-256 hex hash of the raw URL token
   expiresAt      DateTime  // 365 days from creation
   sentAt         DateTime? // Timestamp when sent via WhatsApp
   accessCount    Int       @default(0)
@@ -1415,8 +1415,20 @@ model ParentToken {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  @@index([token])
+  @@index([tokenHash])
   @@index([studentId])
+}
+
+/// Parent Portal Access Audit Log
+model ParentAccessLog {
+  id         String   @id @default(cuid())
+  studentId  String
+  ip         String
+  userAgent  String?
+  accessedAt DateTime @default(now())
+
+  @@index([studentId, accessedAt])
+  @@index([ip])
 }
 
 
