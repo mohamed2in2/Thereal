@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
     const homeworkSubmissions = await prisma.homeworkSubmission.findMany({
       where: { studentId },
       include: { homework: { select: { title: true } } },
-      orderBy: { createdAt: "desc" },
+      orderBy: { completedAt: "desc" },
       take: 10,
     });
 
