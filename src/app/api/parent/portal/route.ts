@@ -36,15 +36,15 @@ export async function GET(req: NextRequest) {
     // 3. Fetch Quiz & Exam Results
     const quizResults = await prisma.quizResult.findMany({
       where: { studentId },
-      include: { quiz: { select: { title: true, maxScore: true } } },
+      include: { quiz: { select: { title: true } } },
       orderBy: { completedAt: "desc" },
       take: 10,
     });
 
     const dailyExamResults = await prisma.dailyExamResult.findMany({
       where: { studentId },
-      include: { exam: { select: { title: true, maxScore: true } } },
-      orderBy: { createdAt: "desc" },
+      include: { exam: { select: { title: true } } },
+      orderBy: { completedAt: "desc" },
       take: 10,
     });
 
@@ -69,13 +69,15 @@ export async function GET(req: NextRequest) {
     let totalMaxSum = 0;
 
     quizResults.forEach((q) => {
+      const maxScore = q.totalQ || 10;
       totalScoreSum += q.score;
-      totalMaxSum += q.quiz?.maxScore || 100;
+      totalMaxSum += maxScore;
     });
 
     dailyExamResults.forEach((e) => {
+      const maxScore = e.totalQ || 10;
       totalScoreSum += e.score;
-      totalMaxSum += e.exam?.maxScore || 100;
+      totalMaxSum += maxScore;
     });
 
     const overallAveragePercent = totalMaxSum > 0 ? Math.round((totalScoreSum / totalMaxSum) * 100) : 92;
@@ -118,22 +120,30 @@ export async function GET(req: NextRequest) {
         late: 0,
       },
       recentExams: [
-        ...quizResults.map((q) => ({
-          title: q.quiz?.title || "اختبار تفاعلي",
-          score: q.score,
-          maxScore: q.quiz?.maxScore || 100,
-          percent: Math.round((q.score / (q.quiz?.maxScore || 100)) * 100),
-          status: Math.round((q.score / (q.quiz?.maxScore || 100)) * 100) >= 85 ? "🟢" : Math.round((q.score / (q.quiz?.maxScore || 100)) * 100) >= 65 ? "🟡" : "🔴",
-          date: q.completedAt.toISOString().split("T")[0],
-        })),
-        ...dailyExamResults.map((e) => ({
-          title: e.exam?.title || "امتحان لوحة الشرف",
-          score: e.score,
-          maxScore: e.exam?.maxScore || 100,
-          percent: Math.round((e.score / (e.exam?.maxScore || 100)) * 100),
-          status: Math.round((e.score / (e.exam?.maxScore || 100)) * 100) >= 85 ? "🟢" : Math.round((e.score / (e.exam?.maxScore || 100)) * 100) >= 65 ? "🟡" : "🔴",
-          date: e.createdAt.toISOString().split("T")[0],
-        })),
+        ...quizResults.map((q) => {
+          const max = q.totalQ || 10;
+          const pct = Math.round((q.score / max) * 100);
+          return {
+            title: q.quiz?.title || "اختبار تفاعلي",
+            score: q.score,
+            maxScore: max,
+            percent: pct,
+            status: pct >= 85 ? "🟢" : pct >= 65 ? "🟡" : "🔴",
+            date: q.completedAt.toISOString().split("T")[0],
+          };
+        }),
+        ...dailyExamResults.map((e) => {
+          const max = e.totalQ || 10;
+          const pct = Math.round((e.score / max) * 100);
+          return {
+            title: e.exam?.title || "امتحان لوحة الشرف",
+            score: e.score,
+            maxScore: max,
+            percent: pct,
+            status: pct >= 85 ? "🟢" : pct >= 65 ? "🟡" : "🔴",
+            date: e.completedAt.toISOString().split("T")[0],
+          };
+        }),
       ].slice(0, 8),
       teacherNotes: feedbacks.map((f) => ({
         teacherName: f.teacher?.name || "المعلم",
