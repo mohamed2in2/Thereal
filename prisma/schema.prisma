@@ -41,6 +41,7 @@ model User {
   verificationStatus  String                   @default("UNVERIFIED") // "VERIFIED" | "WAITING_FOR_OTP" | "UNVERIFIED"
   createdAt           DateTime                 @default(now())
   updatedAt           DateTime                 @updatedAt
+  parentToken         ParentToken?
   otpQueueItems       OtpQueueItem[]
   referralsSent       Referral[]               @relation("ReferralsSent")
   referralReceived    Referral?                @relation("ReferralReceived")
@@ -1337,6 +1338,87 @@ model AuditLog {
   @@index([action, createdAt])
   @@index([ip, createdAt])
 }
+
+/// Dynamic Configuration for WhatsApp Dispatch & Parent Link Settings
+model WhatsAppConfig {
+  id                        String   @id @default("global")
+  deliveryMode              String   @default("baileys_primary") // "baileys_only" | "official_only" | "baileys_primary" | "official_primary"
+  baileysOtpTemplate        String?  // Editable template with {{studentName}}, {{otp}}, {{minutes}}, {{school}}
+  autoSendParentPortal      Boolean  @default(true)
+  requireParentVerification Boolean  @default(false)
+  updatedAt                 DateTime @updatedAt
+}
+
+/// Outgoing WhatsApp Message Audit Log
+model WhatsAppLog {
+  id             String   @id @default(cuid())
+  recipient      String   // E.164 phone
+  provider       String   // "BAILEYS" | "OFFICIAL_API"
+  messageType    String   // "OTP" | "PARENT_LINK" | "NOTIFICATION" | "ANNOUNCEMENT" | "CUSTOM"
+  templateName   String?
+  content        String
+  status         String   // "DELIVERED" | "FAILED" | "PENDING"
+  retries        Int      @default(0)
+  deliveryTimeMs Int?
+  errorMessage   String?
+  createdAt      DateTime @default(now())
+
+  @@index([recipient])
+  @@index([provider, createdAt])
+  @@index([status, createdAt])
+  @@index([messageType])
+}
+
+/// Audit Log for System WhatsApp Configuration Changes
+model WhatsAppConfigLog {
+  id        String   @id @default(cuid())
+  adminId   String
+  adminName String
+  settingKey String
+  oldValue  String?
+  newValue  String?
+  createdAt DateTime @default(now())
+
+  @@index([adminId])
+  @@index([settingKey, createdAt])
+}
+
+/// Daily Message Counters Resetting at Midnight
+model WhatsAppDailyCounter {
+  id              String   @id @default(cuid())
+  date            String   // "YYYY-MM-DD"
+  provider        String   // "BAILEYS" | "OFFICIAL_API"
+  totalCount      Int      @default(0)
+  deliveredCount  Int      @default(0)
+  failedCount     Int      @default(0)
+  pendingCount    Int      @default(0)
+  otpCount        Int      @default(0)
+  parentCount     Int      @default(0)
+  authCount       Int      @default(0) // Official API auth category
+  utilityCount    Int      @default(0) // Official API utility category
+  marketingCount  Int      @default(0) // Official API marketing category
+  updatedAt       DateTime @updatedAt
+
+  @@unique([date, provider])
+}
+
+/// Cryptographically Secure 365-Day Permanent Parent Portal Token
+model ParentToken {
+  id             String    @id @default(cuid())
+  studentId      String    @unique
+  student        User      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  token          String    @unique // 128-bit entropy cryptographically random token
+  expiresAt      DateTime  // 365 days from creation
+  sentAt         DateTime? // Timestamp when sent via WhatsApp
+  accessCount    Int       @default(0)
+  lastAccessedAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([token])
+  @@index([studentId])
+}
+
 
 
 
