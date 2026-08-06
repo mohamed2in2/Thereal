@@ -443,7 +443,7 @@ function fallbackResponse(
 
   const isLove = /بحبك|أحبك|love you|i love|you are the best|أنت الأفضل|الأحسن|أحسن|تبقى كويس/i.test(i);
 
-  const isAboutBot = /مين أنت|من أنت|who are you|what are you|بتعمل ايه|بتعمل إيه|ايه دورك|إيه دورك|عنك|عن نفسك|تعرف.*نفسك|about you/i.test(i);
+  const isAboutBot = /اسمك|مين أنت|من أنت|من انت|مين انت|مين حضرتك|who are you|what is your name|your name|what are you|بتعمل ايه|بتعمل إيه|ايه دورك|إيه دورك|عنك|عن نفسك|تعرف.*نفسك|about you|شو اسمك|إيش اسمك/i.test(i);
 
   const isHelp = !isPerf && !isPlan && !isEdit && !isComplaint && !isStatus
     && (/ساعد|مساعدة|help|assist|support|محتاج|محتاجة|ممكن|قدرني|عايز حاجة|أريد|ابدأ|start/i.test(i) || isGreeting || isMorning || isEvening);
@@ -476,14 +476,14 @@ function fallbackResponse(
     message = `وأنا أكثر! 😄💙 أنا هنا عشانك يا ${nm}. تعالى نذاكر؟\n\nاكتب 2 وأنا هجيبلك خطتك.`;
 
   } else if (isAboutBot) {
-    message = `أنا مرشد Code-UP الذكي! 🤖\n\n` +
-      `دوري أساعدك في:\n` +
-      `• 📊 تحليل أدائك ودرجاتك\n` +
-      `• 📋 خطة مذاكرة مخصصة ليك\n` +
-      `• ✏️ طلبات تعديل الدرجات\n` +
-      `• 📢 تسجيل شكاوى للمعلم\n` +
-      `• 📋 متابعة طلباتك\n\n` +
-      `بشتغل 24/7 بدون تعب! 😄 إيه اللي محتاجه؟`;
+    message = `أنا **المرشد الذكي** 🌟 على منصة Code-UP!\n\n` +
+      `مساعدك الشخصي في المذاكرة والدراسة، ودوري أساعدك في:\n` +
+      `• 📊 تحليل أدائك ودرجاتك ونقاط ضعفك\n` +
+      `• 📋 خطة تدريبية مخصصة ليك\n` +
+      `• ✏️ طلبات تعديل درجات الكويزات\n` +
+      `• 📢 تسجيل شكاوى للمعلم أو المحتوى\n` +
+      `• 📋 متابعة حالة طلباتك بانتظام\n\n` +
+      `قولي إيه اللي محتاجه يا ${nm}؟ 😊`;
 
   } else if (isTired) {
     const motivation = [
