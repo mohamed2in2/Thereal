@@ -188,7 +188,22 @@ export async function POST(req: NextRequest) {
       context = await buildStudentContext(session.id);
     } catch (ctxErr) {
       console.error("[chat/route] buildStudentContext failed:", ctxErr);
-      return NextResponse.json({ message: "يرجى المحاولة مرة أخرى لاحقاً.", actions: [], source: "error" });
+      context = {
+        profile: {
+          id: session.id,
+          name: session.name || "الطالب",
+          email: session.email || "",
+          age: null,
+          educationalStage: null,
+          phone: null,
+        },
+        courses: [],
+        overallStats: { totalCourses: 0, averageScore: 0, totalQuizzesTaken: 0, totalVideosWatched: 0 },
+        weakAreas: [],
+        aiInsights: [],
+        recentFeedback: [],
+        libraryProgress: [],
+      };
     }
 
     // Get conversation history (last 15 messages)
@@ -197,7 +212,8 @@ export async function POST(req: NextRequest) {
       orderBy: { createdAt: "desc" },
       take: 15,
       select: { id: true, role: true, content: true },
-    });
+    }).catch(() => []);
+
     const chatHistory: ChatMessage[] = history
       .reverse()
       .map((h) => ({
@@ -207,66 +223,71 @@ export async function POST(req: NextRequest) {
 
     // Build notifications from recently resolved requests
     const notifItems: string[] = [];
-    const recentGrades = await prisma.gradeAdjustmentRequest.findMany({
-      where: { studentId: session.id, status: { in: ["approved", "rejected"] }, reviewedAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
-      include: { quiz: { select: { title: true } } },
-      orderBy: { reviewedAt: "desc" },
-      take: 3,
-    });
-    const recentTickets = await prisma.supportTicket.findMany({
-      where: { studentId: session.id, status: { in: ["resolved", "closed"] }, updatedAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
-      orderBy: { updatedAt: "desc" },
-      take: 3,
-    });
-    for (const r of recentGrades) {
-      notifItems.push(`تعديل درجة "${r.quiz.title}": ${r.status === "approved" ? "مقبول ✅" : "مرفوض ❌"}${r.teacherNotes ? ` - ${r.teacherNotes}` : ""}`);
-    }
-    for (const t of recentTickets) {
-      notifItems.push(`"${t.title}": ${t.status === "resolved" ? "تم الحل ✅" : "مغلق"}${t.resolution ? ` - ${t.resolution}` : ""}`);
-    }
+    try {
+      const recentGrades = await prisma.gradeAdjustmentRequest.findMany({
+        where: { studentId: session.id, status: { in: ["approved", "rejected"] }, reviewedAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
+        include: { quiz: { select: { title: true } } },
+        orderBy: { reviewedAt: "desc" },
+        take: 3,
+      });
+      const recentTickets = await prisma.supportTicket.findMany({
+        where: { studentId: session.id, status: { in: ["resolved", "closed"] }, updatedAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
+        orderBy: { updatedAt: "desc" },
+        take: 3,
+      });
+      for (const r of recentGrades) {
+        notifItems.push(`تعديل درجة "${r.quiz.title}": ${r.status === "approved" ? "مقبول ✅" : "مرفوض ❌"}${r.teacherNotes ? ` - ${r.teacherNotes}` : ""}`);
+      }
+      for (const t of recentTickets) {
+        notifItems.push(`"${t.title}": ${t.status === "resolved" ? "تم الحل ✅" : "مغلق"}${t.resolution ? ` - ${t.resolution}` : ""}`);
+      }
+    } catch { /* ignore notification errors */ }
+
     const notifications = notifItems.length > 0 ? `تحديثات طلباتك:\n${notifItems.map((n) => `• ${n}`).join("\n")}` : undefined;
 
     // Save user message
-    await prisma.aIConversation.create({
-      data: {
-        studentId: session.id,
-        role: "user",
-        content: message,
-      },
-    });
+    try {
+      await prisma.aIConversation.create({
+        data: {
+          studentId: session.id,
+          role: "user",
+          content: message,
+        },
+      });
+    } catch { /* ignore save failure */ }
 
-    // Get AI response — try AIEngine first, fallback to chatWithAI if needed
+    // Get AI response — try chatWithAI first (runs Gemini -> Anthropic/DeepSeek -> smart fallbackResponse)
     let result;
     try {
-      // First attempt: full AIEngine pipeline (DeepSeek -> Gemini Pool -> Groq)
-      const { AIEngine } = await import("@/ai/AIEngine");
-      const engine = new AIEngine();
-      const engineRes = await engine.processRequest({
-        userMessage: message,
-        studentId: session.id,
-        subject: context?.courses[0]?.subject || "عام",
-        grade: "3",
-      });
-
-      const resText = engineRes.formattedResponse?.renderedContent || engineRes.formattedResponse?.rawContent;
-
-      if (engineRes && engineRes.success && resText) {
-        result = {
-          message: resText,
-          actions: [] as AIAction[],
-          source: (engineRes.telemetry?.provider || "primary") as "primary" | "backup" | "fallback",
-        };
-      } else {
-        result = await chatWithAI(message, chatHistory, context!, notifications);
-      }
-    } catch (aiErr) {
-      console.error("[chat/route] AIEngine threw unexpectedly, falling back to chatWithAI:", aiErr);
+      result = await chatWithAI(message, chatHistory, context, notifications);
+    } catch (chatErr) {
+      console.error("[chat/route] chatWithAI threw, falling back to AIEngine:", chatErr);
       try {
-        result = await chatWithAI(message, chatHistory, context!, notifications);
-      } catch (fallbackErr) {
-        console.error("[chat/route] chatWithAI also threw:", fallbackErr);
+        const { AIEngine } = await import("@/ai/AIEngine");
+        const engine = new AIEngine();
+        const engineRes = await engine.processRequest({
+          userMessage: message,
+          studentId: session.id,
+          subject: context?.courses?.[0]?.subject || "عام",
+          grade: "3",
+        });
+        const resText = engineRes?.formattedResponse?.renderedContent || engineRes?.formattedResponse?.rawContent;
+        if (engineRes && engineRes.success && resText) {
+          result = {
+            message: resText,
+            actions: [] as AIAction[],
+            source: (engineRes.telemetry?.provider || "primary") as "primary" | "backup" | "fallback",
+          };
+        } else {
+          result = {
+            message: "أهلاً بيك! أنا مرشدك الذكي 🌟 قولي إيه اللي محتاجه وسيتم مساعدتك فوراً!",
+            actions: [] as AIAction[],
+            source: "fallback" as const,
+          };
+        }
+      } catch {
         result = {
-          message: "عذراً، حدث خطأ مؤقت. حاول مرة أخرى.\n\n[م:menu]",
+          message: "أهلاً بيك! أنا مرشدك الذكي 🌟 قولي إيه اللي محتاجه وسيتم مساعدتك فوراً!",
           actions: [] as AIAction[],
           source: "fallback" as const,
         };
@@ -353,10 +374,11 @@ export async function POST(req: NextRequest) {
     });
   } catch (err) {
     console.error("AI chat error:", err instanceof Error ? err.stack : err);
-    return NextResponse.json(
-      { error: "حدث خطأ أثناء معالجة الطلب" },
-      { status: 500 }
-    );
+    return NextResponse.json({
+      message: "أهلاً بيك! أنا مرشدك الذكي على Code-UP 🌟\n\nأنا هنا لمساعدتك! اختار خطة تدريبية أو حلل أدائك أو اسألني أي حاجة.",
+      actions: [],
+      source: "fallback",
+    });
   }
 }
 

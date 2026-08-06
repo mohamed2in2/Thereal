@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "يجب تسجيل الدخول أولاً لشراء الاشتراك بالرصيد" }, { status: 401 });
     }
 
-    const { teacherId, planType } = await req.json().catch(() => ({}));
+    const { teacherId, planType, languageTrack } = await req.json().catch(() => ({}));
 
     if (!teacherId || typeof teacherId !== "string") {
       return NextResponse.json({ error: "معرف الأستاذ مطلوب" }, { status: 400 });
@@ -29,19 +29,31 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "لم يتم العثور على الأستاذ" }, { status: 400 });
     }
 
-    const priceMap: Record<string, number | null> = {
-      monthly: profile.priceMonthly,
-      termly: profile.priceTermly,
-      yearly: profile.priceYearly,
+    // Default prices if not set: 1 month = 200, 3 months = 600, 6 months = 1200
+    const basePriceMap: Record<string, number> = {
+      monthly: profile.priceMonthly ?? 200,
+      termly: profile.priceTermly ?? 600,
+      yearly: profile.priceYearly ?? 1200,
     };
-    const numAmount = priceMap[planType];
 
-    if (numAmount == null) {
-      return NextResponse.json({ error: "هذه الباقة غير متوفرة" }, { status: 400 });
-    }
+    const monthsMap: Record<string, number> = {
+      monthly: 1,
+      termly: 3,
+      yearly: 6,
+    };
+
+    const months = monthsMap[planType] || 1;
+    const isLanguages = languageTrack === "languages" || languageTrack === "english";
+    const languageSurcharge = isLanguages ? 50 * months : 0;
+    const numAmount = basePriceMap[planType] + languageSurcharge;
 
     const teacherName = profile.displayName || profile.slug;
-    const planLabel = planType.charAt(0).toUpperCase() + planType.slice(1);
+    const planNames: Record<string, string> = {
+      monthly: "شهر واحد (1 Month)",
+      termly: "3 شهور (3 Months)",
+      yearly: "6 شهور (6 Months)",
+    };
+    const planLabel = `${planNames[planType] || "اشتراك"} ${isLanguages ? "(لغات / إنجليزي)" : "(عربي)"}`;
 
     const user = await prisma.user.findUnique({
       where: { id: session.id },
@@ -66,6 +78,8 @@ export async function POST(req: NextRequest) {
       select: { name: true, phone: true, parentPhone: true, educationalStage: true },
     });
 
+    const expiresAt = new Date(Date.now() + months * 30 * 24 * 60 * 60 * 1000);
+
     const updatedUser = await prisma.$transaction(async (tx) => {
       const updated = await tx.user.update({
         where: { id: session.id },
@@ -77,7 +91,7 @@ export async function POST(req: NextRequest) {
           userId: session.id,
           type: "debit_purchase",
           amount: -numAmount,
-          note: `حجز اشتراك (${planLabel || "خطة حجز"}) - أستاذ ${teacherName || "المعلم"}`,
+          note: `حجز اشتراك (${planLabel}) - أستاذ ${teacherName || "المعلم"}`,
         },
       });
 
@@ -93,22 +107,24 @@ export async function POST(req: NextRequest) {
           studentId: session.id,
           teacherId: teacherId,
           planType: planType,
-          planLabel: planLabel || "حجز اشتراك",
+          planLabel: planLabel,
           amount: numAmount,
           educationalStage: userDetails?.educationalStage,
           studentName: userDetails?.name,
           studentPhone: userDetails?.phone,
           parentPhone: userDetails?.parentPhone,
           status: "active",
+          expiresAt: expiresAt,
         },
         update: {
-          planLabel: planLabel || "حجز اشتراك",
+          planLabel: planLabel,
           amount: numAmount,
           educationalStage: userDetails?.educationalStage,
           studentName: userDetails?.name,
           studentPhone: userDetails?.phone,
           parentPhone: userDetails?.parentPhone,
           status: "active",
+          expiresAt: expiresAt,
         },
       });
 

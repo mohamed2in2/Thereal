@@ -294,14 +294,14 @@ export function TeacherPublicProfile() {
         </div>
 
         <div className="space-y-4">
-          {/* Monthly Plan */}
+          {/* 1 Month Plan */}
           <div className="p-4 rounded-xl border border-[var(--border)] bg-[var(--bg)]">
             <h4 className="font-bold text-sm text-[var(--ink)] mb-3 flex items-center gap-2">
-              <span>📅</span> الاشتراك الشهري
+              <span>📅</span> اشتراك شهر واحد (1 Month)
             </h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className={label}>السعر الأصلي (جنيه)</label>
+                <label className={label}>السعر (جنيه - افتراضي 200ج)</label>
                 <input
                   type="number"
                   min="0"
@@ -309,7 +309,7 @@ export function TeacherPublicProfile() {
                   className={input}
                   value={p.priceMonthly ?? ""}
                   onChange={(e) => set("priceMonthly", e.target.value ? Number(e.target.value) : null)}
-                  placeholder="مثال: 150"
+                  placeholder="200"
                 />
               </div>
               <div>
@@ -328,14 +328,14 @@ export function TeacherPublicProfile() {
             </div>
           </div>
 
-          {/* Termly Plan */}
+          {/* 3 Months Plan */}
           <div className="p-4 rounded-xl border border-[var(--border)] bg-[var(--bg)]">
             <h4 className="font-bold text-sm text-[var(--ink)] mb-3 flex items-center gap-2">
-              <span>📚</span> اشتراك الترم الكامل
+              <span>📚</span> اشتراك 3 شهور (3 Months)
             </h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className={label}>السعر الأصلي (جنيه)</label>
+                <label className={label}>السعر (جنيه - افتراضي 600ج)</label>
                 <input
                   type="number"
                   min="0"
@@ -343,7 +343,7 @@ export function TeacherPublicProfile() {
                   className={input}
                   value={p.priceTermly ?? ""}
                   onChange={(e) => set("priceTermly", e.target.value ? Number(e.target.value) : null)}
-                  placeholder="مثال: 350"
+                  placeholder="600"
                 />
               </div>
               <div>
@@ -362,14 +362,14 @@ export function TeacherPublicProfile() {
             </div>
           </div>
 
-          {/* Yearly Plan */}
+          {/* 6 Months Plan */}
           <div className="p-4 rounded-xl border border-[var(--border)] bg-[var(--bg)]">
             <h4 className="font-bold text-sm text-[var(--ink)] mb-3 flex items-center gap-2">
-              <span>🎓</span> الاشتراك السنوي
+              <span>🎓</span> اشتراك 6 شهور (6 Months)
             </h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className={label}>السعر الأصلي (جنيه)</label>
+                <label className={label}>السعر (جنيه - افتراضي 1200ج)</label>
                 <input
                   type="number"
                   min="0"
@@ -377,7 +377,7 @@ export function TeacherPublicProfile() {
                   className={input}
                   value={p.priceYearly ?? ""}
                   onChange={(e) => set("priceYearly", e.target.value ? Number(e.target.value) : null)}
-                  placeholder="مثال: 600"
+                  placeholder="1200"
                 />
               </div>
               <div>
@@ -397,7 +397,7 @@ export function TeacherPublicProfile() {
           </div>
         </div>
 
-        <p className="text-[10px] text-[var(--ink-muted)] px-1">اترك السعر فارغاً إذا لم ترد عرض هذه الخطة للطلاب. يمكنك تحديد نسبة خصم مختلفة لكل خطة.</p>
+        <p className="text-[10px] text-[var(--ink-muted)] px-1">أسعار باقات الاشتراك: شهر واحد (افتراضي 200 ج)، 3 شهور (افتراضي 600 ج)، 6 شهور (افتراضي 1200 ج). مسار "لغات / إنجليزي" يضيف 50 ج تلقائياً لكل شهر.</p>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
           <div>

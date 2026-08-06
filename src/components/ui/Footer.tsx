@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BrandLogo } from "@/components/ui/BrandLogo";
 
 export function Footer() {
   const year = new Date().getFullYear();
@@ -12,13 +13,7 @@ export function Footer() {
         {/* Brand — full-width on mobile */}
         <div className="col-span-2 md:col-span-1">
           <div className="flex items-center gap-3 mb-4">
-            <span className="w-9 h-9 rounded-[11px] bg-[var(--brand)] flex items-center justify-center shrink-0">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M22 10 12 5 2 10l10 5 10-5Z"/>
-                <path d="M6 12v5c0 1.5 2.7 3 6 3s6-1.5 6-3v-5"/>
-              </svg>
-            </span>
-            <b style={{ fontFamily: "var(--font-head)", fontWeight: 800, fontSize: 18, color: "#F3F6FA" }}>Code-UP</b>
+            <BrandLogo size={28} showText={true} showTagline={true} />
           </div>
           <p className="text-sm leading-relaxed max-w-[300px]" style={{ color: "#8295A8" }}>
             منصة كورسات مصرية تهدف إلى تمكين المتعلمين من المحتوى عالي الجودة وأدوات المتابعة الذكية.
@@ -49,8 +44,11 @@ export function Footer() {
         <div>
           <h4 className="text-xs font-bold mb-4 tracking-wider" style={{ color: "#5E7186" }}>قانوني</h4>
           <ul className="space-y-3">
-            <li><Link href="/terms"   className="text-sm no-underline hover:text-white transition-colors" style={{ color: "#A8B8C8" }}>شروط الاستخدام</Link></li>
-            <li><Link href="/privacy" className="text-sm no-underline hover:text-white transition-colors" style={{ color: "#A8B8C8" }}>سياسة الخصوصية</Link></li>
+            <li>
+              <Link href="/privacy" className="text-sm no-underline hover:text-white transition-colors" style={{ color: "#A8B8C8" }}>
+                الشروط وسياسة الخصوصية
+              </Link>
+            </li>
           </ul>
         </div>
 
@@ -61,11 +59,6 @@ export function Footer() {
             <li>
               <a href="mailto:contact@code-up.tech" className="text-sm no-underline hover:text-white transition-colors break-all" dir="ltr" style={{ color: "#A8B8C8" }}>
                 contact@code-up.tech
-              </a>
-            </li>
-            <li>
-              <a href="tel:+201285353604" className="text-sm no-underline hover:text-white transition-colors" dir="ltr" style={{ color: "#A8B8C8" }}>
-                012 8535 3604
               </a>
             </li>
           </ul>

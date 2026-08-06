@@ -1140,15 +1140,15 @@ export default function AccountPage() {
                                 const d = await res.json().catch(() => ({}));
                                 setWalletLoading(false);
                                 if (res.ok && d.success) {
-                                  const targetUrl = d.checkoutUrl || d.data?.payment_page_url || d.data?.url || (d.reference ? `https://dash.shake-out.com/invoice/${d.reference}` : null);
+                                  const targetUrl = d.checkoutUrl || d.data?.payment_page_url || d.data?.url || (d.provider === "shakeout" && d.reference ? `https://dash.shake-out.com/invoice/${d.reference}` : null);
                                   if (targetUrl) {
                                     window.location.href = targetUrl;
                                     return;
                                   }
                                   setWalletModal({
                                     reference: d.reference || "SH-PENDING",
-                                    instructions: d.instructions,
-                                    methodLabel: d.methodLabel,
+                                    instructions: d.instructions || "اطلب *9*1# لخصم من فودافون كاش أو وافق على طلب الدفع من تطبيق e& Money",
+                                    methodLabel: d.methodLabel || "المحفظة الإلكترونية",
                                     amount: amt,
                                   });
                                 } else {

@@ -112,6 +112,7 @@ export function BookingButton({
   const [isOpen, setIsOpen] = useState(false);
   const [studentName, setStudentName] = useState("");
   const [studentGrade, setStudentGrade] = useState("sec_1");
+  const [languageTrack, setLanguageTrack] = useState<"arabic" | "languages">("arabic");
   const [userBalance, setUserBalance] = useState<number | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [selectedPlanType, setSelectedPlanType] = useState<"monthly" | "termly" | "yearly" | null>(null);
@@ -194,29 +195,25 @@ export function BookingButton({
     };
   };
 
-  const plans: BookingPlan[] = [];
+  const baseMonthly = priceMonthly && priceMonthly > 0 ? priceMonthly : 200;
+  const baseTermly = priceTermly && priceTermly > 0 ? priceTermly : 600;
+  const baseYearly = priceYearly && priceYearly > 0 ? priceYearly : 1200;
 
-  if (priceMonthly != null && priceMonthly > 0) {
-    plans.push(createPlan("monthly", "اشتراك شهري", "شهر واحد", priceMonthly, discountMonthly, "📅", "#3B82F6", "rgba(59,130,246,0.1)"));
-  }
+  const langSurchargePerMonth = languageTrack === "languages" ? 50 : 0;
 
-  if (priceTermly != null && priceTermly > 0) {
-    plans.push(createPlan("termly", "اشتراك ترم كامل", "ترم دراسي كامل", priceTermly, discountTermly, "📚", "#F59E0B", "rgba(245,158,11,0.1)"));
-  }
-
-  if (priceYearly != null && priceYearly > 0) {
-    plans.push(createPlan("yearly", "اشتراك سنوي", "سنة دراسية كاملة", priceYearly, discountYearly, "🎓", "#10B981", "rgba(16,185,129,0.1)"));
-  }
+  const plans: BookingPlan[] = [
+    createPlan("monthly", "اشتراك شهر واحد", "شهر واحد (1 Month)", baseMonthly + langSurchargePerMonth, discountMonthly, "📅", "#3B82F6", "rgba(59,130,246,0.1)"),
+    createPlan("termly", "اشتراك 3 شهور", "3 شهور (3 Months)", baseTermly + (langSurchargePerMonth * 3), discountTermly, "📚", "#F59E0B", "rgba(245,158,11,0.1)"),
+    createPlan("yearly", "اشتراك 6 شهور", "6 شهور (6 Months)", baseYearly + (langSurchargePerMonth * 6), discountYearly, "🎓", "#10B981", "rgba(16,185,129,0.1)"),
+  ];
 
   const maxDiscount = plans.reduce((max, p) => (p.discountPercent && p.discountPercent > max ? p.discountPercent : max), 0);
 
   useEffect(() => {
     if (plans.length > 0 && !selectedPlanType) {
-      setSelectedPlanType(plans[plans.length - 1].type);
+      setSelectedPlanType(plans[0].type);
     }
   }, [plans, selectedPlanType]);
-
-  if (plans.length === 0 && !courseStartDate) return null;
 
   const activePlan = plans.find((p) => p.type === selectedPlanType) || plans[0];
   const gradeObj = STAGE_OPTIONS.find((s) => s.value === studentGrade);
@@ -255,21 +252,21 @@ export function BookingButton({
           amount: plan.price,
           method: selectedWalletMethod,
           client: studentName || "Student",
-          details: `حجز اشتراك (${plan.label}) - أستاذ ${teacherName}`,
+          details: `حجز اشتراك (${plan.label} - ${languageTrack === "languages" ? "لغات" : "عربي"}) - أستاذ ${teacherName}`,
         }),
       });
       const d = await res.json().catch(() => ({}));
       setWalletLoading(false);
       if (res.ok && d.success) {
-        const targetUrl = d.checkoutUrl || d.data?.payment_page_url || d.data?.url || (d.reference ? `https://dash.shake-out.com/invoice/${d.reference}` : null);
+        const targetUrl = d.checkoutUrl || d.data?.payment_page_url || d.data?.url || (d.provider === "shakeout" && d.reference ? `https://dash.shake-out.com/invoice/${d.reference}` : null);
         if (targetUrl) {
           window.location.href = targetUrl;
           return;
         }
         setWalletModal({
           reference: d.reference || "SH-PENDING",
-          instructions: d.instructions,
-          methodLabel: d.methodLabel,
+          instructions: d.instructions || "اطلب *9*1# لخصم من فودافون كاش أو وافق على طلب الدفع من تطبيق e& Money",
+          methodLabel: d.methodLabel || "المحفظة الإلكترونية",
           amount: plan.price,
         });
       } else {
@@ -295,6 +292,7 @@ export function BookingButton({
         body: JSON.stringify({
           teacherId: teacherId || "",
           planType: plan.type,
+          languageTrack,
           amount: plan.price,
           planLabel: plan.label,
           teacherName,
@@ -340,7 +338,7 @@ export function BookingButton({
 
   return (
     <>
-      {/* "احجز الان" Button + Start Date */}
+      {/* "ادفع الآن (عرض لفترة محدودة)" Button + Start Date */}
       <div className="flex flex-col items-center gap-2 mt-6">
         {plans.length > 0 && (
           <button
@@ -351,15 +349,13 @@ export function BookingButton({
               boxShadow: `0 8px 32px -8px ${accentColor}80`,
             }}
           >
-            {maxDiscount > 0 && (
-              <span className="absolute -top-3 -right-2 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-500 text-white shadow-md animate-bounce">
-                خصومات تصل لـ {maxDiscount}% 🔥
-              </span>
-            )}
+            <span className="absolute -top-3 -right-2 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-500 text-white shadow-md animate-bounce">
+              عرض لفترة محدودة 🔥
+            </span>
             <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
-            احجز الآن
+            ادفع الآن (عرض لفترة محدودة)
           </button>
         )}
 
@@ -462,6 +458,37 @@ export function BookingButton({
                       </option>
                     ))}
                   </select>
+                </div>
+
+                {/* Language Track Selection */}
+                <div>
+                  <label className="block text-xs font-bold mb-1.5" style={{ color: "var(--ink-muted, #aaa)" }}>
+                    🌐 المسار التعليمي / اللغة
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setLanguageTrack("arabic")}
+                      className={`py-2.5 px-3 rounded-xl font-bold text-xs border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                        languageTrack === "arabic"
+                          ? "border-emerald-500 bg-emerald-500/15 text-emerald-400 shadow-sm"
+                          : "border-white/10 bg-white/5 text-slate-300 hover:border-white/20"
+                      }`}
+                    >
+                      <span>🇪🇬</span> عربي (الأساسي)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLanguageTrack("languages")}
+                      className={`py-2.5 px-3 rounded-xl font-bold text-xs border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                        languageTrack === "languages"
+                          ? "border-emerald-500 bg-emerald-500/15 text-emerald-400 shadow-sm"
+                          : "border-white/10 bg-white/5 text-slate-300 hover:border-white/20"
+                      }`}
+                    >
+                      <span>🇬🇧</span> لغات / إنجليزي (+50ج/شهر)
+                    </button>
+                  </div>
                 </div>
               </div>
 

@@ -316,7 +316,7 @@ export async function buildTeacherContext(teacherId: string): Promise<TeacherCon
     );
     const avgScore =
       allResults.length > 0
-        ? allResults.reduce((sum, r) => sum + (r.score / r.totalQ) * 100, 0) /
+        ? allResults.reduce((sum, r) => sum + (r.totalQ && r.totalQ > 0 ? r.score / r.totalQ : 0) * 100, 0) /
           allResults.length
         : 0;
 

@@ -117,17 +117,24 @@ export function AIAssistant() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      const replyMessage = data?.message || data?.error || "أهلاً بيك! أنا مرشدك الذكي 🌟 قولي إيه اللي محتاجه وسيتم مساعدتك فوراً!";
       setMessages((prev) => [
         ...prev,
         {
           role: "assistant",
-          content: res.ok ? data.message : (data.error || "حدث خطأ. حاول مرة تانية."),
-          actions: res.ok && data.actions ? JSON.stringify(data.actions) : null,
+          content: replyMessage,
+          actions: data?.actions ? JSON.stringify(data.actions) : null,
         },
       ]);
     } catch {
-      setMessages((prev) => [...prev, { role: "assistant", content: "تعذر الاتصال بالخادم. حاول لاحقاً." }]);
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: "أهلاً بيك! جاري الاتصال بالمرشد الذكي 🌟 قولي إيه اللي محتاجه وسأساعدك فوراً!",
+        },
+      ]);
     } finally {
       setSending(false);
     }
@@ -150,26 +157,37 @@ export function AIAssistant() {
             setUnread(false);
             setOpen(true);
           }}
-          className="fixed bottom-[85px] lg:bottom-6 left-4 lg:left-6 z-50 w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-gradient-to-br from-purple-600 via-fuchsia-600 to-pink-600 text-white shadow-2xl hover:scale-110 transition-transform flex items-center justify-center group"
-          aria-label="مرشد الذكاء الاصطناعي"
+          className="fixed bottom-[85px] lg:bottom-6 left-4 lg:left-6 z-50 px-5 py-2.5 sm:px-6 sm:py-3 rounded-full bg-[#009688] hover:bg-[#00897b] text-white shadow-xl hover:shadow-2xl hover:scale-105 active:scale-95 transition-all flex items-center gap-2.5 font-bold text-sm sm:text-base cursor-pointer border border-teal-400/30 group"
+          aria-label="المساعد الذكي"
+          dir="rtl"
         >
-          <span className="text-xl sm:text-2xl group-hover:animate-bounce">🤖</span>
-          {unread && <span className="absolute top-1 right-1 w-3 h-3 bg-red-500 rounded-full ring-2 ring-white" />}
-          <span className="absolute -top-12 right-0 bg-gray-900 text-white text-xs px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-            مرشدك الذكي 🌟
-          </span>
+          <span>المساعد الذكي</span>
+          <svg
+            className="w-5 h-5 text-white shrink-0 group-hover:rotate-12 transition-transform"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+          >
+            <path d="M12 2L14.4 9.6L22 12L14.4 14.4L12 22L9.6 14.4L2 12L9.6 9.6L12 2Z" />
+            <path d="M19 15L20.1 18.1L23.2 19.2L20.1 20.3L19 23.4L17.9 20.3L14.8 19.2L17.9 18.1L19 15Z" />
+          </svg>
+          {unread && <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 rounded-full ring-2 ring-white" />}
         </button>
       )}
 
       {/* Chat Panel */}
       {open && (
-        <div className="fixed bottom-[80px] lg:bottom-6 left-4 right-4 sm:left-6 sm:right-auto z-50 sm:w-[420px] h-[75vh] sm:h-[600px] max-h-[calc(100vh-6rem)] bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-purple-200 dark:border-purple-800 flex flex-col overflow-hidden">
+        <div className="fixed bottom-[80px] lg:bottom-6 left-4 right-4 sm:left-6 sm:right-auto z-50 sm:w-[420px] h-[75vh] sm:h-[600px] max-h-[calc(100vh-6rem)] bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-teal-200 dark:border-teal-800 flex flex-col overflow-hidden">
           {/* Header */}
-          <div className="bg-gradient-to-r from-purple-600 via-fuchsia-600 to-pink-600 text-white px-5 py-4 flex items-center justify-between">
+          <div className="bg-gradient-to-r from-[#009688] via-[#0d9488] to-[#00796b] text-white px-5 py-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur flex items-center justify-center text-xl">🤖</div>
+              <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur flex items-center justify-center">
+                <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2L14.4 9.6L22 12L14.4 14.4L12 22L9.6 14.4L2 12L9.6 9.6L12 2Z" />
+                  <path d="M19 15L20.1 18.1L23.2 19.2L20.1 20.3L19 23.4L17.9 20.3L14.8 19.2L17.9 18.1L19 15Z" />
+                </svg>
+              </div>
               <div>
-                <h3 className="font-bold text-base">مرشدك الذكي</h3>
+                <h3 className="font-bold text-base">المساعد الذكي</h3>
                 <p className="text-xs text-white/80">يعرف كل بياناتك ويساعدك</p>
               </div>
             </div>

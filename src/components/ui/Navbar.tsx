@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect, useRef, useSyncExternalStore, useCallback } from "react";
 import { getResolvedTheme, setThemePreference, type Theme } from "@/lib/theme";
+import { BrandLogo } from "@/components/ui/BrandLogo";
 
 interface NavbarProps {
   user?: { name: string; role: string } | null;
@@ -183,16 +184,8 @@ export function Navbar({ user }: NavbarProps) {
         className="max-w-[1320px] mx-auto px-3 sm:px-7 h-[60px] sm:h-[74px] flex justify-between lg:grid lg:grid-cols-[1fr_auto_1fr] items-center gap-1.5 sm:gap-[18px]"
       >
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-[11px] no-underline justify-self-start" aria-label="Code-UP">
-          <span className="w-10 h-10 rounded-[11px] bg-[var(--brand)] flex items-center justify-center shrink-0" style={{ boxShadow: "0 4px 12px -4px var(--brand-shadow)" }}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M22 10 12 5 2 10l10 5 10-5Z"/><path d="M6 12v5c0 1.5 2.7 3 6 3s6-1.5 6-3v-5"/>
-            </svg>
-          </span>
-          <span className="hidden sm:flex flex-col leading-[1.15]">
-            <b style={{ fontFamily: "var(--font-head)", fontWeight: 800, fontSize: 19, color: "var(--ink)", letterSpacing: "-.3px", whiteSpace: "nowrap" }}>Code-UP</b>
-            <small style={{ fontSize: 11.5, color: "var(--ink-3)", fontWeight: 500 }}>منصة كورسات متميزة</small>
-          </span>
+        <Link href="/" className="flex items-center no-underline justify-self-start" aria-label="Code-UP">
+          <BrandLogo size={28} showText={true} showTagline={true} />
         </Link>
 
         {/* Desktop nav */}

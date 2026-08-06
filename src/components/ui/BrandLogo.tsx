@@ -1,49 +1,49 @@
 "use client";
 
-import { useState } from "react";
-
 interface BrandLogoProps {
   className?: string;
   size?: number;
   showText?: boolean;
+  showTagline?: boolean;
 }
 
-export function BrandLogo({ className = "", size = 36, showText = true }: BrandLogoProps) {
-  const [loaded, setLoaded] = useState(false);
+export function BrandLogo({
+  className = "",
+  size = 32,
+  showText = true,
+  showTagline = true,
+}: BrandLogoProps) {
+  const height = Math.round(size * 1.18);
 
   return (
-    <div className={`inline-flex items-center gap-2.5 ${className}`}>
+    <div className={`inline-flex items-center gap-2.5 sm:gap-3 select-none ${className}`}>
+      {/* Teal rounded badge with inner rectangle outline matching user image */}
       <div
-        className="relative shrink-0 overflow-hidden rounded-xl bg-gradient-to-br from-teal-600 to-sky-700 flex items-center justify-center font-black text-white"
-        style={{ width: size, height: size }}
+        className="shrink-0 rounded-lg bg-[#009688] flex items-center justify-center shadow-md p-[3px] transition-transform hover:scale-105"
+        style={{ width: size, height: height }}
       >
-        {/* Instant CSS fallback badge so text & layout render with 0 delay on low internet */}
-        <span className="text-sm font-black select-none" style={{ fontFamily: "var(--font-head)" }}>
-          C
-        </span>
-
-        {/* Non-blocking background-loaded image logo */}
-        <img
-          src="/logo.jpeg"
-          alt="Code-UP"
-          loading="lazy"
-          decoding="async"
-          {...({ fetchPriority: "low" } as any)}
-          onLoad={() => setLoaded(true)}
-          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${
-            loaded ? "opacity-100" : "opacity-0"
-          }`}
-        />
+        <div className="w-full h-full border-[2.2px] border-white rounded-[3px]" />
       </div>
 
       {showText && (
-        <span
-          className="font-black text-base tracking-tight"
-          style={{ fontFamily: "var(--font-head)", color: "var(--ink)" }}
-        >
-          Code-UP
-        </span>
+        <div className="flex items-center gap-2 sm:gap-3 leading-none">
+          <span
+            className="font-black text-lg sm:text-xl tracking-tight text-slate-900 dark:text-white"
+            style={{ fontFamily: "var(--font-head)" }}
+          >
+            Code-UP
+          </span>
+          {showTagline && (
+            <span
+              className="hidden sm:inline-block text-xs sm:text-sm font-semibold text-slate-400 dark:text-slate-400 border-r border-slate-300 dark:border-slate-700 pr-2.5 mr-0.5 whitespace-nowrap"
+              dir="rtl"
+            >
+              ذاكر · طبّق · تقدّم
+            </span>
+          )}
+        </div>
       )}
     </div>
   );
 }
+
