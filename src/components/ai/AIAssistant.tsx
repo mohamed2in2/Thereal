@@ -224,6 +224,7 @@ export function AIAssistant() {
             {messages.length === 0 && <div className="text-center text-gray-400 text-sm py-8">ابدأ الحوار...</div>}
             {messages.map((m, idx) => {
               const actions: ChatAction[] = m.actions ? (() => { try { return JSON.parse(m.actions!); } catch { return []; } })() : [];
+              const cleanText = m.content.replace(/\[م:[^\]]+\]/g, "").trim();
               return (
                 <div key={idx} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
                   <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap leading-relaxed ${
@@ -231,7 +232,7 @@ export function AIAssistant() {
                       ? "bg-gradient-to-br from-purple-600 to-fuchsia-600 text-white rounded-br-sm shadow-md"
                       : "bg-white dark:bg-slate-800 text-gray-800 dark:text-gray-100 rounded-bl-sm shadow-sm border border-purple-100 dark:border-purple-900/40"
                   }`}>
-                    {m.content}
+                    {cleanText}
                     {actions.length > 0 && (
                       <div className="mt-2 pt-2 border-t border-purple-200 dark:border-purple-800/40 space-y-1">
                         {actions.map((a, ai) => <ActionBadge key={ai} action={a} router={router} />)}

@@ -1,13 +1,15 @@
-import { StudentContext } from "./ai-context";
-
-const PRIMARY_API_KEY = process.env.AI_PRIMARY_API_KEY || "";
+const PRIMARY_API_KEY = process.env.AI_PRIMARY_API_KEY || process.env.DEEPSEEK_API_KEY || process.env.OPENAI_API_KEY || process.env.GROQ_API_KEY || process.env.ANTHROPIC_API_KEY || "";
 const PRIMARY_API_URL = process.env.AI_PRIMARY_BASE_URL || "https://api.anthropic.com/v1/messages";
 const PRIMARY_MODEL = process.env.AI_PRIMARY_MODEL || "claude-3-5-sonnet-20241022";
 
-const BACKUP_API_KEY = process.env.AI_BACKUP_API_KEY || process.env.GEMINI_API_KEY || "";
+const BACKUP_API_KEY = process.env.AI_BACKUP_API_KEY || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
 const BACKUP_BASE_RAW = process.env.AI_BACKUP_BASE_URL || "https://generativelanguage.googleapis.com/v1beta";
 const BACKUP_BASE_URL = BACKUP_BASE_RAW.replace(/\/+$/, "");
 const BACKUP_MODEL = process.env.AI_BACKUP_MODEL || "gemini-2.0-flash-lite";
+
+export function stripFallbackMarkers(content: string): string {
+  return content.replace(/\[م:[^\]]+\]/g, "").trim();
+}
 
 export interface ChatMessage {
   role: "user" | "assistant" | "system";
@@ -291,10 +293,6 @@ function buildChatContextForStaff(history: ChatMessage[], ctx: StudentContext): 
   return { chatHistory, studentInfo };
 }
 
-function stripFallbackMarkers(content: string): string {
-  return content.replace(/\[م:[^\]]+\]/g, "").trim();
-}
-
 function fallbackResponse(
   userMessage: string,
   ctx: StudentContext,
@@ -448,6 +446,8 @@ function fallbackResponse(
 
   // ── Pick response ─────────────────────────────────────────────────────────
 
+  const isCoding = /coding|كود|برمجة|تكويد|برمجيات|برنامج|python|javascript|c\+\+|html|css|java|react|node/i.test(i);
+
   if (isBye) {
     const byes = [
       `مع السلامة يا ${nm}! 👋 وفقك الله في مذاكرتك. 🌟`,
@@ -455,6 +455,9 @@ function fallbackResponse(
       `وداعاً يا ${nm}! 🌙 لو محتاجني رجعلي في أي وقت. 💙`,
     ];
     message = byes[Math.floor(Date.now() / 1000) % byes.length];
+
+  } else if (isCoding) {
+    message = `البرمجة (Coding) هي كتابة تعليمات وأوامر يفهمها الكمبيوتر لبناء مواقع، تطبيقات، وألعاب! 💻🚀\n\nتعتمد البرمجة على حل المشكلات والتفكير المنطقي خطوة بخطوة بلغات مثل JavaScript و Python.\n\nعلى منصة Code-UP بنساعدك تطبق عملي من خلال الكورسات والتطبيقات التفاعلية! 🌟\n\nعايز تبدأ المذاكرة معنا؟ اكتب **2** لخطة التدريب! 📚`;
 
   } else if (isThankYou) {
     const thanks = [
@@ -581,14 +584,22 @@ export async function chatWithAI(
 
   // 1. Try Gemini first
   let result = await callBackup(messages);
-  if (result) return result;
+  if (result && result.message) {
+    result.message = stripFallbackMarkers(result.message);
+    return result;
+  }
 
   // 2. Try Primary / DeepSeek
   result = await callPrimary(messages);
-  if (result) return result;
+  if (result && result.message) {
+    result.message = stripFallbackMarkers(result.message);
+    return result;
+  }
 
   // 3. Smart menu fallback (always runs when no AI key configured)
-  return fallbackResponse(userMessage, studentContext, history, notifications);
+  const fb = fallbackResponse(userMessage, studentContext, history, notifications);
+  fb.message = stripFallbackMarkers(fb.message);
+  return fb;
 }
 
 export async function analyzeQuizAnswer(
