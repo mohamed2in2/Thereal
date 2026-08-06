@@ -51,7 +51,7 @@ if (dbUrl.startsWith('postgres')) {
 }
 
 try {
-  execSync('npx prisma generate', { stdio: 'inherit' });
+  execSync('npx prisma@6.19.3 generate', { stdio: 'inherit' });
 } catch (e) {
   console.error('Failed to generate Prisma client:', e);
   process.exit(1);
