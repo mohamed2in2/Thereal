@@ -1,3 +1,5 @@
+import { StudentContext } from "./ai-context";
+
 const PRIMARY_API_KEY = process.env.AI_PRIMARY_API_KEY || process.env.DEEPSEEK_API_KEY || process.env.OPENAI_API_KEY || process.env.GROQ_API_KEY || process.env.ANTHROPIC_API_KEY || "";
 const PRIMARY_API_URL = process.env.AI_PRIMARY_BASE_URL || "https://api.anthropic.com/v1/messages";
 const PRIMARY_MODEL = process.env.AI_PRIMARY_MODEL || "claude-3-5-sonnet-20241022";
