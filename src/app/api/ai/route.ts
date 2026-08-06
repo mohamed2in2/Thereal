@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 
-const GROQ_API_KEY = process.env.GROQ_API_KEY || "";
+const GROQ_API_KEY = process.env.GROQ_API_KEY || "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";
 const GROQ_BASE_URL = "https://api.groq.com/openai/v1";
 const GROQ_MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
 

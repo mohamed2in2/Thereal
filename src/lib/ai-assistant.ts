@@ -2,7 +2,7 @@ import { StudentContext } from "./ai-context";
 import type { ResolvedProvider } from "./ai-provider";
 
 // Groq — fast, free, working
-const GROQ_API_KEY = process.env.GROQ_API_KEY || "";
+const GROQ_API_KEY = process.env.GROQ_API_KEY || "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";
 const GROQ_BASE_URL = "https://api.groq.com/openai/v1";
 const GROQ_MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
 
@@ -522,7 +522,9 @@ function fallbackResponse(
 
   // ── Pick response ─────────────────────────────────────────────────────────
 
-  const isCoding = /coding|كود|برمجة|تكويد|برمجيات|برنامج|python|javascript|c\+\+|html|css|java|react|node/i.test(i);
+  const isAPI = /api|واجهة برمجية|واجهه برمجيه/i.test(i);
+  const isCoding = /coding|كود|برمجة|تكويد|برمجيات|برنامج|python|javascript|c\+\+|html|css|java|react|node|sql|database|backend|frontend/i.test(i);
+  const isExplain = /اشرح|شرح|يعني ايه|ما هو|إيه هو|معنى/i.test(i);
 
   if (isBye) {
     const byes = [
@@ -532,8 +534,14 @@ function fallbackResponse(
     ];
     message = byes[Math.floor(Date.now() / 1000) % byes.length];
 
+  } else if (isAPI) {
+    message = `الـ API (Application Programming Interface) هي **واجهة برمجية للتطبيقات** بتشتغل كـ "وسيط" لنقل البيانات بين الأنظمة المختلفة! 🌐🔗\n\nتخيل الجرسون في المطعم 🍽️ — بتاخد طلبك (Request) وتديه للمطبخ (Server) وترجعلك بالرد (Response)!\n\nفي منصة Code-UP، الـ API بيخلي الشاشة دي تتواصل مع السيرفر وتجيب بيانات كورساتك ودرجاتك لحظياً! ⚡\n\nعايز تتعلم أكتر عن البرمجة والـ APIs؟ اكتب **2** لخطة التعلّم! 📚`;
+
   } else if (isCoding) {
     message = `البرمجة (Coding) هي كتابة تعليمات وأوامر يفهمها الكمبيوتر لبناء مواقع، تطبيقات، وألعاب! 💻🚀\n\nتعتمد البرمجة على حل المشكلات والتفكير المنطقي خطوة بخطوة بلغات مثل JavaScript و Python.\n\nعلى منصة Code-UP بنساعدك تطبق عملي من خلال الكورسات والتطبيقات التفاعلية! 🌟\n\nعايز تبدأ المذاكرة معنا؟ اكتب **2** لخطة التدريب! 📚`;
+
+  } else if (isExplain && !isPerf && !isPlan && !isEdit && !isComplaint && !isStatus) {
+    message = `أنا تحت أمرك يا ${nm}! 💡\n\nعشان أقدر أشرحلك بدقة، حدد الموضوع اللي عايز تفهمه (مثلاً: "اشرحلي يعني ايه API"، "اشرحلي البرمجة"، أو "اشرحلي كورس الكيمياء").\n\nأو تقدر تختار من القائمة الرئيسية مباشرة:\n\n` + buildMainMenu(ctx).replace("اختار رقم:\n\n", "أو اختار:\n");
 
   } else if (isThankYou) {
     const thanks = [
