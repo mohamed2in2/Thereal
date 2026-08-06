@@ -21,6 +21,7 @@ import { AccessGate } from "@/components/admin/superadmin/AccessGate";
 import { WalletSection } from "@/components/admin/superadmin/WalletSection";
 import { PlansSection } from "@/components/admin/superadmin/PlansSection";
 import { WhatsAppSection } from "@/components/admin/WhatsAppSection";
+import { SecuritySection } from "@/components/admin/SecuritySection";
 import { IconMenu, IconTrash } from "@/components/admin/AdminIcons";
 import dynamic from "next/dynamic";
 
@@ -471,6 +472,8 @@ export default function SuperadminPage() {
 
 
           {activeSection === "whatsapp" && <WhatsAppSection />}
+
+          {activeSection === "security-violations" && <SecuritySection />}
 
           {activeSection === "plans" && <PlansSection userRole={userRole} />}
 

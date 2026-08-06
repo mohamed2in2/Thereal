@@ -237,6 +237,44 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
   }
 
+  // VPN & Proxy Detection Guard
+  const viaHeader = req.headers.get("via");
+  const xProxyId = req.headers.get("x-proxy-id");
+  const forwardedHops = (req.headers.get("x-forwarded-for") || "").split(",");
+  const isVpnProxy = !!viaHeader || !!xProxyId || forwardedHops.length > 2;
+
+  if (isVpnProxy) {
+    await prisma.securityViolation.create({
+      data: {
+        studentId: session.id,
+        videoId,
+        type: "VPN_DETECTED",
+        details: `Proxy/VPN Headers: via=${viaHeader || "none"}, proxyId=${xProxyId || "none"}, hops=${forwardedHops.length}`,
+        ip: ipAddress,
+        userAgent: req.headers.get("user-agent"),
+      },
+    }).catch(() => {});
+
+    return NextResponse.json(
+      {
+        error: "تم رصد استخدام تطبيق VPN أو البروكسي (مثل Cloudflare WARP / NordVPN). يرجى إغلاق تطبيق الـ VPN لفتح المحتوى المحمي.",
+        code: "VPN_DETECTED",
+      },
+      { status: 403 }
+    );
+  }
+
+  // Dual Active Session Lock: End active sessions on other videos for same student
+  await prisma.videoWatchSession.updateMany({
+    where: {
+      studentId: session.id,
+      videoId: { not: videoId },
+      endedAt: null,
+      expiresAt: { gt: now },
+    },
+    data: { endedAt: now },
+  });
+
   // Verify access via centralized checkVideoAccess
   const hasAccess = await checkVideoAccess(session.id, session.role, videoId);
   if (!hasAccess) {

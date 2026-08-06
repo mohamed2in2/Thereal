@@ -168,7 +168,7 @@ export function VideoGuard({
     void reportViolation("CONTEXT_MENU", "Right click attempted");
   };
 
-  // 4. Tab Visibility & Focus Monitoring
+  // 4. Tab Visibility & Window Focus Loss Monitoring (Full Blur & Blackout Protection)
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === "hidden") {
@@ -179,8 +179,24 @@ export function VideoGuard({
       }
     };
 
+    const handleWindowBlur = () => {
+      setIsTabHidden(true);
+      void reportViolation("TAB_SWITCH", "Window lost focus");
+    };
+
+    const handleWindowFocus = () => {
+      setIsTabHidden(false);
+    };
+
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("blur", handleWindowBlur);
+    window.addEventListener("focus", handleWindowFocus);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("blur", handleWindowBlur);
+      window.removeEventListener("focus", handleWindowFocus);
+    };
   }, [reportViolation]);
 
   return (

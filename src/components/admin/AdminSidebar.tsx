@@ -16,23 +16,24 @@ interface AdminSidebarProps {
 }
 
 const superadminSections = [
-  { id: "overview",          label: "نظرة عامة" },
-  { id: "whatsapp",          label: "💬 خدمة WhatsApp" },
-  { id: "plans",             label: "الخطط الدراسية" },
-  { id: "students",          label: "المتعلمين" },
-  { id: "deleted-students",  label: "المتعلمين المرشحون" },
-  { id: "teachers",          label: "المعلمون" },
-  { id: "teacher-referrals", label: "برامج إحالة المعلمين" },
-  { id: "deleted-teachers",  label: "المعلمون المحذوفون" },
-  { id: "create",            label: "إضافة مدرس" },
-  { id: "wallet",            label: "💰 إدارة الرصيد" },
-  { id: "daily-exams",       label: "امتحانات لوحة الشرف" },
-  { id: "logs",              label: "سجلات النشاط" },
-  { id: "staff-accounts",    label: "المشرفون والموظفون" },
-  { id: "site-text",         label: "نصوص الموقع" },
-  { id: "advanced-settings", label: "الإعدادات المتقدمة" },
-  { id: "errors",            label: "مراقبة الأخطاء" },
-  { id: "danger-zone",       label: "منطقة الخطر" },
+  { id: "overview",            label: "نظرة عامة" },
+  { id: "whatsapp",            label: "💬 خدمة WhatsApp" },
+  { id: "security-violations", label: "🚨 الرصد الأمني والمخالفات" },
+  { id: "plans",               label: "الخطط الدراسية" },
+  { id: "students",            label: "المتعلمين" },
+  { id: "deleted-students",    label: "المتعلمين المرشحون" },
+  { id: "teachers",            label: "المعلمون" },
+  { id: "teacher-referrals",   label: "برامج إحالة المعلمين" },
+  { id: "deleted-teachers",    label: "المعلمون المحذوفون" },
+  { id: "create",              label: "إضافة مدرس" },
+  { id: "wallet",              label: "💰 إدارة الرصيد" },
+  { id: "daily-exams",         label: "امتحانات لوحة الشرف" },
+  { id: "logs",                label: "سجلات النشاط" },
+  { id: "staff-accounts",      label: "المشرفون والموظفون" },
+  { id: "site-text",           label: "نصوص الموقع" },
+  { id: "advanced-settings",   label: "الإعدادات المتقدمة" },
+  { id: "errors",              label: "مراقبة الأخطاء" },
+  { id: "danger-zone",         label: "منطقة الخطر" },
 ];
 
 const aiSections = [
@@ -62,13 +63,14 @@ const aiSections = [
 ];
 
 const adminSections = [
-  { id: "overview",         label: "نظرة عامة" },
-  { id: "students",         label: "المتعلمين" },
-  { id: "deleted-students", label: "المتعلمين المرشحون" },
-  { id: "teachers",         label: "المعلمون" },
-  { id: "create",           label: "إضافة مدرس" },
-  { id: "logs",             label: "سجلات النشاط" },
-  { id: "staff-accounts",   label: "المشرفون والموظفون" },
+  { id: "overview",            label: "نظرة عامة" },
+  { id: "security-violations", label: "🚨 الرصد الأمني والمخالفات" },
+  { id: "students",            label: "المتعلمين" },
+  { id: "deleted-students",    label: "المتعلمين المرشحون" },
+  { id: "teachers",            label: "المعلمون" },
+  { id: "create",              label: "إضافة مدرس" },
+  { id: "logs",                label: "سجلات النشاط" },
+  { id: "staff-accounts",      label: "المشرفون والموظفون" },
 ];
 
 const staffSections = [
