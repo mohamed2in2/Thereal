@@ -162,6 +162,14 @@ class WhatsAppClientManager {
     return this.state === "CONNECTED" && !!this.socket;
   }
 
+  public getState(): WhatsAppConnectionState {
+    return this.state;
+  }
+
+  public getConnectedUser(): string | null {
+    return this.connectedUser?.phone || this.connectedUser?.name || null;
+  }
+
   public getStatus(): WhatsAppClientStatus {
     const uptimeSeconds = this.connectedAtTime ? Math.floor((Date.now() - this.connectedAtTime) / 1000) : 0;
     return {
