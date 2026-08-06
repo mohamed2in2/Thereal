@@ -32,6 +32,13 @@ class WhatsAppQueueManager {
     return this.queue.length;
   }
 
+  public enqueue(rawPhone: string, text: string, isOtp: boolean = false): Promise<{ success: boolean; messageId?: string; error?: string }> {
+    if (isOtp) {
+      return this.enqueueOTP(rawPhone, text);
+    }
+    return this.enqueueMessage(rawPhone, text);
+  }
+
   /**
    * Enqueues a standard text message.
    */
