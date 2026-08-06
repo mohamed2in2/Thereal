@@ -1,14 +1,25 @@
 import { StudentContext } from "./ai-context";
 import type { ResolvedProvider } from "./ai-provider";
 
-const PRIMARY_API_KEY = process.env.AI_PRIMARY_API_KEY || process.env.DEEPSEEK_API_KEY || process.env.OPENAI_API_KEY || process.env.GROQ_API_KEY || process.env.ANTHROPIC_API_KEY || "";
-const PRIMARY_API_URL = process.env.AI_PRIMARY_BASE_URL || "https://api.anthropic.com/v1/messages";
-const PRIMARY_MODEL = process.env.AI_PRIMARY_MODEL || "claude-3-5-sonnet-20241022";
+// Groq — fast, free, working
+const GROQ_API_KEY = process.env.GROQ_API_KEY || "";
+const GROQ_BASE_URL = "https://api.groq.com/openai/v1";
+const GROQ_MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
 
-const BACKUP_API_KEY = process.env.AI_BACKUP_API_KEY || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
+// DeepSeek fallback
+const PRIMARY_API_KEY = process.env.AI_PRIMARY_API_KEY || process.env.DEEPSEEK_API_KEY || process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY || "";
+const PRIMARY_API_URL = process.env.AI_PRIMARY_BASE_URL || process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com/v1";
+const PRIMARY_MODEL = process.env.AI_PRIMARY_MODEL || process.env.DEEPSEEK_MODEL || "deepseek-chat";
+
+// Gemini fallback (with multiple key rotation)
+const GEMINI_KEYS = [
+  process.env.GEMINI_KEY_1 || process.env.GEMINI_API_KEY || "",
+  process.env.GEMINI_KEY_2 || process.env.GEMINI_API_KEY_SECONDARY || "",
+  process.env.GEMINI_KEY_3 || "",
+].filter(Boolean);
 const BACKUP_BASE_RAW = process.env.AI_BACKUP_BASE_URL || "https://generativelanguage.googleapis.com/v1beta";
 const BACKUP_BASE_URL = BACKUP_BASE_RAW.replace(/\/+$/, "");
-const BACKUP_MODEL = process.env.AI_BACKUP_MODEL || "gemini-2.0-flash-lite";
+const BACKUP_MODEL = process.env.AI_BACKUP_MODEL || "gemini-2.0-flash";
 
 export function stripFallbackMarkers(content: string): string {
   return content.replace(/\[م:[^\]]+\]/g, "").trim();
@@ -128,38 +139,75 @@ ${insightsText}
 ${feedbackText}`;
 }
 
+async function callGroq(messages: ChatMessage[]): Promise<AIChatResult | null> {
+  if (!GROQ_API_KEY) return null;
+  try {
+    const sys = messages.find((m) => m.role === "system")?.content || "";
+    const userMsgs = messages.filter((m) => m.role !== "system");
+    const res = await fetch(`${GROQ_BASE_URL}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${GROQ_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: GROQ_MODEL,
+        messages: [
+          { role: "system", content: sys },
+          ...userMsgs.map((m) => ({ role: m.role, content: m.content })),
+        ],
+        max_tokens: 1200,
+        temperature: 0.7,
+      }),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(`Groq API: ${res.status} — ${(errData as any)?.error?.message || ""}`);
+    }
+    const data = (await res.json()) as { choices: Array<{ message: { content: string } }> };
+    const raw = data.choices[0]?.message?.content || "";
+    if (!raw) return null;
+    return {
+      message: raw,
+      actions: [],
+      source: "primary",
+    };
+  } catch (err) {
+    console.error("Groq AI error:", err);
+    return null;
+  }
+}
+
 async function callPrimary(messages: ChatMessage[]): Promise<AIChatResult | null> {
   if (!PRIMARY_API_KEY) return null;
   try {
     const sys = messages.find((m) => m.role === "system")?.content || "";
     const userMsgs = messages.filter((m) => m.role !== "system");
-    const res = await fetch(PRIMARY_API_URL, {
+    // OpenAI-compatible (DeepSeek / OpenAI)
+    const baseUrl = PRIMARY_API_URL.replace(/\/chat\/completions$/, "").replace(/\/messages$/, "");
+    const res = await fetch(`${baseUrl}/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": PRIMARY_API_KEY,
-        "anthropic-version": "2023-06-01",
+        "Authorization": `Bearer ${PRIMARY_API_KEY}`,
       },
       body: JSON.stringify({
         model: PRIMARY_MODEL,
+        messages: [
+          { role: "system", content: sys },
+          ...userMsgs.map((m) => ({ role: m.role, content: m.content })),
+        ],
         max_tokens: 1200,
         temperature: 0.6,
-        system: sys,
-        messages: userMsgs.map((m) => ({ role: m.role, content: m.content })),
       }),
       signal: AbortSignal.timeout(15000),
     });
     if (!res.ok) throw new Error(`Primary API: ${res.status}`);
-    const data = (await res.json()) as { content: Array<{ text: string }> };
-    const raw = data.content[0]?.text || "{}";
-    // Find first JSON object in response
-    const match = raw.match(/\{[\s\S]*\}/);
-    const parsed = match ? JSON.parse(match[0]) : {};
-    return {
-      message: String(parsed.message || raw),
-      actions: Array.isArray(parsed.actions) ? parsed.actions : [],
-      source: "primary",
-    };
+    const data = (await res.json()) as { choices: Array<{ message: { content: string } }> };
+    const raw = data.choices[0]?.message?.content || "";
+    if (!raw) return null;
+    return { message: raw, actions: [], source: "primary" };
   } catch (err) {
     console.error("Primary AI error:", err);
     return null;
@@ -167,41 +215,41 @@ async function callPrimary(messages: ChatMessage[]): Promise<AIChatResult | null
 }
 
 async function callBackup(messages: ChatMessage[]): Promise<AIChatResult | null> {
-  if (!BACKUP_API_KEY) return null;
-  try {
-    const sys = messages.find((m) => m.role === "system")?.content || "";
-    const userMsgs = messages.filter((m) => m.role !== "system");
-    const promptText = sys
-      ? `[النظام: ${sys}]\n\n` + userMsgs.map((m) => `${m.role === "user" ? "المتعلم" : "المرشد"}: ${m.content}`).join("\n")
-      : userMsgs.map((m) => `${m.role === "user" ? "المتعلم" : "المرشد"}: ${m.content}`).join("\n");
+  if (GEMINI_KEYS.length === 0) return null;
+  const sys = messages.find((m) => m.role === "system")?.content || "";
+  const userMsgs = messages.filter((m) => m.role !== "system");
+  const promptText = sys
+    ? `[النظام: ${sys}]\n\n` + userMsgs.map((m) => `${m.role === "user" ? "المتعلم" : "المرشد"}: ${m.content}`).join("\n")
+    : userMsgs.map((m) => `${m.role === "user" ? "المتعلم" : "المرشد"}: ${m.content}`).join("\n");
 
-    const geminiBase = BACKUP_BASE_URL.endsWith("/models") ? BACKUP_BASE_URL : `${BACKUP_BASE_URL}/models`;
-    const url = `${geminiBase}/${BACKUP_MODEL}:generateContent?key=${BACKUP_API_KEY}`;
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: promptText }] }],
-        generationConfig: { maxOutputTokens: 1200, temperature: 0.7 },
-      }),
-      signal: AbortSignal.timeout(15000),
-    });
-
-    if (!res.ok) throw new Error(`Backup AI (Gemini) ${res.status}`);
-    const data = (await res.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
-    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
-
-    const match = raw.match(/\{[\s\S]*\}/);
-    const parsed = match ? JSON.parse(match[0]) : {};
-    return {
-      message: String(parsed.message || raw),
-      actions: Array.isArray(parsed.actions) ? parsed.actions : [],
-      source: "backup",
-    };
-  } catch (err) {
-    console.error("Backup AI (Gemini) error:", err);
-    return null;
+  const geminiBase = BACKUP_BASE_URL.endsWith("/models") ? BACKUP_BASE_URL : `${BACKUP_BASE_URL}/models`;
+  // Try each Gemini key in rotation
+  for (const key of GEMINI_KEYS) {
+    try {
+      const url = `${geminiBase}/${BACKUP_MODEL}:generateContent?key=${key}`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: promptText }] }],
+          generationConfig: { maxOutputTokens: 1200, temperature: 0.7 },
+        }),
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        console.warn(`Gemini key failed (${res.status}):`, (errData as any)?.error?.message?.slice(0, 80));
+        continue;
+      }
+      const data = (await res.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
+      const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      if (!raw) continue;
+      return { message: raw, actions: [], source: "backup" };
+    } catch (err) {
+      console.warn("Gemini key error:", err);
+    }
   }
+  return null;
 }
 
 // ── Menu state detection ──
@@ -667,6 +715,13 @@ export async function chatWithAI(
     { role: "user", content: userMessage },
   ];
 
+  // 0. Try Groq FIRST — fastest, free, working
+  const groqResult = await callGroq(messages);
+  if (groqResult && groqResult.message) {
+    groqResult.message = stripFallbackMarkers(groqResult.message);
+    return groqResult;
+  }
+
   // 1. Check DB or ENV resolved providers (Primary & Backup)
   try {
     const { resolvePlanProviders } = await import("./ai-provider");
@@ -689,14 +744,14 @@ export async function chatWithAI(
     console.warn("[chatWithAI] DB provider resolution skipped:", dbErr);
   }
 
-  // 2. Try static ENV fallback callBackup (Gemini)
+  // 2. Try static ENV fallback callBackup (Gemini key rotation)
   let result = await callBackup(messages);
   if (result && result.message) {
     result.message = stripFallbackMarkers(result.message);
     return result;
   }
 
-  // 3. Try static ENV fallback callPrimary
+  // 3. Try static ENV fallback callPrimary (DeepSeek/OpenAI)
   result = await callPrimary(messages);
   if (result && result.message) {
     result.message = stripFallbackMarkers(result.message);
@@ -736,7 +791,7 @@ export async function analyzeQuizAnswer(
     { role: "user", content: prompt },
   ];
 
-  const result = await callPrimary(messages);
+  const result = (await callGroq(messages)) || (await callPrimary(messages));
   if (result?.message) {
     try {
       const match = result.message.match(/\{[\s\S]*\}/);
@@ -776,7 +831,7 @@ export async function generateInsights(
     },
   ];
 
-  const result = await callPrimary(messages);
+  const result = (await callGroq(messages)) || (await callPrimary(messages));
   if (result?.message) {
     try {
       const match = result.message.match(/\{[\s\S]*\}/);

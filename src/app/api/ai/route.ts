@@ -1,54 +1,70 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 
-const PRIMARY_API_KEY = process.env.AI_PRIMARY_API_KEY || "";
-const PRIMARY_API_URL = process.env.AI_PRIMARY_BASE_URL || "https://api.anthropic.com/v1/messages";
-const PRIMARY_MODEL = process.env.AI_PRIMARY_MODEL || "claude-3-5-sonnet-20241022";
+const GROQ_API_KEY = process.env.GROQ_API_KEY || "";
+const GROQ_BASE_URL = "https://api.groq.com/openai/v1";
+const GROQ_MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
 
-const BACKUP_API_KEY = process.env.AI_BACKUP_API_KEY || process.env.GEMINI_API_KEY || "";
+// Gemini fallback keys (rotation)
+const GEMINI_KEYS = [
+  process.env.GEMINI_KEY_1 || process.env.GEMINI_API_KEY || "",
+  process.env.GEMINI_KEY_2 || process.env.GEMINI_API_KEY_SECONDARY || "",
+  process.env.GEMINI_KEY_3 || "",
+].filter(Boolean);
 const BACKUP_BASE_RAW = process.env.AI_BACKUP_BASE_URL || "https://generativelanguage.googleapis.com/v1beta";
 const BACKUP_BASE_URL = BACKUP_BASE_RAW.replace(/\/+$/, "");
-const BACKUP_MODEL = process.env.AI_BACKUP_MODEL || "gemini-2.0-flash-lite";
+const BACKUP_MODEL = process.env.AI_BACKUP_MODEL || "gemini-2.0-flash";
 
-async function callPrimary(messages: { role: string; content: string }[]) {
-  const sys = messages.find((m) => m.role === "system")?.content || "";
-  const userMsgs = messages.filter((m) => m.role !== "system");
-  const res = await fetch(PRIMARY_API_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": PRIMARY_API_KEY,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: PRIMARY_MODEL,
-      max_tokens: 1200,
-      system: sys,
-      messages: userMsgs.map((m) => ({ role: m.role, content: m.content })),
-    }),
-    signal: AbortSignal.timeout(10000),
-  });
-  if (!res.ok) throw new Error(`Primary AI error: ${res.status}`);
-  const data = await res.json();
-  return data.content[0].text;
+async function callGroq(messages: { role: string; content: string }[]): Promise<string | null> {
+  if (!GROQ_API_KEY) return null;
+  try {
+    const res = await fetch(`${GROQ_BASE_URL}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${GROQ_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: GROQ_MODEL,
+        messages,
+        max_tokens: 1200,
+        temperature: 0.7,
+      }),
+      signal: AbortSignal.timeout(12000),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content || null;
+  } catch {
+    return null;
+  }
 }
 
-async function callBackup(messages: { role: string; content: string }[]) {
+async function callGeminiFallback(messages: { role: string; content: string }[]): Promise<string | null> {
+  if (GEMINI_KEYS.length === 0) return null;
   const prompt = messages.map((m) => `${m.role}: ${m.content}`).join("\n");
   const geminiBase = BACKUP_BASE_URL.endsWith("/models") ? BACKUP_BASE_URL : `${BACKUP_BASE_URL}/models`;
-  const url = `${geminiBase}/${BACKUP_MODEL}:generateContent?key=${BACKUP_API_KEY}`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.7, maxOutputTokens: 1200 },
-    }),
-    signal: AbortSignal.timeout(10000),
-  });
-  if (!res.ok) throw new Error(`Backup AI error: ${res.status}`);
-  const data = await res.json();
-  return data.candidates[0].content.parts[0].text;
+  for (const key of GEMINI_KEYS) {
+    try {
+      const url = `${geminiBase}/${BACKUP_MODEL}:generateContent?key=${key}`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.7, maxOutputTokens: 1200 },
+        }),
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!res.ok) continue;
+      const data = await res.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (text) return text;
+    } catch {
+      continue;
+    }
+  }
+  return null;
 }
 
 function generateFallbackPlan(courses: string[]): string {
@@ -83,26 +99,11 @@ export async function POST(req: NextRequest) {
     ...(messages || []),
   ];
 
-  let reply: string;
-
-  // Try primary API (Claude), fallback to Gemini, then static fallback
-  try {
-    if (PRIMARY_API_KEY) {
-      reply = await callPrimary(formattedMessages);
-    } else {
-      throw new Error("No primary AI key");
-    }
-  } catch {
-    try {
-      if (BACKUP_API_KEY) {
-        reply = await callBackup(formattedMessages);
-      } else {
-        throw new Error("No backup AI key");
-      }
-    } catch {
-      reply = generateFallbackPlan(courses || []);
-    }
-  }
+  // Try Groq first (confirmed working), then Gemini key rotation, then static fallback
+  const reply =
+    (await callGroq(formattedMessages)) ||
+    (await callGeminiFallback(formattedMessages)) ||
+    generateFallbackPlan(courses || []);
 
   return NextResponse.json({ reply });
 }
