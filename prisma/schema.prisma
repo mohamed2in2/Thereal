@@ -220,10 +220,10 @@ model TeacherProfile {
   featuredCourseId String?
   isPublished      Boolean @default(false)
 
-  /// "احجز الان" subscription plan prices (null = plan not offered)
-  priceMonthly      Float?
-  priceTermly       Float?
-  priceYearly       Float?
+  /// "احجز الان" subscription plan prices (default 200, 600, 1200)
+  priceMonthly      Float? @default(200)
+  priceTermly       Float? @default(600)
+  priceYearly       Float? @default(1200)
 
   /// Per-plan discount percentages (0-100)
   discountMonthly   Float?
@@ -235,6 +235,9 @@ model TeacherProfile {
 
   /// Optional teacher contact/payment link (WhatsApp, payment page, etc.)
   bookingContactUrl String?
+
+  /// Toggle to enable or disable English/Languages track booking for this teacher
+  enableLanguagesTrack Boolean @default(true)
 
   /// Extra monthly surcharge for English / Languages track (default: 50 EGP/month)
   priceLanguagesMonthly Float? @default(50)

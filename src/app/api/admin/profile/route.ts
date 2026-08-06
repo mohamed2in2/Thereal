@@ -20,7 +20,7 @@ async function uniqueSlug(name: string, teacherId: string): Promise<string> {
   }
 }
 
-const EDITABLE = ["displayName", "bio", "photoUrl", "bannerUrl", "navColor", "accentColor", "socials", "featuredCourseId", "priceMonthly", "priceTermly", "priceYearly", "discountMonthly", "discountTermly", "discountYearly", "courseStartDate", "bookingContactUrl", "priceLanguagesMonthly", "paymentNotes"] as const;
+const EDITABLE = ["displayName", "bio", "photoUrl", "bannerUrl", "navColor", "accentColor", "socials", "featuredCourseId", "priceMonthly", "priceTermly", "priceYearly", "discountMonthly", "discountTermly", "discountYearly", "courseStartDate", "bookingContactUrl", "priceLanguagesMonthly", "paymentNotes", "enableLanguagesTrack"] as const;
 
 export async function GET() {
   try {
@@ -32,8 +32,32 @@ export async function GET() {
     let profile = await prisma.teacherProfile.findUnique({ where: { teacherId: session.id } });
     if (!profile) {
       profile = await prisma.teacherProfile.create({
-        data: { teacherId: session.id, slug: await uniqueSlug(session.name, session.id), displayName: session.name },
+        data: {
+          teacherId: session.id,
+          slug: await uniqueSlug(session.name, session.id),
+          displayName: session.name,
+          priceMonthly: 200,
+          priceTermly: 600,
+          priceYearly: 1200,
+          enableLanguagesTrack: true,
+          priceLanguagesMonthly: 50,
+        },
       });
+    } else {
+      // Ensure defaults for missing base prices
+      const updates: Record<string, any> = {};
+      if (profile.priceMonthly == null) updates.priceMonthly = 200;
+      if (profile.priceTermly == null) updates.priceTermly = 600;
+      if (profile.priceYearly == null) updates.priceYearly = 1200;
+      if (profile.enableLanguagesTrack == null) updates.enableLanguagesTrack = true;
+      if (profile.priceLanguagesMonthly == null) updates.priceLanguagesMonthly = 50;
+
+      if (Object.keys(updates).length > 0) {
+        profile = await prisma.teacherProfile.update({
+          where: { teacherId: session.id },
+          data: updates,
+        });
+      }
     }
     return NextResponse.json({ profile });
   } catch (error) {

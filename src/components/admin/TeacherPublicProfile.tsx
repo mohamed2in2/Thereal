@@ -22,6 +22,7 @@ type Profile = {
   discountTermly: number | null;
   discountYearly: number | null;
   priceLanguagesMonthly: number | null;
+  enableLanguagesTrack?: boolean;
   paymentNotes: string | null;
   courseStartDate: string | null;
   bookingContactUrl: string | null;
@@ -295,23 +296,47 @@ export function TeacherPublicProfile() {
           <p className="text-xs text-[var(--ink-muted)] mt-1">تحكم كامل في أسعار الاشتراك، نسبة الخصم، رسوم مسار اللغات، ورابط الدفع المباشر.</p>
         </div>
 
-        {/* Languages Track Surcharge Setting */}
-        <div className="p-4 rounded-xl border border-sky-500/30 bg-sky-500/5">
-          <label className="block text-xs font-bold text-sky-400 mb-1">🌐 رسوم مسار اللغات / إنجليزي (إضافي شهرياً)</label>
-          <div className="flex flex-col sm:flex-row items-center gap-3">
-            <input
-              type="number"
-              min="0"
-              step="5"
-              className={`${input} sm:max-w-xs`}
-              value={p.priceLanguagesMonthly ?? 50}
-              onChange={(e) => set("priceLanguagesMonthly", e.target.value ? Number(e.target.value) : 0)}
-              placeholder="50"
-            />
-            <span className="text-xs text-[var(--ink-muted)]">
-              المبلغ يضاف تلقائياً لطلاب مسار اللغات (مثال: {p.priceLanguagesMonthly ?? 50}ج/شهر × 3 شهور = +{(p.priceLanguagesMonthly ?? 50) * 3}ج).
-            </span>
+        {/* Languages Track Toggle & Surcharge Setting */}
+        <div className="p-4 rounded-xl border border-sky-500/30 bg-sky-500/5 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="font-bold text-sm text-[var(--ink)]">🌐 إتاحة الحجز بمسار "لغات / إنجليزي"</p>
+              <p className="text-xs text-[var(--ink-muted)] mt-0.5">عند تفعيل الخيار، يتمكن الطلاب من اختيار مسار اللغات عند الحجز.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => set("enableLanguagesTrack", !(p.enableLanguagesTrack ?? true))}
+              role="switch"
+              aria-checked={p.enableLanguagesTrack ?? true}
+              className={`relative w-12 h-7 rounded-full transition-colors shrink-0 ${p.enableLanguagesTrack ?? true ? "bg-emerald-500" : "bg-[var(--border)]"}`}
+            >
+              <span className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-all ${p.enableLanguagesTrack ?? true ? "left-1" : "left-6"}`} />
+            </button>
           </div>
+
+          {(p.enableLanguagesTrack ?? true) ? (
+            <div className="pt-2 border-t border-sky-500/20">
+              <label className="block text-xs font-bold text-sky-400 mb-1">💰 رسوم مسار اللغات / إنجليزي (إضافي شهرياً)</label>
+              <div className="flex flex-col sm:flex-row items-center gap-3">
+                <input
+                  type="number"
+                  min="0"
+                  step="5"
+                  className={`${input} sm:max-w-xs`}
+                  value={p.priceLanguagesMonthly ?? 50}
+                  onChange={(e) => set("priceLanguagesMonthly", e.target.value ? Number(e.target.value) : 0)}
+                  placeholder="50"
+                />
+                <span className="text-xs text-[var(--ink-muted)]">
+                  المبلغ يضاف تلقائياً لطلاب مسار اللغات (مثال: {p.priceLanguagesMonthly ?? 50}ج/شهر × 3 شهور = +{(p.priceLanguagesMonthly ?? 50) * 3}ج).
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-bold">
+              🚫 مسار اللغات معطّل حالياً — سيقتصر الحجز على المسار العربي فقط.
+            </div>
+          )}
         </div>
 
         <div className="space-y-4">
