@@ -23,6 +23,8 @@ interface BookingModalProps {
   discountMonthly?: number | null;
   discountTermly?: number | null;
   discountYearly?: number | null;
+  priceLanguagesMonthly?: number | null;
+  paymentNotes?: string | null;
   courseStartDate: string | null;
   bookingContactUrl: string | null;
   accentColor: string;
@@ -104,6 +106,8 @@ export function BookingButton({
   discountMonthly,
   discountTermly,
   discountYearly,
+  priceLanguagesMonthly,
+  paymentNotes,
   courseStartDate,
   bookingContactUrl,
   accentColor,
@@ -199,7 +203,8 @@ export function BookingButton({
   const baseTermly = priceTermly && priceTermly > 0 ? priceTermly : 600;
   const baseYearly = priceYearly && priceYearly > 0 ? priceYearly : 1200;
 
-  const langSurchargePerMonth = languageTrack === "languages" ? 50 : 0;
+  const langRate = priceLanguagesMonthly != null && priceLanguagesMonthly >= 0 ? priceLanguagesMonthly : 50;
+  const langSurchargePerMonth = languageTrack === "languages" ? langRate : 0;
 
   const plans: BookingPlan[] = [
     createPlan("monthly", "اشتراك شهر واحد", "شهر واحد (1 Month)", baseMonthly + langSurchargePerMonth, discountMonthly, "📅", "#3B82F6", "rgba(59,130,246,0.1)"),
@@ -565,9 +570,17 @@ export function BookingButton({
 
               {/* Start Date Footer */}
               {courseStartDate && (
-                <p className="text-center text-xs font-bold mb-4 p-3 rounded-xl" style={{ background: "rgba(255,255,255,0.04)", color: "var(--ink-muted, #888)" }}>
+                <p className="text-center text-xs font-bold mb-3 p-3 rounded-xl" style={{ background: "rgba(255,255,255,0.04)", color: "var(--ink-muted, #888)" }}>
                   📍 موعد بدء الكورس: <span style={{ color: accentColor }}>{formatArabicDate(courseStartDate)}</span>
                 </p>
+              )}
+
+              {/* Teacher Custom Payment Notes */}
+              {paymentNotes && (
+                <div className="mb-4 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-semibold leading-relaxed">
+                  <span className="font-bold text-amber-400 block mb-0.5">📢 ملاحظات المعلم والدفع:</span>
+                  {paymentNotes}
+                </div>
               )}
 
               {/* Payment Method Tabs (Wallet / Balance / WhatsApp / Code) */}

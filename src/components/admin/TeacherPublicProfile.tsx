@@ -21,6 +21,8 @@ type Profile = {
   discountMonthly: number | null;
   discountTermly: number | null;
   discountYearly: number | null;
+  priceLanguagesMonthly: number | null;
+  paymentNotes: string | null;
   courseStartDate: string | null;
   bookingContactUrl: string | null;
 };
@@ -288,20 +290,44 @@ export function TeacherPublicProfile() {
             <svg className="w-5 h-5 text-emerald-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
-            إعدادات الحجز والاشتراك
+            إعدادات الحجز والدفع والاشتراك 💳
           </h3>
-          <p className="text-xs text-[var(--ink-muted)] mt-1">حدد أسعار خطط الاشتراك التي ستظهر للطلاب عند الضغط على "احجز الآن" في صفحتك.</p>
+          <p className="text-xs text-[var(--ink-muted)] mt-1">تحكم كامل في أسعار الاشتراك، نسبة الخصم، رسوم مسار اللغات، ورابط الدفع المباشر.</p>
+        </div>
+
+        {/* Languages Track Surcharge Setting */}
+        <div className="p-4 rounded-xl border border-sky-500/30 bg-sky-500/5">
+          <label className="block text-xs font-bold text-sky-400 mb-1">🌐 رسوم مسار اللغات / إنجليزي (إضافي شهرياً)</label>
+          <div className="flex flex-col sm:flex-row items-center gap-3">
+            <input
+              type="number"
+              min="0"
+              step="5"
+              className={`${input} sm:max-w-xs`}
+              value={p.priceLanguagesMonthly ?? 50}
+              onChange={(e) => set("priceLanguagesMonthly", e.target.value ? Number(e.target.value) : 0)}
+              placeholder="50"
+            />
+            <span className="text-xs text-[var(--ink-muted)]">
+              المبلغ يضاف تلقائياً لطلاب مسار اللغات (مثال: {p.priceLanguagesMonthly ?? 50}ج/شهر × 3 شهور = +{(p.priceLanguagesMonthly ?? 50) * 3}ج).
+            </span>
+          </div>
         </div>
 
         <div className="space-y-4">
           {/* 1 Month Plan */}
           <div className="p-4 rounded-xl border border-[var(--border)] bg-[var(--bg)]">
-            <h4 className="font-bold text-sm text-[var(--ink)] mb-3 flex items-center gap-2">
-              <span>📅</span> اشتراك شهر واحد (1 Month)
+            <h4 className="font-bold text-sm text-[var(--ink)] mb-3 flex items-center justify-between">
+              <span className="flex items-center gap-2"><span>📅</span> اشتراك شهر واحد (1 Month)</span>
+              {p.priceMonthly && (
+                <span className="text-xs font-mono text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
+                  صافي العربي: {Math.round((p.priceMonthly ?? 200) * (1 - (p.discountMonthly || 0) / 100))}ج | لغات: {Math.round((p.priceMonthly ?? 200) * (1 - (p.discountMonthly || 0) / 100)) + (p.priceLanguagesMonthly ?? 50)}ج
+                </span>
+              )}
             </h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className={label}>السعر (جنيه - افتراضي 200ج)</label>
+                <label className={label}>السعر الأساسي (جنيه - افتراضي 200ج)</label>
                 <input
                   type="number"
                   min="0"
@@ -330,12 +356,17 @@ export function TeacherPublicProfile() {
 
           {/* 3 Months Plan */}
           <div className="p-4 rounded-xl border border-[var(--border)] bg-[var(--bg)]">
-            <h4 className="font-bold text-sm text-[var(--ink)] mb-3 flex items-center gap-2">
-              <span>📚</span> اشتراك 3 شهور (3 Months)
+            <h4 className="font-bold text-sm text-[var(--ink)] mb-3 flex items-center justify-between">
+              <span className="flex items-center gap-2"><span>📚</span> اشتراك 3 شهور (3 Months)</span>
+              {p.priceTermly && (
+                <span className="text-xs font-mono text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/20">
+                  صافي العربي: {Math.round((p.priceTermly ?? 600) * (1 - (p.discountTermly || 0) / 100))}ج | لغات: {Math.round((p.priceTermly ?? 600) * (1 - (p.discountTermly || 0) / 100)) + (p.priceLanguagesMonthly ?? 50) * 3}ج
+                </span>
+              )}
             </h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className={label}>السعر (جنيه - افتراضي 600ج)</label>
+                <label className={label}>السعر الأساسي (جنيه - افتراضي 600ج)</label>
                 <input
                   type="number"
                   min="0"
@@ -364,12 +395,17 @@ export function TeacherPublicProfile() {
 
           {/* 6 Months Plan */}
           <div className="p-4 rounded-xl border border-[var(--border)] bg-[var(--bg)]">
-            <h4 className="font-bold text-sm text-[var(--ink)] mb-3 flex items-center gap-2">
-              <span>🎓</span> اشتراك 6 شهور (6 Months)
+            <h4 className="font-bold text-sm text-[var(--ink)] mb-3 flex items-center justify-between">
+              <span className="flex items-center gap-2"><span>🎓</span> اشتراك 6 شهور (6 Months)</span>
+              {p.priceYearly && (
+                <span className="text-xs font-mono text-purple-400 bg-purple-500/10 px-2.5 py-1 rounded-full border border-purple-500/20">
+                  صافي العربي: {Math.round((p.priceYearly ?? 1200) * (1 - (p.discountYearly || 0) / 100))}ج | لغات: {Math.round((p.priceYearly ?? 1200) * (1 - (p.discountYearly || 0) / 100)) + (p.priceLanguagesMonthly ?? 50) * 6}ج
+                </span>
+              )}
             </h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className={label}>السعر (جنيه - افتراضي 1200ج)</label>
+                <label className={label}>السعر الأساسي (جنيه - افتراضي 1200ج)</label>
                 <input
                   type="number"
                   min="0"
@@ -397,8 +433,6 @@ export function TeacherPublicProfile() {
           </div>
         </div>
 
-        <p className="text-[10px] text-[var(--ink-muted)] px-1">أسعار باقات الاشتراك: شهر واحد (افتراضي 200 ج)، 3 شهور (افتراضي 600 ج)، 6 شهور (افتراضي 1200 ج). مسار "لغات / إنجليزي" يضيف 50 ج تلقائياً لكل شهر.</p>
-
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
           <div>
             <label className={label}>📅 تاريخ بدء أول كورس</label>
@@ -410,7 +444,7 @@ export function TeacherPublicProfile() {
             />
           </div>
           <div>
-            <label className={label}>🔗 رابط التواصل / الحجز</label>
+            <label className={label}>🔗 رابط التواصل / الحجز المباشر</label>
             <input
               className={`${input} font-mono`}
               dir="ltr"
@@ -418,13 +452,24 @@ export function TeacherPublicProfile() {
               onChange={(e) => set("bookingContactUrl", e.target.value || null)}
               placeholder="https://wa.me/201234567890"
             />
-            <p className="text-[10px] text-[var(--ink-muted)] mt-1">رابط واتساب أو رقم الهاتف المخصص للحجز.</p>
+            <p className="text-[10px] text-[var(--ink-muted)] mt-1">رابط واتساب أو صفحة الدفع المباشر الخاصة بك.</p>
           </div>
+        </div>
+
+        <div>
+          <label className={label}>📝 تعليمات الدفع المخصصة للطلاب (اختياري)</label>
+          <textarea
+            rows={2}
+            className={`${input} resize-none`}
+            value={p.paymentNotes ?? ""}
+            onChange={(e) => set("paymentNotes", e.target.value || null)}
+            placeholder="مثال: حول على فودافون كاش 01xxxxxxxx ورسل صورة التحويل على واتساب لتفعيل اشتراكك فوراً!"
+          />
         </div>
       </div>
 
-      <button onClick={save} disabled={saving} className={`${primaryBtn} w-full py-3`}>
-        {saving ? "جارٍ الحفظ…" : "حفظ صفحتي"}
+      <button onClick={save} disabled={saving} className={`${primaryBtn} w-full py-3 text-base`}>
+        {saving ? "جارٍ حفظ التغييرات…" : "حفظ إعدادات صفحة المدرس والأسعار 💾"}
       </button>
     </div>
   );

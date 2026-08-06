@@ -236,6 +236,12 @@ model TeacherProfile {
   /// Optional teacher contact/payment link (WhatsApp, payment page, etc.)
   bookingContactUrl String?
 
+  /// Extra monthly surcharge for English / Languages track (default: 50 EGP/month)
+  priceLanguagesMonthly Float? @default(50)
+
+  /// Custom payment instructions or Vodafone Cash number
+  paymentNotes      String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
