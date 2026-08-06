@@ -46,3 +46,8 @@ next-env.d.ts
 /src/generated/prisma
 /dev.db
 /dev.db-journal
+
+# WhatsApp Baileys Auth & Logs
+whatsapp-auth/
+logs/
+

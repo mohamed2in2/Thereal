@@ -17,6 +17,7 @@ interface AdminSidebarProps {
 
 const superadminSections = [
   { id: "overview",          label: "نظرة عامة" },
+  { id: "whatsapp",          label: "💬 خدمة WhatsApp" },
   { id: "plans",             label: "الخطط الدراسية" },
   { id: "students",          label: "المتعلمين" },
   { id: "deleted-students",  label: "المتعلمين المرشحون" },

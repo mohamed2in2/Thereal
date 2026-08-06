@@ -17,14 +17,27 @@ export function generateVerificationCode(): string {
   return String(100000 + randomInt(900000));
 }
 
+import { whatsapp } from "./whatsapp/index";
+
 /**
- * Sends a WhatsApp OTP using Meta Business Cloud API with an Authentication template.
+ * Sends a WhatsApp OTP using Baileys client (or Meta Business Cloud API as fallback).
  * Throws a WhatsAppSendError on failure or non-2xx response.
  */
 export async function sendOtpWhatsApp(phoneE164: string, code: string): Promise<boolean> {
   // Offline mode — skip actual API call (useful for staging without WhatsApp credentials)
   if (process.env.WHATSAPP_OFFLINE === "true") {
     throw new WhatsAppSendError("WhatsApp is offline (WHATSAPP_OFFLINE=true)", 503);
+  }
+
+  // Try sending via internal Baileys WhatsApp client first if connected
+  const status = whatsapp.getStatus();
+  if (status.connected) {
+    try {
+      await whatsapp.sendOTP(phoneE164, code);
+      return true;
+    } catch (err: any) {
+      console.warn("Baileys OTP send failed, checking Meta Cloud API fallback:", err.message);
+    }
   }
 
   const token = process.env.WHATSAPP_PERMANENT_TOKEN;
@@ -36,10 +49,16 @@ export async function sendOtpWhatsApp(phoneE164: string, code: string): Promise<
   const templateHasButton = process.env.WHATSAPP_TEMPLATE_HAS_BUTTON !== "false";
 
   if (!token || !phoneId || !templateName) {
-    throw new WhatsAppSendError(
-      "WhatsApp Business API credentials or template name not configured.",
-      500
-    );
+    // If Baileys wasn't connected and Meta API keys aren't set, attempt Baileys enqueue anyway
+    try {
+      await whatsapp.sendOTP(phoneE164, code);
+      return true;
+    } catch (err: any) {
+      throw new WhatsAppSendError(
+        `WhatsApp sending failed: ${err.message || "WhatsApp client disconnected"}`,
+        500
+      );
+    }
   }
 
   let recipient: string;

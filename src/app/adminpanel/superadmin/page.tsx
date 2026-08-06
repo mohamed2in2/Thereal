@@ -20,6 +20,7 @@ import { AdvancedSettingsSection } from "@/components/admin/superadmin/AdvancedS
 import { AccessGate } from "@/components/admin/superadmin/AccessGate";
 import { WalletSection } from "@/components/admin/superadmin/WalletSection";
 import { PlansSection } from "@/components/admin/superadmin/PlansSection";
+import { WhatsAppSection } from "@/components/admin/WhatsAppSection";
 import { IconMenu, IconTrash } from "@/components/admin/AdminIcons";
 import dynamic from "next/dynamic";
 
@@ -105,6 +106,7 @@ import { SuperadminReferredStudentsSection } from "@/components/admin/superadmin
 
 const SECTION_TITLES: Record<string, string> = {
   overview: "نظرة عامة",
+  whatsapp: "خدمة WhatsApp (Baileys)",
   plans: "الخطط الدراسية",
   students: "إدارة المتعلمين",
   teachers: "إدارة المعلمين",
@@ -467,6 +469,8 @@ export default function SuperadminPage() {
             </div>
           )}
 
+
+          {activeSection === "whatsapp" && <WhatsAppSection />}
 
           {activeSection === "plans" && <PlansSection userRole={userRole} />}
 
