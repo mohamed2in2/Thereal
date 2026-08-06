@@ -35,9 +35,9 @@ export async function GET(req: NextRequest) {
 
     // 3. Fetch Quiz & Exam Results
     const quizResults = await prisma.quizResult.findMany({
-      where: { userId: studentId },
+      where: { studentId },
       include: { quiz: { select: { title: true, maxScore: true } } },
-      orderBy: { createdAt: "desc" },
+      orderBy: { completedAt: "desc" },
       take: 10,
     });
 
@@ -124,7 +124,7 @@ export async function GET(req: NextRequest) {
           maxScore: q.quiz?.maxScore || 100,
           percent: Math.round((q.score / (q.quiz?.maxScore || 100)) * 100),
           status: Math.round((q.score / (q.quiz?.maxScore || 100)) * 100) >= 85 ? "🟢" : Math.round((q.score / (q.quiz?.maxScore || 100)) * 100) >= 65 ? "🟡" : "🔴",
-          date: q.createdAt.toISOString().split("T")[0],
+          date: q.completedAt.toISOString().split("T")[0],
         })),
         ...dailyExamResults.map((e) => ({
           title: e.exam?.title || "امتحان لوحة الشرف",
