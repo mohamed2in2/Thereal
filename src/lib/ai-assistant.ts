@@ -25,8 +25,15 @@ export function stripFallbackMarkers(content: string): string {
   return content.replace(/\[م:[^\]]+\]/g, "").trim();
 }
 
+function cleanArabicUTF8(str: string): string {
+  return str
+    .replace(/[\u25A0-\u25FF\uFFFD\uFFFE\uFFFF]/g, "")
+    .replace(/[ \t]+/g, " ")
+    .trim();
+}
+
 export function parseAIResponse(raw: string, source: "primary" | "backup" | "fallback"): AIChatResult {
-  const clean = raw.trim();
+  const clean = cleanArabicUTF8(raw);
   const jsonMatch = clean.match(/\{[\s\S]*\}/);
   if (jsonMatch) {
     try {
@@ -35,7 +42,7 @@ export function parseAIResponse(raw: string, source: "primary" | "backup" | "fal
         const messageStr = typeof parsed.message === "string" ? parsed.message : typeof parsed.text === "string" ? parsed.text : "";
         if (messageStr) {
           return {
-            message: stripFallbackMarkers(messageStr),
+            message: cleanArabicUTF8(stripFallbackMarkers(messageStr)),
             actions: Array.isArray(parsed.actions) ? parsed.actions : [],
             source,
           };
@@ -47,7 +54,7 @@ export function parseAIResponse(raw: string, source: "primary" | "backup" | "fal
   }
 
   return {
-    message: stripFallbackMarkers(clean),
+    message: cleanArabicUTF8(stripFallbackMarkers(clean)),
     actions: [],
     source,
   };
@@ -185,7 +192,7 @@ async function callGroq(messages: ChatMessage[]): Promise<AIChatResult | null> {
           ...userMsgs.map((m) => ({ role: m.role, content: m.content })),
         ],
         max_tokens: 1200,
-        temperature: 0.7,
+        temperature: 0.3,
       }),
       signal: AbortSignal.timeout(15000),
     });

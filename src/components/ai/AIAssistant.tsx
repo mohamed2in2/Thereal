@@ -313,26 +313,34 @@ export function AIAssistant() {
 }
 
 function ActionBadge({ action, router }: { action: ChatAction; router: ReturnType<typeof useRouter> }) {
-  const color =
-    action.status === "success" ? "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800"
-    : action.status === "error"   ? "bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800"
-    : "bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800";
-  const icon =
-    action.status === "success" ? "✓"
-    : action.status === "error"   ? "✗"
-    : action.type === "navigate"  ? "→"
-    : "⟳";
+  if (!action || action.type === "none" || action.status === "ok") return null;
 
-  return (
-    <div className={`flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg border ${color}`}>
-      <span className="font-bold">{icon}</span>
-      <span>
-        {action.type === "navigate" && action.id ? (
-          <button onClick={() => router.push(action.id!)} className="underline underline-offset-2">
-            {action.status === "success" ? "انتقل للكورس" : action.status}
-          </button>
-        ) : action.status}
-      </span>
-    </div>
-  );
+  const isNav = action.type === "navigate";
+  const path = (action as any)?.payload?.path || action.id;
+  const reason = (action as any)?.payload?.reason;
+
+  if (isNav && path) {
+    return (
+      <button
+        onClick={() => router.push(path)}
+        className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-purple-50 hover:bg-purple-100 dark:bg-purple-900/30 dark:hover:bg-purple-900/50 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 transition-colors font-medium cursor-pointer"
+      >
+        <span>🔗 {reason || "انتقل للصفحة"}</span>
+      </button>
+    );
+  }
+
+  if (action.status === "success" || action.status === "error") {
+    const isErr = action.status === "error";
+    return (
+      <div className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border ${
+        isErr ? "bg-red-50 text-red-700 border-red-200" : "bg-emerald-50 text-emerald-700 border-emerald-200"
+      }`}>
+        <span>{isErr ? "❌" : "✅"}</span>
+        <span>{action.error || action.status}</span>
+      </div>
+    );
+  }
+
+  return null;
 }
