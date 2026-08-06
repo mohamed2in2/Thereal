@@ -426,7 +426,8 @@ function fallbackResponse(
   const isIslamicGreeting = /^(السلام عليكم|وعليكم السلام|سلام عليكم|السلام)/i.test(i);
 
   const isGreeting = isMorning || isEvening || isIslamicGreeting
-    || /^(مرحبا|مرحباً|أهلا|أهلاً|اهلا|هاي|هلو|هالو|ازيك|عامل|كيفك|كيف حالك|hi|hello|hey|yo|sup|howdy|what.?s up|wassup|hola|greetings)/i.test(i);
+    || /^(مرحبا|مرحباً|أهلا|أهلاً|اهلا|هلا|هلاا|هلااا|هلاااا|هلاو|هاي|هلو|هالو|ازيك|عامل|كيفك|كيف حالك|hala|hi|hello|hey|yo|sup|howdy|what.?s up|wassup|hola|greetings)/i.test(i)
+    || /^هلا+/i.test(i.trim());
 
   const isQuestion = /\?|؟|ايه|إيه|ما هو|ما هي|كيف|ليه|why|how|what|when|where|من|who|هل|is it|can you|do you/i.test(i)
     && !isPerf && !isPlan && !isEdit && !isComplaint && !isStatus;
@@ -554,6 +555,9 @@ function fallbackResponse(
     actions.push({ type: "show_insights", payload: { checkStatus: true } });
     message = `📋 جاري تحميل حالة طلباتك...\n\n[م:5]`;
 
+  } else if (isGreeting) {
+    message = `أهلاً وسهلاً يا ${nm}! 😊 إيه الأخبار؟ كيف أقدر أساعدك في كورساتك أو المذاكرة النهاردة؟ ✨\n\n` + buildMainMenu(ctx).replace("اختار رقم:\n\n", "أو اختار من القائمة:\n");
+
   } else if (isQuestion) {
     message = `سؤالك وصلني يا ${nm}! 🤔\n\nأنا مساعدك في الكورسات والدراسة على Code-UP. اختار اللي محتاجه:\n\n` + buildMainMenu(ctx).replace("اختار رقم:\n\n", "");
 
@@ -565,6 +569,84 @@ function fallbackResponse(
   }
 
   return { message, actions, source: "fallback" };
+}
+
+async function callResolvedProvider(provider: ResolvedProvider, messages: ChatMessage[]): Promise<AIChatResult | null> {
+  const sys = messages.find((m) => m.role === "system")?.content || "";
+  const userMsgs = messages.filter((m) => m.role !== "system");
+
+  try {
+    if (provider.kind === "gemini") {
+      const promptText = sys
+        ? `[النظام: ${sys}]\n\n` + userMsgs.map((m) => `${m.role === "user" ? "المتعلم" : "المرشد"}: ${m.content}`).join("\n")
+        : userMsgs.map((m) => `${m.role === "user" ? "المتعلم" : "المرشد"}: ${m.content}`).join("\n");
+      const url = `${provider.baseUrl}/models/${provider.model}:generateContent?key=${provider.key}`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: promptText }] }],
+          generationConfig: { maxOutputTokens: 1200, temperature: 0.7 },
+        }),
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      if (!raw) return null;
+      return { message: raw, actions: [], source: "backup" };
+
+    } else if (provider.kind === "anthropic") {
+      const res = await fetch(provider.baseUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": provider.key,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: provider.model,
+          max_tokens: 1200,
+          temperature: 0.7,
+          system: sys,
+          messages: userMsgs.map((m) => ({ role: m.role, content: m.content })),
+        }),
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      const raw = data.content?.[0]?.text || "";
+      if (!raw) return null;
+      return { message: raw, actions: [], source: "primary" };
+
+    } else {
+      const res = await fetch(`${provider.baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${provider.key}`,
+        },
+        body: JSON.stringify({
+          model: provider.model,
+          messages: [
+            { role: "system", content: sys },
+            ...userMsgs.map((m) => ({ role: m.role, content: m.content })),
+          ],
+          max_tokens: 1200,
+          temperature: 0.7,
+        }),
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      const raw = data.choices?.[0]?.message?.content || "";
+      if (!raw) return null;
+      return { message: raw, actions: [], source: "primary" };
+    }
+  } catch (err) {
+    console.error(`[callResolvedProvider] Provider ${provider.name} failed:`, err);
+    return null;
+  }
 }
 
 export async function chatWithAI(
@@ -584,21 +666,43 @@ export async function chatWithAI(
     { role: "user", content: userMessage },
   ];
 
-  // 1. Try Gemini first
+  // 1. Check DB or ENV resolved providers (Primary & Backup)
+  try {
+    const { resolvePlanProviders } = await import("./ai-provider");
+    const { primary, backup } = await resolvePlanProviders();
+    if (primary) {
+      const res = await callResolvedProvider(primary as any, messages);
+      if (res && res.message) {
+        res.message = stripFallbackMarkers(res.message);
+        return res;
+      }
+    }
+    if (backup) {
+      const res = await callResolvedProvider(backup as any, messages);
+      if (res && res.message) {
+        res.message = stripFallbackMarkers(res.message);
+        return res;
+      }
+    }
+  } catch (dbErr) {
+    console.warn("[chatWithAI] DB provider resolution skipped:", dbErr);
+  }
+
+  // 2. Try static ENV fallback callBackup (Gemini)
   let result = await callBackup(messages);
   if (result && result.message) {
     result.message = stripFallbackMarkers(result.message);
     return result;
   }
 
-  // 2. Try Primary / DeepSeek
+  // 3. Try static ENV fallback callPrimary
   result = await callPrimary(messages);
   if (result && result.message) {
     result.message = stripFallbackMarkers(result.message);
     return result;
   }
 
-  // 3. Smart menu fallback (always runs when no AI key configured)
+  // 4. Smart menu fallback (always runs when no AI key configured)
   const fb = fallbackResponse(userMessage, studentContext, history, notifications);
   fb.message = stripFallbackMarkers(fb.message);
   return fb;
