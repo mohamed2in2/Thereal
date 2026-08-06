@@ -1,0 +1,2 @@
+ALTER TABLE "Course"
+ADD COLUMN "quizTimeLimitMinutes" INTEGER NOT NULL DEFAULT 30;

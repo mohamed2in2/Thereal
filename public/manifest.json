@@ -1,0 +1,39 @@
+{
+  "name": "منصة Code-UP التعليمية",
+  "short_name": "Code-UP",
+  "description": "تعلّم الرياضيات والعلوم للطلاب المصريين",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F7F5F0",
+  "theme_color": "#0E6E62",
+  "lang": "ar",
+  "dir": "rtl",
+  "icons": [
+    {
+      "src": "/logo.jpeg",
+      "sizes": "192x192",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/logo.jpeg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["education"],
+  "shortcuts": [
+    {
+      "name": "مكتبتي",
+      "url": "/library",
+      "description": "الكورسات المسجّل فيها"
+    },
+    {
+      "name": "لوحة الشرف",
+      "url": "/leaderboard",
+      "description": "ترتيب الطلاب"
+    }
+  ]
+}

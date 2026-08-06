@@ -1,0 +1,110 @@
+
+> thefake@0.1.0 dev
+> npx tsx scripts/repair-sqlite-db.ts && next dev --webpack
+
+[repair-db] SQLite schema already up to date
+▲ Next.js 16.2.7 (webpack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.1.28:3000
+- Environments: .env
+✓ Ready in 11.8s
+- Experiments (use with caution):
+  · optimizePackageImports
+  · serverActions
+
+○ Compiling /adminpanel ...
+ GET /adminpanel 200 in 46s (next.js: 43s, proxy.ts: 1905ms, application-code: 778ms)
+[Middleware] No auth_token cookie present for path: /api/auth/login
+○ Compiling /api/auth/login ...
+normalizeEgyptPhone raw: "01015015015" codes: [
+  48, 49, 48, 49, 53,
+  48, 49, 53, 48, 49,
+  53
+]
+ POST /api/auth/login 200 in 13.4s (next.js: 7.1s, proxy.ts: 309ms, application-code: 5.9s)
+[Middleware] No auth_token cookie present for path: /api/auth/login
+⨯ SyntaxError: Unexpected end of JSON input
+    at JSON.parse (<anonymous>) {
+  page: '/api/auth/login'
+}
+ POST /api/auth/login 500 in 8.9s (next.js: 5.0s, proxy.ts: 140ms, application-code: 3.8s)
+[Middleware] No auth_token cookie present for path: /api/auth/login
+normalizeEgyptPhone raw: "01015015015" codes: [
+  48, 49, 48, 49, 53,
+  48, 49, 53, 48, 49,
+  53
+]
+ POST /api/auth/login 200 in 13.0s (next.js: 169ms, proxy.ts: 144ms, application-code: 12.7s)
+[Middleware] No auth_token cookie present for path: /api/auth/login
+normalizeEgyptPhone raw: "01015015015" codes: [
+  48, 49, 48, 49, 53,
+  48, 49, 53, 48, 49,
+  53
+]
+ POST /api/auth/login 200 in 631ms (next.js: 4ms, proxy.ts: 11ms, application-code: 615ms)
+[Middleware] No auth_token cookie present for path: /api/auth/login
+normalizeEgyptPhone raw: "01015015015" codes: [
+  48, 49, 48, 49, 53,
+  48, 49, 53, 48, 49,
+  53
+]
+ POST /api/auth/login 200 in 549ms (next.js: 6ms, proxy.ts: 15ms, application-code: 529ms)
+[Middleware] No auth_token cookie present for path: /api/auth/login
+normalizeEgyptPhone raw: "01015015015" codes: [
+  48, 49, 48, 49, 53,
+  48, 49, 53, 48, 49,
+  53
+]
+ POST /api/auth/login 200 in 1188ms (next.js: 3ms, proxy.ts: 9ms, application-code: 1175ms)
+[Middleware] No auth_token cookie present for path: /api/auth/login
+normalizeEgyptPhone raw: "01015015015" codes: [
+  48, 49, 48, 49, 53,
+  48, 49, 53, 48, 49,
+  53
+]
+ POST /api/auth/login 200 in 541ms (next.js: 5ms, proxy.ts: 11ms, application-code: 525ms)
+[Middleware] No auth_token cookie present for path: /api/auth/login
+○ Compiling /api/auth/login ...
+normalizeEgyptPhone raw: "01015015015" codes: [
+  48, 49, 48, 49, 53,
+  48, 49, 53, 48, 49,
+  53
+]
+ POST /api/auth/login 200 in 22.1s (next.js: 21.0s, proxy.ts: 15ms, application-code: 1043ms)
+[Middleware] No auth_token cookie present for path: /api/auth/login
+normalizeEgyptPhone raw: "01015015015" codes: [
+  48, 49, 48, 49, 53,
+  48, 49, 53, 48, 49,
+  53
+]
+ POST /api/auth/login 200 in 820ms (next.js: 44ms, proxy.ts: 16ms, application-code: 761ms)
+[Middleware] No auth_token cookie present for path: /api/auth/login
+normalizeEgyptPhone raw: "01015015015" codes: [
+  48, 49, 48, 49, 53,
+  48, 49, 53, 48, 49,
+  53
+]
+ POST /api/auth/login 200 in 582ms (next.js: 4ms, proxy.ts: 8ms, application-code: 570ms)
+[Middleware] No auth_token cookie present for path: /api/auth/login
+normalizeEgyptPhone raw: "01015015015" codes: [
+  48, 49, 48, 49, 53,
+  48, 49, 53, 48, 49,
+  53
+]
+ POST /api/auth/login 200 in 675ms (next.js: 4ms, proxy.ts: 8ms, application-code: 663ms)
+[Middleware] No auth_token cookie present for path: /api/auth/login
+normalizeEgyptPhone raw: "01015015015" codes: [
+  48, 49, 48, 49, 53,
+  48, 49, 53, 48, 49,
+  53
+]
+ POST /api/auth/login 403 in 158ms (next.js: 4ms, proxy.ts: 8ms, application-code: 147ms)
+○ Compiling /api/admin/students/[id]/reset-devices ...
+ POST /api/admin/students/cmqfcxizr0000v4ygx40e2e7o/reset-devices 200 in 27.9s (next.js: 27.3s, proxy.ts: 64ms, application-code: 514ms)
+[Middleware] No auth_token cookie present for path: /api/auth/login
+normalizeEgyptPhone raw: "01015015015" codes: [
+  48, 49, 48, 49, 53,
+  48, 49, 53, 48, 49,
+  53
+]
+ POST /api/auth/login 200 in 1067ms (next.js: 347ms, proxy.ts: 24ms, application-code: 697ms)

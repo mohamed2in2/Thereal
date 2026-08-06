@@ -1,0 +1,414 @@
+2026-08-02T18:32:35.620Z INFO  llm config  turnStep=0.1 provider=openai model=glm-5.2 modelAlias=glm5.2 thinkingEffort=off systemPromptChars=51058 toolCount=24
+2026-08-02T18:32:35.620Z INFO  llm request  turnStep=0.1
+2026-08-02T18:32:39.653Z INFO  llm response  turnStep=0/1 ttftMs=2891 requestBuildMs=1 serverFirstTokenMs=2890 streamDurationMs=1138 serverDecodeMs=1134 clientConsumeMs=3 outputTokens=59
+2026-08-02T18:32:45.882Z INFO  llm request  turnStep=1.1
+2026-08-02T18:32:51.491Z INFO  llm response  turnStep=1/1 ttftMs=4718 requestBuildMs=0 serverFirstTokenMs=4718 streamDurationMs=890 serverDecodeMs=882 clientConsumeMs=7 outputTokens=66
+2026-08-02T18:33:08.686Z INFO  llm request  turnStep=2.1
+2026-08-02T18:33:16.222Z INFO  llm response  turnStep=2/1 ttftMs=3685 requestBuildMs=0 serverFirstTokenMs=3685 streamDurationMs=3851 serverDecodeMs=3836 clientConsumeMs=15 outputTokens=238
+2026-08-02T18:35:03.239Z INFO  llm request  turnStep=3.1
+2026-08-02T18:35:06.101Z INFO  llm response  turnStep=3/1 ttftMs=1663 requestBuildMs=0 serverFirstTokenMs=1663 streamDurationMs=1198 serverDecodeMs=1189 clientConsumeMs=9 outputTokens=86
+2026-08-02T18:35:32.072Z INFO  llm request  turnStep=4.1
+2026-08-02T18:35:39.712Z INFO  llm response  turnStep=4/1 ttftMs=2116 requestBuildMs=0 serverFirstTokenMs=2116 streamDurationMs=5522 serverDecodeMs=5488 clientConsumeMs=34 outputTokens=366
+2026-08-02T18:36:34.440Z INFO  llm request  turnStep=5.1
+2026-08-02T18:36:45.930Z INFO  llm response  turnStep=5/1 ttftMs=2590 requestBuildMs=0 serverFirstTokenMs=2590 streamDurationMs=4200 serverDecodeMs=4185 clientConsumeMs=15 outputTokens=266
+2026-08-02T18:36:45.935Z INFO  llm request  turnStep=5.2
+2026-08-02T18:37:31.399Z INFO  llm response  turnStep=5/2 ttftMs=3304 requestBuildMs=1 serverFirstTokenMs=3303 streamDurationMs=42068 serverDecodeMs=41774 clientConsumeMs=294 outputTokens=3241
+2026-08-02T18:37:31.413Z INFO  llm request  turnStep=5.3
+2026-08-02T18:37:33.259Z INFO  llm config  turnStep=0.1 provider=openai model=glm-5.2 modelAlias=glm5.2 thinkingEffort=off systemPromptChars=22746 toolCount=5 agentId=agent-0
+2026-08-02T18:37:33.259Z INFO  llm request  turnStep=0.1 agentId=agent-0
+2026-08-02T18:37:33.515Z INFO  llm config  turnStep=0.1 provider=openai model=glm-5.2 modelAlias=glm5.2 thinkingEffort=off systemPromptChars=22746 toolCount=5 agentId=agent-5
+2026-08-02T18:37:33.515Z INFO  llm request  turnStep=0.1 agentId=agent-5
+2026-08-02T18:37:33.520Z INFO  llm config  turnStep=0.1 provider=openai model=glm-5.2 modelAlias=glm5.2 thinkingEffort=off systemPromptChars=22746 toolCount=5 agentId=agent-3
+2026-08-02T18:37:33.520Z INFO  llm request  turnStep=0.1 agentId=agent-3
+2026-08-02T18:37:33.524Z INFO  llm config  turnStep=0.1 provider=openai model=glm-5.2 modelAlias=glm5.2 thinkingEffort=off systemPromptChars=22746 toolCount=5 agentId=agent-4
+2026-08-02T18:37:33.524Z INFO  llm request  turnStep=0.1 agentId=agent-4
+2026-08-02T18:37:33.527Z INFO  llm config  turnStep=0.1 provider=openai model=glm-5.2 modelAlias=glm5.2 thinkingEffort=off systemPromptChars=22746 toolCount=5 agentId=agent-1
+2026-08-02T18:37:33.527Z INFO  llm request  turnStep=0.1 agentId=agent-1
+2026-08-02T18:37:33.531Z INFO  llm config  turnStep=0.1 provider=openai model=glm-5.2 modelAlias=glm5.2 thinkingEffort=off systemPromptChars=22746 toolCount=5 agentId=agent-2
+2026-08-02T18:37:33.531Z INFO  llm request  turnStep=0.1 agentId=agent-2
+2026-08-02T18:37:40.637Z INFO  llm response  turnStep=0/1 ttftMs=2746 requestBuildMs=0 serverFirstTokenMs=2746 streamDurationMs=3852 serverDecodeMs=3843 clientConsumeMs=9 outputTokens=257 agentId=agent-2
+2026-08-02T18:37:40.638Z INFO  llm request  turnStep=0.2 agentId=agent-2
+2026-08-02T18:37:40.789Z INFO  llm response  turnStep=5/3 ttftMs=2708 requestBuildMs=1 serverFirstTokenMs=2707 streamDurationMs=5745 serverDecodeMs=5731 clientConsumeMs=14 outputTokens=275
+2026-08-02T18:37:40.791Z INFO  llm request  turnStep=5.4
+2026-08-02T18:37:41.302Z INFO  llm response  turnStep=0/1 ttftMs=1492 requestBuildMs=0 serverFirstTokenMs=1492 streamDurationMs=6310 serverDecodeMs=6296 clientConsumeMs=14 outputTokens=396 agentId=agent-0
+2026-08-02T18:37:41.304Z INFO  llm request  turnStep=0.2 agentId=agent-0
+2026-08-02T18:37:42.383Z INFO  llm response  turnStep=0/1 ttftMs=1634 requestBuildMs=0 serverFirstTokenMs=1634 streamDurationMs=6752 serverDecodeMs=6731 clientConsumeMs=21 outputTokens=442 agentId=agent-1
+2026-08-02T18:37:42.384Z INFO  llm request  turnStep=0.2 agentId=agent-1
+2026-08-02T18:37:42.724Z INFO  llm response  turnStep=0/1 ttftMs=3052 requestBuildMs=0 serverFirstTokenMs=3052 streamDurationMs=5514 serverDecodeMs=5493 clientConsumeMs=21 outputTokens=393 agentId=agent-5
+2026-08-02T18:37:42.726Z INFO  llm request  turnStep=0.2 agentId=agent-5
+2026-08-02T18:37:45.594Z INFO  llm response  turnStep=0/1 ttftMs=1833 requestBuildMs=0 serverFirstTokenMs=1833 streamDurationMs=10091 serverDecodeMs=10072 clientConsumeMs=19 outputTokens=442 agentId=agent-3
+2026-08-02T18:37:45.595Z INFO  llm request  turnStep=0.2 agentId=agent-3
+2026-08-02T18:37:46.916Z INFO  llm response  turnStep=0/2 ttftMs=1849 requestBuildMs=0 serverFirstTokenMs=1849 streamDurationMs=4378 serverDecodeMs=4370 clientConsumeMs=8 outputTokens=238 agentId=agent-2
+2026-08-02T18:37:46.917Z INFO  llm request  turnStep=0.3 agentId=agent-2
+2026-08-02T18:37:47.856Z INFO  llm response  turnStep=0/1 ttftMs=1455 requestBuildMs=0 serverFirstTokenMs=1455 streamDurationMs=3028 serverDecodeMs=3018 clientConsumeMs=11 outputTokens=179 agentId=agent-4
+2026-08-02T18:37:47.858Z INFO  llm request  turnStep=0.2 agentId=agent-4
+2026-08-02T18:37:50.484Z INFO  llm response  turnStep=0/2 ttftMs=1259 requestBuildMs=0 serverFirstTokenMs=1259 streamDurationMs=5782 serverDecodeMs=5762 clientConsumeMs=20 outputTokens=342 agentId=agent-1
+2026-08-02T18:37:50.485Z INFO  llm request  turnStep=0.3 agentId=agent-1
+2026-08-02T18:37:51.485Z INFO  llm response  turnStep=5/4 ttftMs=3219 requestBuildMs=0 serverFirstTokenMs=3219 streamDurationMs=7185 serverDecodeMs=7175 clientConsumeMs=10 outputTokens=232
+2026-08-02T18:37:51.487Z INFO  llm request  turnStep=5.5
+2026-08-02T18:37:52.411Z INFO  llm response  turnStep=0/3 ttftMs=1523 requestBuildMs=0 serverFirstTokenMs=1523 streamDurationMs=3287 serverDecodeMs=3274 clientConsumeMs=13 outputTokens=194 agentId=agent-2
+2026-08-02T18:37:52.412Z INFO  llm request  turnStep=0.4 agentId=agent-2
+2026-08-02T18:37:52.685Z INFO  llm response  turnStep=0/2 ttftMs=2162 requestBuildMs=0 serverFirstTokenMs=2162 streamDurationMs=7786 serverDecodeMs=7775 clientConsumeMs=11 outputTokens=318 agentId=agent-5
+2026-08-02T18:37:52.687Z INFO  llm request  turnStep=0.3 agentId=agent-5
+2026-08-02T18:37:53.240Z INFO  llm response  turnStep=0/2 ttftMs=803 requestBuildMs=0 serverFirstTokenMs=803 streamDurationMs=4557 serverDecodeMs=4546 clientConsumeMs=11 outputTokens=285 agentId=agent-4
+2026-08-02T18:37:53.243Z INFO  llm request  turnStep=0.3 agentId=agent-4
+2026-08-02T18:37:54.621Z INFO  llm response  turnStep=0/2 ttftMs=3539 requestBuildMs=0 serverFirstTokenMs=3539 streamDurationMs=5473 serverDecodeMs=5468 clientConsumeMs=5 outputTokens=231 agentId=agent-3
+2026-08-02T18:37:54.623Z INFO  llm request  turnStep=0.3 agentId=agent-3
+2026-08-02T18:37:55.024Z INFO  llm response  turnStep=0/3 ttftMs=1296 requestBuildMs=0 serverFirstTokenMs=1296 streamDurationMs=3234 serverDecodeMs=3226 clientConsumeMs=8 outputTokens=144 agentId=agent-1
+2026-08-02T18:37:55.026Z INFO  llm request  turnStep=0.4 agentId=agent-1
+2026-08-02T18:37:57.554Z INFO  llm response  turnStep=0/2 ttftMs=1693 requestBuildMs=0 serverFirstTokenMs=1693 streamDurationMs=13559 serverDecodeMs=13547 clientConsumeMs=12 outputTokens=403 agentId=agent-0
+2026-08-02T18:37:57.555Z INFO  llm request  turnStep=0.3 agentId=agent-0
+2026-08-02T18:37:57.969Z INFO  llm response  turnStep=0/4 ttftMs=1529 requestBuildMs=0 serverFirstTokenMs=1529 streamDurationMs=1405 serverDecodeMs=1402 clientConsumeMs=3 outputTokens=84 agentId=agent-1
+2026-08-02T18:37:57.971Z INFO  llm request  turnStep=0.5 agentId=agent-1
+2026-08-02T18:37:58.774Z INFO  llm response  turnStep=0/3 ttftMs=1860 requestBuildMs=0 serverFirstTokenMs=1860 streamDurationMs=4219 serverDecodeMs=4208 clientConsumeMs=11 outputTokens=222 agentId=agent-5
+2026-08-02T18:37:58.777Z INFO  llm request  turnStep=0.4 agentId=agent-5
+2026-08-02T18:37:59.762Z INFO  llm response  turnStep=0/4 ttftMs=1716 requestBuildMs=0 serverFirstTokenMs=1716 streamDurationMs=5626 serverDecodeMs=5609 clientConsumeMs=17 outputTokens=308 agentId=agent-2
+2026-08-02T18:37:59.763Z INFO  llm request  turnStep=0.5 agentId=agent-2
+2026-08-02T18:38:01.052Z INFO  llm response  turnStep=5/5 ttftMs=2284 requestBuildMs=0 serverFirstTokenMs=2284 streamDurationMs=7274 serverDecodeMs=7259 clientConsumeMs=15 outputTokens=240
+2026-08-02T18:38:01.055Z INFO  llm request  turnStep=5.6
+2026-08-02T18:38:02.674Z INFO  llm response  turnStep=0/3 ttftMs=1355 requestBuildMs=0 serverFirstTokenMs=1355 streamDurationMs=7222 serverDecodeMs=7205 clientConsumeMs=17 outputTokens=386 agentId=agent-4
+2026-08-02T18:38:02.676Z INFO  llm request  turnStep=0.4 agentId=agent-4
+2026-08-02T18:38:03.289Z INFO  llm response  turnStep=0/5 ttftMs=3029 requestBuildMs=0 serverFirstTokenMs=3029 streamDurationMs=2285 serverDecodeMs=2283 clientConsumeMs=2 outputTokens=60 agentId=agent-1
+2026-08-02T18:38:03.290Z INFO  llm request  turnStep=0.6 agentId=agent-1
+2026-08-02T18:38:07.551Z INFO  llm response  turnStep=0/3 ttftMs=2247 requestBuildMs=0 serverFirstTokenMs=2247 streamDurationMs=6652 serverDecodeMs=6645 clientConsumeMs=7 outputTokens=166 agentId=agent-0
+2026-08-02T18:38:07.552Z INFO  llm request  turnStep=0.4 agentId=agent-0
+2026-08-02T18:38:08.253Z INFO  llm response  turnStep=0/5 ttftMs=1576 requestBuildMs=0 serverFirstTokenMs=1576 streamDurationMs=6901 serverDecodeMs=6887 clientConsumeMs=14 outputTokens=316 agentId=agent-2
+2026-08-02T18:38:08.254Z INFO  llm request  turnStep=0.6 agentId=agent-2
+2026-08-02T18:38:08.998Z INFO  llm response  turnStep=0/6 ttftMs=1491 requestBuildMs=0 serverFirstTokenMs=1491 streamDurationMs=3744 serverDecodeMs=3733 clientConsumeMs=11 outputTokens=189 agentId=agent-1
+2026-08-02T18:38:08.999Z INFO  llm request  turnStep=0.7 agentId=agent-1
+2026-08-02T18:38:12.028Z INFO  llm response  turnStep=0/4 ttftMs=1891 requestBuildMs=0 serverFirstTokenMs=1891 streamDurationMs=7450 serverDecodeMs=7432 clientConsumeMs=18 outputTokens=397 agentId=agent-4
+2026-08-02T18:38:12.029Z INFO  llm request  turnStep=0.5 agentId=agent-4
+2026-08-02T18:38:13.494Z INFO  llm response  turnStep=0/7 ttftMs=2231 requestBuildMs=0 serverFirstTokenMs=2231 streamDurationMs=2042 serverDecodeMs=2033 clientConsumeMs=9 outputTokens=125 agentId=agent-1
+2026-08-02T18:38:13.495Z INFO  llm request  turnStep=0.8 agentId=agent-1
+2026-08-02T18:38:14.206Z INFO  llm response  turnStep=5/6 ttftMs=4803 requestBuildMs=0 serverFirstTokenMs=4803 streamDurationMs=8344 serverDecodeMs=8340 clientConsumeMs=4 outputTokens=459
+2026-08-02T18:38:14.208Z INFO  llm request  turnStep=5.7
+2026-08-02T18:38:14.523Z INFO  llm response  turnStep=0/4 ttftMs=3455 requestBuildMs=0 serverFirstTokenMs=3455 streamDurationMs=3389 serverDecodeMs=3378 clientConsumeMs=11 outputTokens=223 agentId=agent-0
+2026-08-02T18:38:14.525Z INFO  llm request  turnStep=0.5 agentId=agent-0
+2026-08-02T18:38:15.313Z INFO  llm response  turnStep=0/3 ttftMs=1751 requestBuildMs=0 serverFirstTokenMs=1751 streamDurationMs=5171 serverDecodeMs=5158 clientConsumeMs=13 outputTokens=229 agentId=agent-3
+2026-08-02T18:38:15.314Z INFO  llm request  turnStep=0.4 agentId=agent-3
+2026-08-02T18:38:19.044Z INFO  llm request  turnStep=0.5 attempt=2/10 agentId=agent-4
+2026-08-02T18:38:19.086Z INFO  llm request  turnStep=0.8 attempt=2/10 agentId=agent-1
+2026-08-02T18:38:19.273Z INFO  llm request  turnStep=0.5 attempt=2/10 agentId=agent-0
+2026-08-02T18:38:19.358Z INFO  llm request  turnStep=0.4 attempt=2/10 agentId=agent-3
+2026-08-02T18:38:19.479Z INFO  llm request  turnStep=5.7 attempt=2/10
+2026-08-02T18:38:20.149Z INFO  llm response  turnStep=0/6 ttftMs=6151 requestBuildMs=0 serverFirstTokenMs=6151 streamDurationMs=5732 serverDecodeMs=5708 clientConsumeMs=24 outputTokens=305 agentId=agent-2
+2026-08-02T18:38:20.152Z INFO  llm request  turnStep=0.7 agentId=agent-2
+2026-08-02T18:38:23.826Z INFO  llm request  turnStep=0.5 attempt=3/10 agentId=agent-4
+2026-08-02T18:38:24.174Z INFO  llm request  turnStep=0.8 attempt=3/10 agentId=agent-1
+2026-08-02T18:38:24.425Z INFO  llm request  turnStep=0.5 attempt=3/10 agentId=agent-0
+2026-08-02T18:38:25.263Z INFO  llm request  turnStep=0.4 attempt=3/10 agentId=agent-3
+2026-08-02T18:38:26.246Z INFO  llm request  turnStep=5.7 attempt=3/10
+2026-08-02T18:38:28.067Z INFO  llm request  turnStep=0.7 attempt=2/10 agentId=agent-2
+2026-08-02T18:38:30.176Z INFO  llm request  turnStep=0.5 attempt=4/10 agentId=agent-0
+2026-08-02T18:38:30.842Z INFO  llm request  turnStep=0.8 attempt=4/10 agentId=agent-1
+2026-08-02T18:38:31.561Z INFO  llm request  turnStep=0.5 attempt=4/10 agentId=agent-4
+2026-08-02T18:38:32.385Z INFO  llm request  turnStep=0.4 attempt=4/10 agentId=agent-3
+2026-08-02T18:38:34.023Z INFO  llm request  turnStep=0.7 attempt=3/10 agentId=agent-2
+2026-08-02T18:38:34.319Z INFO  llm request  turnStep=5.7 attempt=4/10
+2026-08-02T18:38:38.063Z INFO  llm request  turnStep=0.5 attempt=5/10 agentId=agent-0
+2026-08-02T18:38:40.030Z INFO  llm request  turnStep=0.8 attempt=5/10 agentId=agent-1
+2026-08-02T18:38:40.682Z INFO  llm request  turnStep=0.5 attempt=5/10 agentId=agent-4
+2026-08-02T18:38:40.690Z INFO  llm request  turnStep=0.7 attempt=4/10 agentId=agent-2
+2026-08-02T18:38:41.110Z INFO  llm request  turnStep=0.4 attempt=5/10 agentId=agent-3
+2026-08-02T18:38:44.049Z INFO  llm request  turnStep=5.7 attempt=5/10
+2026-08-02T18:38:49.677Z INFO  llm request  turnStep=0.7 attempt=5/10 agentId=agent-2
+2026-08-02T18:38:49.696Z INFO  llm request  turnStep=0.5 attempt=6/10 agentId=agent-0
+2026-08-02T18:38:52.765Z INFO  llm request  turnStep=0.8 attempt=6/10 agentId=agent-1
+2026-08-02T18:38:53.204Z INFO  llm request  turnStep=0.5 attempt=6/10 agentId=agent-4
+2026-08-02T18:38:53.905Z INFO  llm request  turnStep=0.4 attempt=6/10 agentId=agent-3
+2026-08-02T18:38:57.802Z INFO  llm request  turnStep=5.7 attempt=6/10
+2026-08-02T18:39:02.145Z INFO  llm request  turnStep=0.7 attempt=6/10 agentId=agent-2
+2026-08-02T18:39:09.863Z INFO  llm request  turnStep=0.5 attempt=7/10 agentId=agent-0
+2026-08-02T18:39:13.406Z INFO  llm request  turnStep=0.8 attempt=7/10 agentId=agent-1
+2026-08-02T18:39:15.463Z INFO  llm request  turnStep=0.5 attempt=7/10 agentId=agent-4
+2026-08-02T18:39:15.979Z INFO  llm request  turnStep=0.4 attempt=7/10 agentId=agent-3
+2026-08-02T18:39:19.851Z INFO  llm request  turnStep=5.7 attempt=7/10
+2026-08-02T18:39:24.221Z INFO  llm request  turnStep=0.7 attempt=7/10 agentId=agent-2
+2026-08-02T18:39:44.970Z INFO  llm request  turnStep=0.5 attempt=8/10 agentId=agent-0
+2026-08-02T18:39:52.207Z INFO  llm request  turnStep=0.8 attempt=8/10 agentId=agent-1
+2026-08-02T18:39:55.537Z INFO  llm request  turnStep=0.5 attempt=8/10 agentId=agent-4
+2026-08-02T18:39:57.854Z INFO  llm request  turnStep=5.7 attempt=8/10
+2026-08-02T18:39:59.753Z INFO  llm request  turnStep=0.4 attempt=8/10 agentId=agent-3
+2026-08-02T18:39:59.957Z INFO  llm request  turnStep=0.7 attempt=8/10 agentId=agent-2
+2026-08-02T18:40:09.733Z INFO  llm response  turnStep=0/4 ttftMs=1943 requestBuildMs=0 serverFirstTokenMs=1943 streamDurationMs=128491 serverDecodeMs=127764 clientConsumeMs=727 outputTokens=9580 agentId=agent-5
+2026-08-02T18:40:09.735Z INFO  llm request  turnStep=0.5 agentId=agent-5
+2026-08-02T18:40:14.168Z INFO  llm response  turnStep=0/7 ttftMs=10511 requestBuildMs=0 serverFirstTokenMs=10511 streamDurationMs=3692 serverDecodeMs=3669 clientConsumeMs=23 outputTokens=229 agentId=agent-2
+2026-08-02T18:40:14.170Z INFO  llm request  turnStep=0.8 agentId=agent-2
+2026-08-02T18:40:15.882Z INFO  llm response  turnStep=5/7 ttftMs=15699 requestBuildMs=0 serverFirstTokenMs=15699 streamDurationMs=2316 serverDecodeMs=2309 clientConsumeMs=7 outputTokens=155
+2026-08-02T18:40:15.892Z INFO  llm request  kind=compaction droppedCount=0
+2026-08-02T18:40:16.401Z INFO  llm response  turnStep=0/5 ttftMs=3800 requestBuildMs=0 serverFirstTokenMs=3800 streamDurationMs=2848 serverDecodeMs=2844 clientConsumeMs=4 outputTokens=196 agentId=agent-5
+2026-08-02T18:40:16.403Z INFO  llm request  turnStep=0.6 agentId=agent-5
+2026-08-02T18:40:16.558Z INFO  llm response  turnStep=0/4 ttftMs=12915 requestBuildMs=0 serverFirstTokenMs=12915 streamDurationMs=3882 serverDecodeMs=3865 clientConsumeMs=17 outputTokens=206 agentId=agent-3
+2026-08-02T18:40:16.560Z INFO  llm request  turnStep=0.5 agentId=agent-3
+2026-08-02T18:40:19.368Z INFO  llm response  turnStep=0/8 ttftMs=1702 requestBuildMs=0 serverFirstTokenMs=1702 streamDurationMs=2841 serverDecodeMs=2822 clientConsumeMs=19 outputTokens=186 agentId=agent-2
+2026-08-02T18:40:19.370Z INFO  llm request  turnStep=0.9 agentId=agent-2
+2026-08-02T18:40:22.570Z INFO  llm request  turnStep=0.5 attempt=9/10 agentId=agent-0
+2026-08-02T18:40:22.842Z INFO  llm response  turnStep=0/5 ttftMs=17029 requestBuildMs=0 serverFirstTokenMs=17029 streamDurationMs=9570 serverDecodeMs=9544 clientConsumeMs=26 outputTokens=459 agentId=agent-4
+2026-08-02T18:40:22.844Z INFO  llm request  turnStep=0.6 agentId=agent-4
+2026-08-02T18:40:28.031Z INFO  llm response  turnStep=0/9 ttftMs=6048 requestBuildMs=0 serverFirstTokenMs=6048 streamDurationMs=2516 serverDecodeMs=2509 clientConsumeMs=7 outputTokens=175 agentId=agent-2
+2026-08-02T18:40:28.032Z INFO  llm request  turnStep=0.10 agentId=agent-2
+2026-08-02T18:40:30.273Z INFO  llm response  turnStep=0/5 ttftMs=2037 requestBuildMs=0 serverFirstTokenMs=2037 streamDurationMs=5570 serverDecodeMs=5557 clientConsumeMs=13 outputTokens=219 agentId=agent-0
+2026-08-02T18:40:30.274Z INFO  llm request  turnStep=0.6 agentId=agent-0
+2026-08-02T18:40:31.501Z INFO  llm response  turnStep=0/6 ttftMs=2532 requestBuildMs=0 serverFirstTokenMs=2532 streamDurationMs=5479 serverDecodeMs=5456 clientConsumeMs=23 outputTokens=369 agentId=agent-4
+2026-08-02T18:40:31.502Z INFO  llm request  turnStep=0.7 agentId=agent-4
+2026-08-02T18:40:34.326Z INFO  llm request  turnStep=0.10 attempt=2/10 agentId=agent-2
+2026-08-02T18:40:39.135Z INFO  llm request  turnStep=0.10 attempt=3/10 agentId=agent-2
+2026-08-02T18:40:39.652Z INFO  llm response  turnStep=0/6 ttftMs=978 requestBuildMs=0 serverFirstTokenMs=978 streamDurationMs=7627 serverDecodeMs=7602 clientConsumeMs=25 outputTokens=434 agentId=agent-0
+2026-08-02T18:40:39.653Z INFO  llm request  turnStep=0.7 agentId=agent-0
+2026-08-02T18:40:40.638Z INFO  llm request  turnStep=0.8 attempt=9/10 agentId=agent-1
+2026-08-02T18:40:43.517Z INFO  llm response  turnStep=0/7 ttftMs=1186 requestBuildMs=0 serverFirstTokenMs=1186 streamDurationMs=10161 serverDecodeMs=10133 clientConsumeMs=28 outputTokens=531 agentId=agent-4
+2026-08-02T18:40:43.518Z INFO  llm request  turnStep=0.8 agentId=agent-4
+2026-08-02T18:40:56.504Z INFO  llm request  turnStep=0.10 attempt=4/10 agentId=agent-2
+2026-08-02T18:40:57.780Z INFO  llm request  turnStep=0.7 attempt=2/10 agentId=agent-0
+2026-08-02T18:40:59.877Z INFO  llm request  turnStep=0.8 attempt=2/10 agentId=agent-4
+2026-08-02T18:41:06.244Z INFO  llm request  turnStep=0.7 attempt=3/10 agentId=agent-0
+2026-08-02T18:41:08.241Z INFO  llm request  turnStep=0.8 attempt=3/10 agentId=agent-4
+2026-08-02T18:41:11.642Z INFO  llm request  turnStep=0.10 attempt=5/10 agentId=agent-2
+2026-08-02T18:41:12.950Z INFO  llm request  turnStep=0.7 attempt=4/10 agentId=agent-0
+2026-08-02T18:41:17.991Z INFO  llm request  turnStep=0.8 attempt=4/10 agentId=agent-4
+2026-08-02T18:41:25.947Z INFO  llm response  turnStep=0/6 ttftMs=2853 requestBuildMs=0 serverFirstTokenMs=2853 streamDurationMs=66152 serverDecodeMs=65908 clientConsumeMs=244 outputTokens=4095 agentId=agent-5
+2026-08-02T18:41:25.948Z INFO  llm request  turnStep=0.7 agentId=agent-5
+2026-08-02T18:41:26.196Z INFO  llm request  turnStep=0.7 attempt=5/10 agentId=agent-0
+2026-08-02T18:41:27.764Z INFO  llm request  turnStep=0.8 attempt=5/10 agentId=agent-4
+2026-08-02T18:41:29.323Z INFO  llm request  turnStep=0.10 attempt=6/10 agentId=agent-2
+2026-08-02T18:41:30.031Z INFO  llm request  turnStep=0.7 attempt=2/10 agentId=agent-5
+2026-08-02T18:41:33.779Z INFO  llm request  turnStep=0.8 attempt=10/10 agentId=agent-1
+2026-08-02T18:41:35.516Z INFO  llm request  turnStep=0.7 attempt=3/10 agentId=agent-5
+2026-08-02T18:41:39.973Z INFO  llm response  turnStep=0/8 ttftMs=2383 requestBuildMs=0 serverFirstTokenMs=2383 streamDurationMs=3546 serverDecodeMs=3534 clientConsumeMs=12 outputTokens=157 agentId=agent-1
+2026-08-02T18:41:39.974Z INFO  llm request  turnStep=0.9 agentId=agent-1
+2026-08-02T18:41:41.070Z INFO  llm request  turnStep=0.8 attempt=6/10 agentId=agent-4
+2026-08-02T18:41:44.382Z INFO  llm request  turnStep=0.7 attempt=4/10 agentId=agent-5
+2026-08-02T18:41:45.762Z INFO  llm request  turnStep=0.9 attempt=2/10 agentId=agent-1
+2026-08-02T18:41:51.791Z INFO  llm request  turnStep=0.9 attempt=3/10 agentId=agent-1
+2026-08-02T18:41:53.692Z INFO  llm request  turnStep=0.10 attempt=7/10 agentId=agent-2
+2026-08-02T18:41:55.236Z INFO  llm request  turnStep=0.7 attempt=5/10 agentId=agent-5
+2026-08-02T18:41:57.804Z INFO  llm request  turnStep=0.9 attempt=4/10 agentId=agent-1
+2026-08-02T18:42:02.187Z INFO  llm request  turnStep=0.8 attempt=7/10 agentId=agent-4
+2026-08-02T18:42:03.858Z INFO  llm request  turnStep=5.8
+2026-08-02T18:42:06.181Z INFO  llm request  turnStep=0.9 attempt=5/10 agentId=agent-1
+2026-08-02T18:42:08.113Z INFO  llm request  turnStep=5.8 attempt=2/10
+2026-08-02T18:42:08.142Z INFO  llm request  turnStep=0.7 attempt=6/10 agentId=agent-5
+2026-08-02T18:42:11.925Z INFO  llm request  turnStep=5.8 attempt=3/10
+2026-08-02T18:42:16.793Z INFO  llm request  turnStep=5.8 attempt=4/10
+2026-08-02T18:42:18.567Z INFO  llm request  turnStep=0.9 attempt=6/10 agentId=agent-1
+2026-08-02T18:42:24.354Z INFO  llm request  turnStep=5.8 attempt=5/10
+2026-08-02T18:42:30.285Z INFO  llm request  turnStep=0.7 attempt=7/10 agentId=agent-5
+2026-08-02T18:42:33.305Z INFO  llm response  turnStep=5/8 ttftMs=1654 requestBuildMs=0 serverFirstTokenMs=1654 streamDurationMs=7176 serverDecodeMs=7164 clientConsumeMs=12 outputTokens=388
+2026-08-02T18:42:33.307Z INFO  llm request  turnStep=5.9
+2026-08-02T18:42:34.700Z INFO  llm request  turnStep=0.10 attempt=8/10 agentId=agent-2
+2026-08-02T18:42:36.799Z INFO  llm request  turnStep=5.9 attempt=2/10
+2026-08-02T18:42:39.820Z INFO  llm request  turnStep=0.9 attempt=7/10 agentId=agent-1
+2026-08-02T18:42:40.906Z INFO  llm request  turnStep=5.9 attempt=3/10
+2026-08-02T18:42:44.212Z INFO  llm request  turnStep=0.8 attempt=8/10 agentId=agent-4
+2026-08-02T18:42:46.584Z INFO  llm request  turnStep=5.9 attempt=4/10
+2026-08-02T18:42:46.593Z INFO  llm response  turnStep=0/5 ttftMs=2687 requestBuildMs=0 serverFirstTokenMs=2687 streamDurationMs=146397 serverDecodeMs=145779 clientConsumeMs=618 outputTokens=8763 agentId=agent-3
+2026-08-02T18:42:46.595Z INFO  llm request  turnStep=0.6 agentId=agent-3
+2026-08-02T18:42:49.357Z INFO  llm response  turnStep=0/7 ttftMs=1926 requestBuildMs=0 serverFirstTokenMs=1926 streamDurationMs=81125 serverDecodeMs=80784 clientConsumeMs=341 outputTokens=4775 agentId=agent-0
+2026-08-02T18:42:49.358Z INFO  llm request  turnStep=0.8 agentId=agent-0
+2026-08-02T18:42:51.797Z INFO  llm request  turnStep=0.6 attempt=2/10 agentId=agent-3
+2026-08-02T18:42:52.944Z INFO  llm request  turnStep=0.8 attempt=2/10 agentId=agent-0
+2026-08-02T18:42:54.346Z INFO  llm response  turnStep=5/9 ttftMs=1723 requestBuildMs=0 serverFirstTokenMs=1723 streamDurationMs=5911 serverDecodeMs=5892 clientConsumeMs=19 outputTokens=364
+2026-08-02T18:42:54.348Z INFO  llm request  turnStep=5.10
+2026-08-02T18:42:57.195Z INFO  llm request  turnStep=0.8 attempt=3/10 agentId=agent-0
+2026-08-02T18:42:57.453Z INFO  llm request  turnStep=0.6 attempt=3/10 agentId=agent-3
+2026-08-02T18:42:58.143Z INFO  llm request  turnStep=5.10 attempt=2/10
+2026-08-02T18:43:02.490Z INFO  llm request  turnStep=5.10 attempt=3/10
+2026-08-02T18:43:02.973Z INFO  llm request  turnStep=0.8 attempt=4/10 agentId=agent-0
+2026-08-02T18:43:03.205Z INFO  llm request  turnStep=0.6 attempt=4/10 agentId=agent-3
+2026-08-02T18:43:08.801Z INFO  llm request  turnStep=5.10 attempt=4/10
+2026-08-02T18:43:10.803Z INFO  llm request  turnStep=0.8 attempt=5/10 agentId=agent-0
+2026-08-02T18:43:11.410Z INFO  llm request  turnStep=0.6 attempt=5/10 agentId=agent-3
+2026-08-02T18:43:13.430Z INFO  llm request  turnStep=0.7 attempt=8/10 agentId=agent-5
+2026-08-02T18:43:13.462Z INFO  llm request  turnStep=0.10 attempt=9/10 agentId=agent-2
+2026-08-02T18:43:18.141Z INFO  llm request  turnStep=5.10 attempt=5/10
+2026-08-02T18:43:18.225Z INFO  llm request  turnStep=0.9 attempt=8/10 agentId=agent-1
+2026-08-02T18:43:23.294Z INFO  llm request  turnStep=0.8 attempt=9/10 agentId=agent-4
+2026-08-02T18:43:23.984Z INFO  llm request  turnStep=0.8 attempt=6/10 agentId=agent-0
+2026-08-02T18:43:26.419Z INFO  llm request  turnStep=0.6 attempt=6/10 agentId=agent-3
+2026-08-02T18:43:31.138Z INFO  llm request  turnStep=5.10 attempt=6/10
+2026-08-02T18:43:47.102Z INFO  llm request  turnStep=0.8 attempt=7/10 agentId=agent-0
+2026-08-02T18:43:47.372Z INFO  llm request  turnStep=0.6 attempt=7/10 agentId=agent-3
+2026-08-02T18:43:50.726Z INFO  llm request  turnStep=0.10 attempt=10/10 agentId=agent-2
+2026-08-02T18:43:52.011Z INFO  llm request  turnStep=0.7 attempt=9/10 agentId=agent-5
+2026-08-02T18:43:54.039Z INFO  llm request  turnStep=5.10 attempt=7/10
+2026-08-02T18:43:54.358Z WARN  llm request failed  turnStep=0.10 attempt=10/10 model=glm-5.2 errorName=APIProviderRateLimitError errorMessage="429 Rate limit exceeded." statusCode=429 agentId=agent-2
+2026-08-02T18:43:54.377Z ERROR turn failed  turnId=0 agentId=agent-2
+  APIProviderRateLimitError: 429 Rate limit exceeded.
+    at normalizeAPIStatusError$1 (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:1208:33)
+    at convertOpenAIError$1 (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:53515:10)
+    at OpenAILegacyChatProvider$1.generate (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:54494:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async Agent$4.generate$1 [as rawGenerate] (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:55679:17)
+    at async KosongLLM.chat (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:159218:19)
+    at async chatWithRetry (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:123325:21)
+    at async executeLoopStep (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:140021:14)
+    at async runTurn (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:140301:23)
+    at async TurnFlow.runStepLoop (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:158729:14)
+2026-08-02T18:44:00.841Z INFO  llm request  turnStep=0.9 attempt=9/10 agentId=agent-1
+2026-08-02T18:44:03.294Z INFO  llm request  turnStep=0.8 attempt=10/10 agentId=agent-4
+2026-08-02T18:44:07.051Z WARN  llm request failed  turnStep=0.8 attempt=10/10 model=glm-5.2 errorName=APIProviderRateLimitError errorMessage="429 Rate limit exceeded." statusCode=429 agentId=agent-4
+2026-08-02T18:44:07.058Z ERROR turn failed  turnId=0 agentId=agent-4
+  APIProviderRateLimitError: 429 Rate limit exceeded.
+    at normalizeAPIStatusError$1 (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:1208:33)
+    at convertOpenAIError$1 (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:53515:10)
+    at OpenAILegacyChatProvider$1.generate (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:54494:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async Agent$4.generate$1 [as rawGenerate] (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:55679:17)
+    at async KosongLLM.chat (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:159218:19)
+    at async chatWithRetry (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:123325:21)
+    at async executeLoopStep (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:140021:14)
+    at async runTurn (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:140301:23)
+    at async TurnFlow.runStepLoop (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:158729:14)
+2026-08-02T18:44:26.071Z INFO  llm request  turnStep=0.6 attempt=8/10 agentId=agent-3
+2026-08-02T18:44:30.407Z INFO  llm request  turnStep=0.8 attempt=8/10 agentId=agent-0
+2026-08-02T18:44:31.569Z INFO  llm request  turnStep=5.10 attempt=8/10
+2026-08-02T18:44:32.023Z INFO  llm request  turnStep=0.7 attempt=10/10 agentId=agent-5
+2026-08-02T18:44:35.961Z WARN  llm request failed  turnStep=0.7 attempt=10/10 model=glm-5.2 errorName=APIProviderRateLimitError errorMessage="429 Rate limit exceeded." statusCode=429 agentId=agent-5
+2026-08-02T18:44:35.970Z ERROR turn failed  turnId=0 agentId=agent-5
+  APIProviderRateLimitError: 429 Rate limit exceeded.
+    at normalizeAPIStatusError$1 (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:1208:33)
+    at convertOpenAIError$1 (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:53515:10)
+    at OpenAILegacyChatProvider$1.generate (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:54494:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async Agent$4.generate$1 [as rawGenerate] (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:55679:17)
+    at async KosongLLM.chat (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:159218:19)
+    at async chatWithRetry (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:123325:21)
+    at async executeLoopStep (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:140021:14)
+    at async runTurn (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:140301:23)
+    at async TurnFlow.runStepLoop (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:158729:14)
+2026-08-02T18:44:37.506Z INFO  llm request  turnStep=0.9 attempt=10/10 agentId=agent-1
+2026-08-02T18:44:40.453Z WARN  llm request failed  turnStep=0.9 attempt=10/10 model=glm-5.2 errorName=APIProviderRateLimitError errorMessage="429 Rate limit exceeded." statusCode=429 agentId=agent-1
+2026-08-02T18:44:40.458Z ERROR turn failed  turnId=0 agentId=agent-1
+  APIProviderRateLimitError: 429 Rate limit exceeded.
+    at normalizeAPIStatusError$1 (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:1208:33)
+    at convertOpenAIError$1 (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:53515:10)
+    at OpenAILegacyChatProvider$1.generate (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:54494:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async Agent$4.generate$1 [as rawGenerate] (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:55679:17)
+    at async KosongLLM.chat (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:159218:19)
+    at async chatWithRetry (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:123325:21)
+    at async executeLoopStep (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:140021:14)
+    at async runTurn (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:140301:23)
+    at async TurnFlow.runStepLoop (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:158729:14)
+2026-08-02T18:45:06.620Z INFO  llm request  turnStep=0.6 attempt=9/10 agentId=agent-3
+2026-08-02T18:45:12.598Z INFO  llm request  turnStep=0.8 attempt=9/10 agentId=agent-0
+2026-08-02T18:45:12.625Z INFO  llm request  turnStep=5.10 attempt=9/10
+2026-08-02T18:45:46.753Z INFO  llm request  turnStep=0.6 attempt=10/10 agentId=agent-3
+2026-08-02T18:45:50.211Z INFO  llm request  turnStep=0.8 attempt=10/10 agentId=agent-0
+2026-08-02T18:45:50.527Z WARN  llm request failed  turnStep=0.6 attempt=10/10 model=glm-5.2 errorName=APIProviderRateLimitError errorMessage="429 Rate limit exceeded." statusCode=429 agentId=agent-3
+2026-08-02T18:45:50.531Z ERROR turn failed  turnId=0 agentId=agent-3
+  APIProviderRateLimitError: 429 Rate limit exceeded.
+    at normalizeAPIStatusError$1 (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:1208:33)
+    at convertOpenAIError$1 (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:53515:10)
+    at OpenAILegacyChatProvider$1.generate (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:54494:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async Agent$4.generate$1 [as rawGenerate] (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:55679:17)
+    at async KosongLLM.chat (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:159218:19)
+    at async chatWithRetry (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:123325:21)
+    at async executeLoopStep (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:140021:14)
+    at async runTurn (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:140301:23)
+    at async TurnFlow.runStepLoop (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:158729:14)
+2026-08-02T18:45:54.254Z WARN  llm request failed  turnStep=0.8 attempt=10/10 model=glm-5.2 errorName=APIProviderRateLimitError errorMessage="429 Rate limit exceeded." statusCode=429 agentId=agent-0
+2026-08-02T18:45:54.260Z ERROR turn failed  turnId=0 agentId=agent-0
+  APIProviderRateLimitError: 429 Rate limit exceeded.
+    at normalizeAPIStatusError$1 (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:1208:33)
+    at convertOpenAIError$1 (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:53515:10)
+    at OpenAILegacyChatProvider$1.generate (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:54494:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async Agent$4.generate$1 [as rawGenerate] (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:55679:17)
+    at async KosongLLM.chat (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:159218:19)
+    at async chatWithRetry (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:123325:21)
+    at async executeLoopStep (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:140021:14)
+    at async runTurn (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:140301:23)
+    at async TurnFlow.runStepLoop (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:158729:14)
+2026-08-02T18:45:56.342Z INFO  llm request  turnStep=5.10 attempt=10/10
+2026-08-02T18:45:59.649Z WARN  llm request failed  turnStep=5.10 attempt=10/10 model=glm-5.2 errorName=APIProviderRateLimitError errorMessage="429 Rate limit exceeded." statusCode=429
+2026-08-02T18:45:59.653Z ERROR turn failed  turnId=5
+  APIProviderRateLimitError: 429 Rate limit exceeded.
+    at normalizeAPIStatusError$1 (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:1208:33)
+    at convertOpenAIError$1 (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:53515:10)
+    at OpenAILegacyChatProvider$1.generate (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:54494:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async Agent$4.generate$1 [as rawGenerate] (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:55679:17)
+    at async KosongLLM.chat (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:159218:19)
+    at async chatWithRetry (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:123325:21)
+    at async executeLoopStep (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:140021:14)
+    at async runTurn (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:140301:23)
+    at async TurnFlow.runStepLoop (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:158729:14)
+2026-08-02T18:55:35.849Z INFO  llm config  turnStep=6.1 provider=openai model=glm-5.2 modelAlias=glm5.2 thinkingEffort=off systemPromptChars=51058 toolCount=24
+2026-08-02T18:55:35.849Z INFO  llm request  turnStep=6.1
+2026-08-02T18:55:55.723Z INFO  llm response  turnStep=6/1 ttftMs=4449 requestBuildMs=0 serverFirstTokenMs=4449 streamDurationMs=14624 serverDecodeMs=14569 clientConsumeMs=55 outputTokens=908
+2026-08-02T18:55:55.725Z INFO  llm request  turnStep=6.2
+2026-08-02T18:56:10.240Z INFO  llm request  turnStep=6.2 attempt=2/10
+2026-08-02T18:56:15.242Z INFO  llm request  turnStep=6.2 attempt=3/10
+2026-08-02T18:56:21.609Z INFO  llm request  turnStep=6.2 attempt=4/10
+2026-08-02T18:56:30.609Z INFO  llm request  turnStep=6.2 attempt=5/10
+2026-08-02T18:56:46.153Z INFO  llm request  turnStep=6.2 attempt=6/10
+2026-08-02T18:57:10.702Z INFO  llm request  turnStep=6.2 attempt=7/10
+2026-08-02T18:57:52.508Z INFO  llm request  turnStep=6.2 attempt=8/10
+2026-08-02T18:58:54.146Z INFO  llm request  turnStep=6.2 attempt=9/10
+2026-08-02T18:59:39.379Z INFO  llm request  turnStep=6.2 attempt=10/10
+2026-08-02T18:59:43.018Z WARN  llm request failed  turnStep=6.2 attempt=10/10 model=glm-5.2 errorName=APIProviderRateLimitError errorMessage="429 Rate limit exceeded." statusCode=429
+2026-08-02T18:59:43.024Z ERROR turn failed  turnId=6
+  APIProviderRateLimitError: 429 Rate limit exceeded.
+    at normalizeAPIStatusError$1 (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:1208:33)
+    at convertOpenAIError$1 (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:53515:10)
+    at OpenAILegacyChatProvider$1.generate (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:54494:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async Agent$4.generate$1 [as rawGenerate] (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:55679:17)
+    at async KosongLLM.chat (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:159218:19)
+    at async chatWithRetry (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:123325:21)
+    at async executeLoopStep (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:140021:14)
+    at async runTurn (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:140301:23)
+    at async TurnFlow.runStepLoop (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:158729:14)
+2026-08-02T19:00:17.950Z INFO  llm request  turnStep=7.1
+2026-08-02T19:00:23.948Z INFO  llm request  turnStep=7.1 attempt=2/10
+2026-08-02T19:00:30.070Z INFO  llm request  turnStep=7.1 attempt=3/10
+2026-08-02T19:00:35.656Z INFO  llm request  turnStep=7.1 attempt=4/10
+2026-08-02T19:00:43.722Z INFO  llm request  turnStep=7.1 attempt=5/10
+2026-08-02T19:00:58.580Z INFO  llm request  turnStep=7.1 attempt=6/10
+2026-08-02T19:01:24.163Z INFO  llm request  turnStep=7.1 attempt=7/10
+2026-08-02T19:02:06.184Z INFO  llm request  turnStep=7.1 attempt=8/10
+2026-08-02T19:02:51.872Z INFO  llm request  turnStep=7.1 attempt=9/10
+2026-08-02T19:03:36.127Z INFO  llm request  turnStep=7.1 attempt=10/10
+2026-08-02T19:03:40.655Z WARN  llm request failed  turnStep=7.1 attempt=10/10 model=glm-5.2 errorName=APIProviderRateLimitError errorMessage="429 Rate limit exceeded." statusCode=429
+2026-08-02T19:03:40.658Z ERROR turn failed  turnId=7
+  APIProviderRateLimitError: 429 Rate limit exceeded.
+    at normalizeAPIStatusError$1 (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:1208:33)
+    at convertOpenAIError$1 (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:53515:10)
+    at OpenAILegacyChatProvider$1.generate (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:54494:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async Agent$4.generate$1 [as rawGenerate] (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:55679:17)
+    at async KosongLLM.chat (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:159218:19)
+    at async chatWithRetry (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:123325:21)
+    at async executeLoopStep (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:140021:14)
+    at async runTurn (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:140301:23)
+    at async TurnFlow.runStepLoop (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:158729:14)
+2026-08-02T19:06:35.359Z INFO  session resume  app_version=0.31.1
+2026-08-02T19:06:59.567Z INFO  llm config  turnStep=8.1 provider=openai model=glm-5.2 modelAlias=glm5.2 thinkingEffort=off systemPromptChars=51058 toolCount=24
+2026-08-02T19:06:59.567Z INFO  llm request  turnStep=8.1
+2026-08-02T19:07:35.900Z INFO  llm request  turnStep=8.1 attempt=2/10
+2026-08-02T19:08:09.328Z INFO  llm response  turnStep=8/1 ttftMs=29707 requestBuildMs=0 serverFirstTokenMs=29707 streamDurationMs=971 serverDecodeMs=948 clientConsumeMs=24 outputTokens=200
+2026-08-02T19:08:09.331Z INFO  llm request  turnStep=8.2
+2026-08-02T19:08:16.335Z INFO  llm request  turnStep=8.2 attempt=2/10
+2026-08-02T19:08:21.291Z INFO  llm request  turnStep=8.2 attempt=3/10
+2026-08-02T19:08:27.814Z INFO  llm request  turnStep=8.2 attempt=4/10
+2026-08-02T19:08:36.201Z INFO  llm request  turnStep=8.2 attempt=5/10
+2026-08-02T19:08:51.745Z INFO  llm request  turnStep=8.2 attempt=6/10
+2026-08-02T19:09:25.631Z INFO  llm request  turnStep=8.2 attempt=7/10
+2026-08-02T19:10:36.302Z INFO  llm request  turnStep=8.2 attempt=8/10
+2026-08-02T19:11:28.449Z INFO  llm request  turnStep=8.2 attempt=9/10
+2026-08-02T19:12:05.907Z INFO  llm request  turnStep=8.2 attempt=10/10
+2026-08-02T19:12:10.587Z WARN  llm request failed  turnStep=8.2 attempt=10/10 model=glm-5.2 errorName=APIProviderRateLimitError errorMessage="429 Rate limit exceeded." statusCode=429
+2026-08-02T19:12:10.599Z ERROR turn failed  turnId=8
+  APIProviderRateLimitError: 429 Rate limit exceeded.
+    at normalizeAPIStatusError$1 (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:1208:33)
+    at convertOpenAIError$1 (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:53515:10)
+    at OpenAILegacyChatProvider$1.generate (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:54494:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async Agent$4.generate$1 [as rawGenerate] (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:55679:17)
+    at async KosongLLM.chat (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:159218:19)
+    at async chatWithRetry (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:123325:21)
+    at async executeLoopStep (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:140021:14)
+    at async runTurn (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:140301:23)
+    at async TurnFlow.runStepLoop (D:\a\kimi-code\kimi-code\apps\kimi-code\dist-native\intermediates\main.cjs:158729:14)

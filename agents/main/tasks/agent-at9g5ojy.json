@@ -1,0 +1,13 @@
+{
+  "taskId": "agent-at9g5ojy",
+  "description": "Audit auth & session security",
+  "status": "failed",
+  "detached": true,
+  "startedAt": 1785695851320,
+  "endedAt": 1785696354261,
+  "stopReason": "429 Rate limit exceeded.",
+  "timeoutMs": 7200000,
+  "kind": "agent",
+  "agentId": "agent-0",
+  "subagentType": "explore"
+}

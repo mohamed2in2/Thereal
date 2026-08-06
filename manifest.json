@@ -1,0 +1,17 @@
+{
+  "sessionId": "session_9b7ef1a2-5dff-41b1-8c20-e2ade1003b89",
+  "exportedAt": "2026-08-02T19:17:26.234Z",
+  "kimiCodeVersion": "0.31.1",
+  "wireProtocolVersion": "1.4",
+  "os": "win32 x64",
+  "nodejsVersion": "24.15.0",
+  "title": "hi",
+  "workspaceDir": "J:/crispy-octo-doodle-1",
+  "sessionLogPath": "logs/kimi-code.log",
+  "globalLogPath": "logs/global/kimi-code.log",
+  "installSource": "native",
+  "shellEnv": {
+    "termProgram": "vscode",
+    "termProgramVersion": "1.124.2"
+  }
+}

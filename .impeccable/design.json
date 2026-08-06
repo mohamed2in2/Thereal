@@ -1,0 +1,151 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-06-14T00:00:00Z",
+  "title": "Design System: Code-UP",
+  "extensions": {
+    "colorMeta": {
+      "ink-deep":         { "role": "neutral",   "displayName": "Ink Deep",         "canonical": "oklch(0.11 0.02 264)", "tonalRamp": ["#030507","#0b0f19","#111827","#1e293b","#334155","#475569","#94a3b8","#e2e8f0"] },
+      "ink-surface":      { "role": "neutral",   "displayName": "Ink Surface",       "canonical": "oklch(0.13 0.025 264)", "tonalRamp": ["#020617","#0f172a","#1e293b","#334155","#475569","#64748b","#94a3b8","#e2e8f0"] },
+      "ink-card":         { "role": "neutral",   "displayName": "Ink Card",          "canonical": "oklch(0.19 0.025 258)", "tonalRamp": ["#0b0f19","#1e293b","#293548","#334155","#475569","#64748b","#94a3b8","#e2e8f0"] },
+      "sky-accent":       { "role": "primary",   "displayName": "Sky Action Blue",   "canonical": "oklch(0.53 0.21 254)", "tonalRamp": ["#1e3a5f","#1d4ed8","#2563eb","#3b82f6","#60a5fa","#93c5fd","#bae6fd","#e0f2fe"] },
+      "sky-accent-light": { "role": "primary",   "displayName": "Sky Light",         "canonical": "oklch(0.67 0.18 252)", "tonalRamp": ["#1d4ed8","#2563eb","#3b82f6","#60a5fa","#93c5fd","#bae6fd","#e0f2fe","#f0f9ff"] },
+      "indigo-glow":      { "role": "secondary", "displayName": "Indigo Glow",       "canonical": "oklch(0.55 0.23 278)", "tonalRamp": ["#312e81","#4338ca","#4f46e5","#6366f1","#818cf8","#a5b4fc","#c7d2fe","#e0e7ff"] },
+      "text-primary-dark":{ "role": "neutral",   "displayName": "Text Primary Dark", "canonical": "oklch(0.90 0.01 248)", "tonalRamp": ["#334155","#475569","#64748b","#94a3b8","#cbd5e1","#e2e8f0","#f1f5f9","#f8fafc"] },
+      "error":            { "role": "tertiary",  "displayName": "Error Rose",        "canonical": "oklch(0.64 0.24 4)",   "tonalRamp": ["#4c0519","#9f1239","#be123c","#e11d48","#f43f5e","#fb7185","#fda4af","#ffe4e6"] },
+      "success":          { "role": "tertiary",  "displayName": "Success Emerald",   "canonical": "oklch(0.65 0.17 162)", "tonalRamp": ["#064e3b","#065f46","#047857","#059669","#10b981","#34d399","#6ee7b7","#d1fae5"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Hero section headlines only. The rotating subject name (الرياضيات, الفيزياء). Never in app UI." },
+      "headline": { "displayName": "Headline", "purpose": "Page-level section headings — courses header, library title." },
+      "title":    { "displayName": "Title",    "purpose": "Card headings, panel titles, modal headers." },
+      "body":     { "displayName": "Body",     "purpose": "Descriptions, content prose, AI chat. Max 65ch for Arabic readability." },
+      "label":    { "displayName": "Label",    "purpose": "Nav links, button text, form labels, metadata chips. The workhorse." }
+    },
+    "shadows": [
+      { "name": "hover-glow-white", "value": "0 0 40px rgba(255,255,255,0.25)", "purpose": "White CTA button hover — ambient light burst, not a lift." },
+      { "name": "focus-ring-sky",   "value": "0 0 0 3px rgba(59,130,246,0.18)", "purpose": "Keyboard focus indicator on all interactive elements." },
+      { "name": "nav-depth",        "value": "0 10px 30px -20px rgba(15,23,42,0.45)", "purpose": "Sticky nav shadow — reinforces sticky position without floating." },
+      { "name": "card-hover-lift",  "value": "0 4px 24px rgba(0,0,0,0.18)", "purpose": "Interactive card hover lift. Never at rest." }
+    ],
+    "motion": [
+      { "name": "ease-expo-out",  "value": "cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "Primary ease for entrances and exits. All hero stagger animations." },
+      { "name": "ease-standard",  "value": "ease", "purpose": "Default for state transitions (button hover, nav link, color shifts). 160ms." },
+      { "name": "spring-spotlight", "value": "framer-motion spring: stiffness 140, damping 26, mass 0.6", "purpose": "Cursor-following hero spotlight. Framer Motion useSpring only." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" },
+      { "name": "xl", "value": "1280px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Main action button. Sky blue, rounded, tactile press. Used for enrollment, submit, login.",
+      "html": "<button class=\"ds-btn-primary\">ابدأ الآن</button>",
+      "css": ".ds-btn-primary { background: #2563eb; color: #ffffff; padding: 12px 28px; border-radius: 12px; font-family: Cairo, sans-serif; font-size: 0.875rem; font-weight: 700; border: none; cursor: pointer; transition: background 160ms ease, transform 160ms ease, box-shadow 160ms ease; direction: rtl; } .ds-btn-primary:hover { background: #1d4ed8; } .ds-btn-primary:active { transform: scale(0.97); } .ds-btn-primary:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(59,130,246,0.18); } .ds-btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }"
+    },
+    {
+      "name": "Hero CTA Button",
+      "kind": "button",
+      "refersTo": "button-cta",
+      "description": "Pill-shaped white CTA button for the hero section. Has a shimmer sweep on hover.",
+      "html": "<button class=\"ds-btn-cta\"><span class=\"ds-btn-cta-label\">ابدأ الآن مجاناً</span><span class=\"ds-btn-cta-shimmer\" aria-hidden=\"true\"></span></button>",
+      "css": ".ds-btn-cta { position: relative; background: #ffffff; color: #0b0f19; padding: 14px 32px; border-radius: 9999px; font-family: Cairo, sans-serif; font-size: 1rem; font-weight: 700; border: none; cursor: pointer; overflow: hidden; transition: box-shadow 160ms ease; direction: rtl; } .ds-btn-cta:hover { box-shadow: 0 0 40px rgba(255,255,255,0.25); } .ds-btn-cta:hover .ds-btn-cta-shimmer { left: 115%; } .ds-btn-cta-label { position: relative; z-index: 1; } .ds-btn-cta-shimmer { position: absolute; inset-y: 0; left: -45%; width: 33%; transform: skewX(-12deg); background: linear-gradient(to right, transparent, rgba(165,180,252,0.60), transparent); filter: blur(2px); transition: left 700ms ease-out; pointer-events: none; }"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Secondary action. Subtle background, border. Used for 'Explore Courses', cancel actions.",
+      "html": "<button class=\"ds-btn-ghost\">استكشف الكورسات</button>",
+      "css": ".ds-btn-ghost { background: rgba(255,255,255,0.05); color: #e2e8f0; padding: 12px 28px; border-radius: 12px; font-family: Cairo, sans-serif; font-size: 0.875rem; font-weight: 700; border: 1px solid rgba(255,255,255,0.10); cursor: pointer; transition: background 160ms ease, border-color 160ms ease; direction: rtl; } .ds-btn-ghost:hover { background: rgba(255,255,255,0.10); border-color: rgba(255,255,255,0.20); color: #ffffff; } .ds-btn-ghost:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(59,130,246,0.18); }"
+    },
+    {
+      "name": "Grade Chip",
+      "kind": "chip",
+      "refersTo": "chip-grade",
+      "description": "Grade/stage shortcut pill. Used in hero section and course filter bar.",
+      "html": "<a class=\"ds-chip-grade\" href=\"#\">الثالث الثانوي <span class=\"ds-chip-grade-arrow\" aria-hidden=\"true\">←</span></a>",
+      "css": ".ds-chip-grade { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 9999px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.10); color: rgba(255,255,255,0.70); font-family: Cairo, sans-serif; font-size: 0.875rem; font-weight: 700; text-decoration: none; transition: background 200ms ease, border-color 200ms ease, color 200ms ease; direction: rtl; } .ds-chip-grade:hover { background: rgba(99,102,241,0.15); border-color: rgba(99,102,241,0.40); color: #ffffff; } .ds-chip-grade-arrow { color: #a5b4fc; display: inline-block; transition: transform 200ms ease; } .ds-chip-grade:hover .ds-chip-grade-arrow { transform: translateX(-2px); }"
+    },
+    {
+      "name": "Nav Link",
+      "kind": "nav",
+      "refersTo": "nav-link-default",
+      "description": "Navigation link in the sticky top nav. Active state uses sky accent.",
+      "html": "<a class=\"ds-nav-link ds-nav-link--active\" href=\"#\">الكورسات</a>",
+      "css": ".ds-nav-link { display: inline-flex; align-items: center; padding: 8px 16px; border-radius: 8px; font-family: Cairo, sans-serif; font-size: 0.875rem; font-weight: 500; color: #94a3b8; text-decoration: none; transition: color 160ms ease, background 160ms ease; direction: rtl; } .ds-nav-link:hover { color: #e2e8f0; background: rgba(255,255,255,0.05); } .ds-nav-link--active { color: #7dd3fc; background: rgba(14,165,233,0.15); }"
+    },
+    {
+      "name": "Course Card",
+      "kind": "card",
+      "refersTo": "button-ghost",
+      "description": "Course listing card. Thumbnail + stage badge + title + teacher name. Hover lifts.",
+      "html": "<div class=\"ds-course-card\"><div class=\"ds-course-thumb\"></div><div class=\"ds-course-body\"><span class=\"ds-course-badge\">الثانوية العامة</span><h3 class=\"ds-course-title\">رياضيات الثالث الثانوي</h3><p class=\"ds-course-teacher\">أ. محمد الشيخ</p></div></div>",
+      "css": ".ds-course-card { background: rgba(15,23,42,0.78); border: 1px solid rgba(148,163,184,0.16); border-radius: 16px; overflow: hidden; cursor: pointer; transition: box-shadow 200ms ease, transform 200ms ease; direction: rtl; } .ds-course-card:hover { box-shadow: 0 4px 24px rgba(0,0,0,0.18); transform: translateY(-2px); } .ds-course-thumb { width: 100%; height: 160px; background: #1e293b; } .ds-course-body { padding: 16px; } .ds-course-badge { display: inline-block; padding: 2px 10px; border-radius: 9999px; background: rgba(37,99,235,0.15); color: #93c5fd; font-size: 0.75rem; font-weight: 700; margin-bottom: 8px; } .ds-course-title { color: #e2e8f0; font-size: 1rem; font-weight: 700; line-height: 1.4; margin: 0 0 6px; font-family: Cairo, sans-serif; } .ds-course-teacher { color: #94a3b8; font-size: 0.875rem; font-weight: 400; margin: 0; font-family: Cairo, sans-serif; }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "button-ghost",
+      "description": "Form field. Used in login, signup, course creation. RTL-native.",
+      "html": "<div class=\"ds-field\"><label class=\"ds-label\" for=\"f1\">البريد الإلكتروني</label><input class=\"ds-input\" id=\"f1\" type=\"email\" placeholder=\"example@mail.com\" /></div>",
+      "css": ".ds-field { display: flex; flex-direction: column; gap: 6px; direction: rtl; } .ds-label { font-family: Cairo, sans-serif; font-size: 0.875rem; font-weight: 500; color: #e2e8f0; } .ds-input { width: 100%; padding: 12px 16px; background: #1e293b; border: 1px solid rgba(148,163,184,0.22); border-radius: 12px; color: #e2e8f0; font-family: Cairo, sans-serif; font-size: 1rem; font-weight: 400; direction: rtl; transition: border-color 160ms ease, box-shadow 160ms ease; } .ds-input::placeholder { color: #64748b; } .ds-input:focus { outline: none; border-color: rgba(59,130,246,0.5); box-shadow: 0 0 0 3px rgba(59,130,246,0.18); } .ds-input:disabled { opacity: 0.5; cursor: not-allowed; }"
+    },
+    {
+      "name": "Skeleton Loader",
+      "kind": "custom",
+      "refersTo": "button-ghost",
+      "description": "Shimmer placeholder for data-loading states. Never a centered spinner.",
+      "html": "<div class=\"ds-skeleton\"></div>",
+      "css": "@keyframes ds-shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } } .ds-skeleton { background: linear-gradient(90deg, rgba(15,23,42,0.78) 25%, rgba(148,163,184,0.16) 50%, rgba(15,23,42,0.78) 75%); background-size: 200% 100%; animation: ds-shimmer 1.5s infinite; border-radius: 8px; width: 100%; height: 20px; } @media (prefers-reduced-motion: reduce) { .ds-skeleton { animation: none; background: rgba(148,163,184,0.10); } }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Premium Prep Center",
+    "overview": "Code-UP looks and feels like the best exam preparation center in Egypt — one students pay for and trust with their academic futures. The interface is confident, focused, and unhurried. It never performs busyness. The dark-native surfaces reduce eye strain for students studying late at night; the light mode is an option, not the default. The typography is Arabic-first (Cairo), with scale ratios calibrated for RTL reading rhythm. Every interactive element responds with quiet precision — a subtle shadow on press, a smooth color shift — without choreography that wastes the student's time.\n\nThe system explicitly rejects the following: the generic blue-and-white 'global EdTech' aesthetic (Coursera, edX) that signals 'not made for us'; the cluttered Arabic portal pattern with competing banners, pop-ups, and autoplay; and SaaS dashboard chrome (metric cards, sidebar layouts, data tables) on student-facing pages. Code-UP is a learning tool, not a productivity app.\n\nColor strategy is Restrained: dark-navy surfaces carry the canvas; one saturated sky-blue accent marks primary actions and navigation state. The indigo glow is reserved for the hero section only — a signature moment, not a pattern.",
+    "keyCharacteristics": [
+      "Dark-native canvas (near-black ink-deep #0b0f19) with sky-blue as the single accent",
+      "Arabic-first (RTL, Cairo), weights from 400–900 across the scale",
+      "Spacing varies deliberately; rhythm over uniformity",
+      "Framer Motion for entrance and state transitions; never orchestrated page-load sequences on the app surface",
+      "Reduced motion respected unconditionally — every animation has a crossfade fallback",
+      "Touch-first tap targets (≥44px), keyboard-navigable, WCAG AA contrast throughout"
+    ],
+    "rules": [
+      { "name": "The One Voice Rule", "body": "Sky Action Blue is used on ≤10% of any given screen. Its rarity is exactly what makes it legible as 'tap here.' Avoid using it for decorative borders, backgrounds, or icons that don't invite interaction.", "section": "colors" },
+      { "name": "The Hero Signature Rule", "body": "Indigo Glow (#6366f1) is exclusively a hero-section material — spotlight, glow, background atmosphere. Applying it to buttons, cards, or navigation in the app surface is prohibited.", "section": "colors" },
+      { "name": "The Single Family Rule", "body": "Cairo only. No serif display pairing, no 'brand font' injected for headings. Consistency of shape across the interface is the signal of quality.", "section": "typography" },
+      { "name": "The Weight Axis Rule", "body": "Weight is the hierarchy, not size alone. A 700 title at 1.25rem outranks a 400 body at 1.5rem. Never use font-weight: 400 for headings.", "section": "typography" },
+      { "name": "The Flat-By-Default Rule", "body": "Surfaces are flat at rest. The eye navigates by tonal contrast between --card and --background, not by shadow. Applying shadows to static cards, panels, or text blocks is prohibited.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do use Cairo at 700–900 for all headings. Weight is the hierarchy signal.",
+      "Do use Sky Action Blue (#2563eb) exclusively for interactive affordances — buttons, links, active nav state, focus rings. Not for decoration.",
+      "Do verify ≥4.5:1 contrast for every text element including placeholders and muted labels.",
+      "Do use skeleton loaders on every data-fetching surface. Loading states are not edge cases.",
+      "Do keep tap targets ≥44px. Every nav link, button, and chip must be touchable on a small phone screen.",
+      "Do provide a prefers-reduced-motion fallback for every Framer Motion animation.",
+      "Do respect RTL throughout: direction: rtl on <html>, flip directional icons, no LTR-only layout assumptions.",
+      "Do use the tonal layer system (Ink Muted Bg → Ink Surface → Ink Card) to communicate depth.",
+      "Do vary spacing deliberately across the full scale from xs(4) to 2xl(64)."
+    ],
+    "donts": [
+      "Don't use the generic blue-and-white 'global EdTech' aesthetic (Coursera, edX). Code-UP's identity is dark-navy with sky accent.",
+      "Don't use cluttered Arabic portal patterns: competing banners, pop-ups, autoplay content.",
+      "Don't bring SaaS dashboard chrome — metric cards, hero-metric templates, sidebar + topbar layouts — onto student-facing pages.",
+      "Don't use background-clip: text gradient text. Gradient text is decorative and fails accessibility.",
+      "Don't use border-left or border-right > 1px as a colored stripe on cards or alerts.",
+      "Don't apply Indigo Glow (#6366f1) outside the hero section.",
+      "Don't gate content visibility on a class-toggled transition. Animations must enhance visible content, not reveal hidden content.",
+      "Don't use drop shadows on static surfaces. Shadows are state-feedback only.",
+      "Don't apply backdrop-filter: blur decoratively — use only where there is genuinely layered content beneath.",
+      "Don't animate layout properties (height, width, padding). Animate transform and opacity only.",
+      "Don't use identical card grids — same icon + heading + text, repeated in a uniform grid."
+    ]
+  }
+}

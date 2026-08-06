@@ -1,0 +1,13 @@
+{
+  "taskId": "agent-4a8ehlfu",
+  "description": "Audit quiz, homework & plans",
+  "status": "failed",
+  "detached": true,
+  "startedAt": 1785695851345,
+  "endedAt": 1785696275972,
+  "stopReason": "429 Rate limit exceeded.",
+  "timeoutMs": 7200000,
+  "kind": "agent",
+  "agentId": "agent-5",
+  "subagentType": "explore"
+}

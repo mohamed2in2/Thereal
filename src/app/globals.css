@@ -1,0 +1,282 @@
+@import "tailwindcss";
+
+/* Class-based dark mode (html.dark) for Tailwind v4 */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ─── Design Tokens ────────────────────────────────────────────────────────── */
+:root {
+  /* Surfaces — warm sand palette */
+  --canvas:        #E8E4DC;
+  --bg:            #F7F5F0;
+  --bg-2:          #EFECE4;
+  --surface:       #FFFFFF;
+  --surface-2:     #F8F7F3;
+  --nav:           #FFFFFF;
+  --border:        #E6E1D7;
+  --border-strong: #D7D1C4;
+
+  /* Text */
+  --ink:           #13243A;
+  --ink-2:         #566576;
+  --ink-3:         #8B97A5;
+
+  /* Brand — teal */
+  --brand:         #0E6E62;
+  --brand-strong:  #0A574D;
+  --brand-soft:    #E2F0ED;
+  --brand-shadow:  rgba(14, 110, 98, .40);
+
+  /* Gold accent */
+  --gold:          #B07D26;
+  --gold-2:        #C8922F;
+  --gold-soft:     #F6ECD8;
+
+  /* Danger */
+  --danger:        #C2384A;
+  --danger-soft:   #FBE9EC;
+
+  /* Shadows */
+  --shadow-sm:     0 1px 2px rgba(19, 36, 58, .06);
+  --shadow:        0 10px 34px -16px rgba(19, 36, 58, .20);
+  --shadow-lg:     0 30px 70px -30px rgba(19, 36, 58, .30);
+
+  /* Fonts */
+  --font-body:     'IBM Plex Sans Arabic', 'Cairo', sans-serif;
+  --font-head:     'Tajawal', 'Cairo', sans-serif;
+
+  /* Semantic aliases — kept for backward compat */
+  --ink-muted:     var(--ink-2);
+  --error:         var(--danger);
+  --success:       #10b981;
+  --warn:          var(--gold);
+  --accent:        var(--brand);
+  --accent-dk:     var(--brand-strong);
+  --accent-lt:     var(--brand-soft);
+  --card:          var(--surface-2);
+
+  /* Feature cards — frosted glass */
+  --feature-card-bg:     rgba(255, 255, 255, 0.85);
+  --feature-card-border: rgba(0, 0, 0, 0.06);
+
+  /* Z-index scale */
+  --z-dropdown: 40;
+  --z-sticky:   50;
+  --z-modal-bg: 60;
+  --z-modal:    70;
+  --z-toast:    80;
+  --z-tooltip:  90;
+}
+
+html.dark {
+  /* Surfaces — deep navy palette */
+  --canvas:        #05090F;
+  --bg:            #0A1521;
+  --bg-2:          #0D1A28;
+  --surface:       #0F1E2E;
+  --surface-2:     #15273A;
+  --nav:           #0C1825;
+  --border:        #1E3346;
+  --border-strong: #2B4458;
+
+  --ink:           #EAF1F8;
+  --ink-2:         #9DB1C5;
+  --ink-3:         #6B8094;
+
+  --brand:         #2FB6A4;
+  --brand-strong:  #4FD2C0;
+  --brand-soft:    #11302D;
+  --brand-shadow:  rgba(47, 182, 164, .35);
+
+  --gold:          #E0B354;
+  --gold-2:        #EBC36A;
+  --gold-soft:     #241D0E;
+
+  --danger:        #F0788A;
+  --danger-soft:   #2A141A;
+
+  --shadow-sm:     0 1px 2px rgba(0, 0, 0, .4);
+  --shadow:        0 10px 34px -16px rgba(0, 0, 0, .55);
+  --shadow-lg:     0 30px 70px -30px rgba(0, 0, 0, .7);
+
+  /* Feature cards — frosted glass (dark) */
+  --feature-card-bg:     rgba(20, 25, 35, 0.80);
+  --feature-card-border: rgba(255, 255, 255, 0.10);
+
+  /* Backward compat */
+  --ink-muted:     var(--ink-2);
+  --error:         var(--danger);
+  --accent:        var(--brand);
+  --accent-dk:     var(--brand-strong);
+  --accent-lt:     var(--brand-soft);
+  --card:          var(--surface-2);
+
+  color-scheme: dark;
+}
+
+html:not(.dark) {
+  color-scheme: light;
+}
+
+@theme inline {
+  --color-background: var(--bg);
+  --color-foreground: var(--ink);
+}
+
+/* ─── Reset & Base ─────────────────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-body);
+  direction: rtl;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  transition: background-color 0.2s ease, color 0.2s ease;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--brand);
+  color: #fff;
+}
+
+/* ─── Mobile & Tablet bottom tab bar padding ──────────────────────────────── */
+/* The MobileTabBar toggles this class while it is visible so page content and
+   the footer clear the fixed bar (and the iOS home indicator) on phones & tablets.
+   Kept in sync with the lg:hidden breakpoint (max-width: 1023px). */
+@media (max-width: 1023px) {
+  body.has-bottom-nav {
+    padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* ─── Scrollbar ────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--ink-3); }
+
+/* ─── Focus ────────────────────────────────────────────────────────────────── */
+:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--brand-shadow);
+}
+
+/* ─── Interactive base transitions ────────────────────────────────────────── */
+button, input, select, textarea, a {
+  transition-property: color, background-color, border-color, box-shadow, opacity, transform;
+  transition-duration: 160ms;
+  transition-timing-function: ease;
+}
+
+/* ─── RTL utilities ────────────────────────────────────────────────────────── */
+.rtl { direction: rtl; }
+.ltr { direction: ltr; }
+
+/* ─── Typography helpers ───────────────────────────────────────────────────── */
+.text-balance { text-wrap: balance; }
+.text-pretty  { text-wrap: pretty; }
+
+/* ─── Maintenance screen shimmer ───────────────────────────────────────────── */
+@keyframes maintenance-shimmer {
+  0%   { transform: translateX(-130%); }
+  100% { transform: translateX(430%); }
+}
+.maintenance-shimmer {
+  animation: maintenance-shimmer 1.6s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .maintenance-shimmer { animation: none; }
+}
+
+/* ─── Skeleton loader ──────────────────────────────────────────────────────── */
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--surface-2) 25%,
+    var(--border) 50%,
+    var(--surface-2) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+    background: var(--surface-2);
+  }
+}
+
+/* ─── Float animation ──────────────────────────────────────────────────────── */
+@keyframes float-slow {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-7px); }
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes marquee {
+  to { transform: translateX(-50%); }
+}
+
+.animate-float-slow {
+  animation: float-slow 8s ease-in-out infinite;
+}
+
+.animate-fade-up {
+  animation: fade-up 0.5s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-float-slow,
+  .animate-fade-up {
+    animation: none;
+  }
+}
+
+/* ─── Hero backgrounds ──────────────────────────────────────────────────────── */
+.hero-bg {
+  background: linear-gradient(to bottom, var(--bg), var(--bg-2) 50%, var(--canvas));
+}
+
+html.dark .hero-bg {
+  background: var(--bg);
+}
+
+.hero-grid {
+  background-image: linear-gradient(to left, rgba(14, 110, 98, 0.05) 1px, transparent 1px),
+                    linear-gradient(to bottom, rgba(14, 110, 98, 0.05) 1px, transparent 1px);
+}
+
+html.dark .hero-grid {
+  background-image: linear-gradient(to left, rgba(47, 182, 164, 0.04) 1px, transparent 1px),
+                    linear-gradient(to bottom, rgba(47, 182, 164, 0.04) 1px, transparent 1px);
+}
+
+/* ─── Noise texture ─────────────────────────────────────────────────────────── */
+.noise {
+  position: absolute;
+  inset: 0;
+  opacity: 0.02;
+  mix-blend-mode: overlay;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}

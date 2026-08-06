@@ -1,0 +1,13 @@
+{
+  "taskId": "agent-4qvzpx3k",
+  "description": "Audit video & access security",
+  "status": "failed",
+  "detached": true,
+  "startedAt": 1785695851337,
+  "endedAt": 1785696350532,
+  "stopReason": "429 Rate limit exceeded.",
+  "timeoutMs": 7200000,
+  "kind": "agent",
+  "agentId": "agent-3",
+  "subagentType": "explore"
+}

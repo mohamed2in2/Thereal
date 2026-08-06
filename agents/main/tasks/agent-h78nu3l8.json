@@ -1,0 +1,13 @@
+{
+  "taskId": "agent-h78nu3l8",
+  "description": "Audit payment & wallet security",
+  "status": "failed",
+  "detached": true,
+  "startedAt": 1785695851326,
+  "endedAt": 1785696280459,
+  "stopReason": "429 Rate limit exceeded.",
+  "timeoutMs": 7200000,
+  "kind": "agent",
+  "agentId": "agent-1",
+  "subagentType": "explore"
+}

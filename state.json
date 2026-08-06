@@ -1,0 +1,46 @@
+{
+  "createdAt": "2026-08-02T18:32:31.726Z",
+  "updatedAt": "2026-08-02T19:06:59.534Z",
+  "title": "hi",
+  "isCustomTitle": false,
+  "agents": {
+    "main": {
+      "homedir": "C:/Users/kiwi/.kimi-code/sessions/wd_crispy-octo-doodle-1_11bffcff1840/session_9b7ef1a2-5dff-41b1-8c20-e2ade1003b89/agents/main",
+      "type": "main",
+      "parentAgentId": null
+    },
+    "agent-0": {
+      "homedir": "C:/Users/kiwi/.kimi-code/sessions/wd_crispy-octo-doodle-1_11bffcff1840/session_9b7ef1a2-5dff-41b1-8c20-e2ade1003b89/agents/agent-0",
+      "type": "sub",
+      "parentAgentId": "main"
+    },
+    "agent-1": {
+      "homedir": "C:/Users/kiwi/.kimi-code/sessions/wd_crispy-octo-doodle-1_11bffcff1840/session_9b7ef1a2-5dff-41b1-8c20-e2ade1003b89/agents/agent-1",
+      "type": "sub",
+      "parentAgentId": "main"
+    },
+    "agent-2": {
+      "homedir": "C:/Users/kiwi/.kimi-code/sessions/wd_crispy-octo-doodle-1_11bffcff1840/session_9b7ef1a2-5dff-41b1-8c20-e2ade1003b89/agents/agent-2",
+      "type": "sub",
+      "parentAgentId": "main"
+    },
+    "agent-3": {
+      "homedir": "C:/Users/kiwi/.kimi-code/sessions/wd_crispy-octo-doodle-1_11bffcff1840/session_9b7ef1a2-5dff-41b1-8c20-e2ade1003b89/agents/agent-3",
+      "type": "sub",
+      "parentAgentId": "main"
+    },
+    "agent-4": {
+      "homedir": "C:/Users/kiwi/.kimi-code/sessions/wd_crispy-octo-doodle-1_11bffcff1840/session_9b7ef1a2-5dff-41b1-8c20-e2ade1003b89/agents/agent-4",
+      "type": "sub",
+      "parentAgentId": "main"
+    },
+    "agent-5": {
+      "homedir": "C:/Users/kiwi/.kimi-code/sessions/wd_crispy-octo-doodle-1_11bffcff1840/session_9b7ef1a2-5dff-41b1-8c20-e2ade1003b89/agents/agent-5",
+      "type": "sub",
+      "parentAgentId": "main"
+    }
+  },
+  "custom": {},
+  "workDir": "J:/crispy-octo-doodle-1",
+  "lastPrompt": "continue"
+}

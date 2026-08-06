@@ -1,0 +1,595 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface Submission {
+  id: string;
+  studentId: string;
+  student: { id: string; name: string; email: string };
+  submittedOutput?: string | null;
+  fileUrl?: string | null;
+  fileName?: string | null;
+  status: string;
+  completedAt: string;
+  review?: { verdict?: string | null; note?: string | null } | null;
+}
+
+interface HwWithSubs {
+  id: string;
+  title: string;
+  type: string;
+  expectedOutput?: string | null;
+  reviewQueueCount?: number;
+  submissions?: Submission[];
+}
+
+// ─── LiveReviewPanel ──────────────────────────────────────────────────────────
+
+export function LiveReviewPanel({ notify }: { notify: (t: "success" | "error", m: string) => void }) {
+  const [homeworks, setHomeworks] = useState<HwWithSubs[]>([]);
+  const [selected, setSelected] = useState<HwWithSubs | null>(null);
+  const [subs, setSubs] = useState<Submission[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [verdicting, setVerdicting] = useState<string | null>(null);
+  const [noteMap, setNoteMap] = useState<Record<string, string>>({});
+
+  const fetchHomeworks = useCallback(async () => {
+    const res = await fetch("/api/admin/homework", { credentials: "include" });
+    const data = await res.json();
+    const filtered = (data.homeworks || []).filter((h: HwWithSubs) => (h.reviewQueueCount ?? 0) > 0 || h.type === "terminal");
+    setHomeworks(data.homeworks || []);
+  }, []);
+
+  useEffect(() => { void fetchHomeworks(); }, [fetchHomeworks]);
+
+  const loadReview = async (hw: HwWithSubs) => {
+    setSelected(hw);
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/homework/${hw.id}/review`, { credentials: "include" });
+      const data = await res.json();
+      setSubs(data.submissions || []);
+    } finally { setLoading(false); }
+  };
+
+  const verdict = async (sub: Submission, v: "passed" | "failed") => {
+    setVerdicting(sub.id);
+    try {
+      const res = await fetch(`/api/homework/${selected!.id}/review`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ submissionId: sub.id, verdict: v, note: noteMap[sub.id] || "" }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        notify("success", v === "passed" ? "تم قبول الإجابة ✅" : "تم رفض الإجابة ❌");
+        setSubs(s => s.filter(x => x.id !== sub.id));
+      } else {
+        notify("error", data.error || "تعذر حفظ الحكم");
+      }
+    } finally { setVerdicting(null); }
+  };
+
+  const pendingTotal = homeworks.reduce((s, h) => s + (h.reviewQueueCount ?? 0), 0);
+
+  const input = "w-full px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--bg)] text-[var(--ink)] text-sm focus:outline-none focus:border-sky-400/60 transition-all";
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center gap-3">
+        <h2 className="text-lg font-black text-[var(--ink)]">🔍 مراجعة الإجابات المعلقة</h2>
+        {pendingTotal > 0 && (
+          <span className="bg-amber-500/15 text-amber-500 text-xs font-bold px-2.5 py-1 rounded-full">
+            {pendingTotal} في الانتظار
+          </span>
+        )}
+      </div>
+
+      {!selected ? (
+        <div className="space-y-3">
+          {homeworks.length === 0 ? (
+            <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-12 text-center">
+              <p className="text-4xl mb-3">✅</p>
+              <p className="text-[var(--ink-muted)]">لا توجد إجابات تحتاج مراجعة</p>
+            </div>
+          ) : (
+            homeworks.map(hw => (
+              <button
+                key={hw.id}
+                onClick={() => loadReview(hw)}
+                className="w-full bg-[var(--surface)] border border-[var(--border)] hover:border-sky-400/50 rounded-2xl p-4 flex items-center justify-between gap-3 text-right transition-colors"
+              >
+                <div>
+                  <p className="font-bold text-[var(--ink)]">{hw.title}</p>
+                  <p className="text-xs text-[var(--ink-muted)] mt-0.5">{hw.type === "terminal" ? "💻 كود" : hw.type}</p>
+                </div>
+                <span className={`text-xs font-bold px-2.5 py-1 rounded-full shrink-0 ${(hw.reviewQueueCount ?? 0) > 0 ? "bg-amber-500/15 text-amber-500" : "bg-slate-500/15 text-[var(--ink-muted)]"}`}>
+                  {hw.reviewQueueCount ?? 0} معلق
+                </span>
+              </button>
+            ))
+          )}
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <button onClick={() => setSelected(null)} className="text-sm text-sky-500 hover:underline flex items-center gap-1">
+            ← العودة لقائمة الواجبات
+          </button>
+          <h3 className="font-bold text-[var(--ink)]">{selected.title} — الإجابات المعلقة</h3>
+
+          {selected.expectedOutput && (
+            <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4">
+              <p className="text-xs font-bold text-[var(--ink-muted)] mb-1">الناتج المتوقع (المرجع):</p>
+              <pre className="text-sm text-emerald-400 font-mono whitespace-pre-wrap">{selected.expectedOutput}</pre>
+            </div>
+          )}
+
+          {loading ? (
+            <div className="text-center py-8 text-[var(--ink-muted)]">جارٍ التحميل...</div>
+          ) : subs.length === 0 ? (
+            <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-12 text-center">
+              <p className="text-4xl mb-2">✅</p>
+              <p className="text-[var(--ink-muted)]">لا توجد إجابات معلقة لهذا الواجب</p>
+            </div>
+          ) : (
+            subs.map(sub => (
+              <div key={sub.id} className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-5 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="font-bold text-[var(--ink)]">{sub.student.name}</p>
+                    <p className="text-xs text-[var(--ink-muted)]">{sub.student.email}</p>
+                  </div>
+                  <span className="text-xs text-amber-500 bg-amber-500/10 px-2.5 py-1 rounded-full font-bold">
+                    {sub.status === "review_requested" ? "🔍 طلب مراجعة" : "⏳ معلق"}
+                  </span>
+                </div>
+
+                {sub.submittedOutput && (
+                  <div>
+                    <p className="text-xs font-bold text-[var(--ink-muted)] mb-1">ناتج الطالب:</p>
+                    <pre className="bg-[var(--bg)] border border-[var(--border)] rounded-xl p-3 text-sm text-white font-mono whitespace-pre-wrap overflow-x-auto">{sub.submittedOutput}</pre>
+                  </div>
+                )}
+                {sub.fileUrl && (
+                  <div>
+                    <p className="text-xs font-bold text-[var(--ink-muted)] mb-1">ملف مرفق:</p>
+                    <a
+                      href={`/api/homework/${selected.id}/file?studentId=${sub.studentId}&fileName=${encodeURIComponent(sub.fileUrl.split("/").pop() || "")}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-sm text-sky-500 font-mono hover:underline flex items-center gap-1"
+                    >
+                      📎 {sub.fileName || "تحميل الملف"}
+                    </a>
+                  </div>
+                )}
+
+                <div>
+                  <label className="text-xs font-bold text-[var(--ink-muted)] block mb-1">ملاحظة للطالب (اختياري):</label>
+                  <input
+                    type="text"
+                    className={input}
+                    placeholder="مثال: الكود صحيح لكن ابدأ بـ print"
+                    value={noteMap[sub.id] || ""}
+                    onChange={e => setNoteMap(m => ({ ...m, [sub.id]: e.target.value }))}
+                  />
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => verdict(sub, "passed")}
+                    disabled={verdicting === sub.id}
+                    className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold transition-colors disabled:opacity-50"
+                  >
+                    ✅ قبول
+                  </button>
+                  <button
+                    onClick={() => verdict(sub, "failed")}
+                    disabled={verdicting === sub.id}
+                    className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-bold transition-colors disabled:opacity-50"
+                  >
+                    ❌ رفض
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── HomeworkManagerSection ───────────────────────────────────────────────────
+
+interface Course { id: string; title: string }
+interface Folder { id: string; name: string; videos?: Array<{ id: string; title: string }> }
+
+export function HomeworkManagerSection({
+  courses,
+  folders: initialFolders,
+  selectedCourse,
+  onSelectCourse,
+  notify,
+}: {
+  courses: Course[];
+  folders: Folder[];
+  selectedCourse: Course | null;
+  onSelectCourse: (c: Course) => void;
+  notify: (t: "success" | "error", m: string) => void;
+}) {
+  const [homeworks, setHomeworks] = useState<any[]>([]);
+  const [loadingHw, setLoadingHw] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [courseFolders, setCourseFolders] = useState<Folder[]>(initialFolders || []);
+  const [loadingFolders, setLoadingFolders] = useState(false);
+
+  const [form, setForm] = useState({
+    title: "",
+    description: "",
+    type: "exam" as "link" | "exam" | "terminal" | "upload",
+    linkUrl: "",
+    courseId: selectedCourse?.id || "",
+    videoId: "",
+    dueAt: "",
+    timeLimitMinutes: 30,
+    isPublished: false,
+    // terminal
+    expectedOutput: "",
+    codeTemplate: "",
+    codeLanguage: "python",
+    // upload
+    allowedFileTypes: "pdf,py,js,zip",
+    // exam
+    questions: [{ question: "", imageUrl: "", optionA: "", optionB: "", optionC: "", optionD: "", correctAnswer: "A" }],
+  });
+
+  const input = "w-full px-3.5 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--bg)] text-[var(--ink)] text-sm focus:outline-none focus:border-sky-400/60 transition-all";
+  const label = "block text-xs font-semibold text-[var(--ink-muted)] mb-1.5";
+  const btn = "inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-white text-sm font-bold transition-colors disabled:opacity-50";
+
+  // Keep form.courseId updated if selectedCourse changes
+  useEffect(() => {
+    if (selectedCourse?.id) {
+      setForm(f => ({ ...f, courseId: selectedCourse.id }));
+    }
+  }, [selectedCourse]);
+
+  // Fetch folders for the currently selected courseId in the form
+  useEffect(() => {
+    if (!form.courseId) {
+      setCourseFolders([]);
+      return;
+    }
+    let isMounted = true;
+    setLoadingFolders(true);
+    fetch(`/api/admin/courses/${form.courseId}/folders`, { credentials: "include" })
+      .then(res => res.json())
+      .then(data => {
+        if (isMounted) setCourseFolders(data.folders || []);
+      })
+      .catch(() => {
+        if (isMounted) setCourseFolders([]);
+      })
+      .finally(() => {
+        if (isMounted) setLoadingFolders(false);
+      });
+    return () => { isMounted = false; };
+  }, [form.courseId]);
+
+  const fetchHomeworks = useCallback(async () => {
+    setLoadingHw(true);
+    try {
+      const res = await fetch("/api/admin/homework", { credentials: "include" });
+      const data = await res.json();
+      setHomeworks(data.homeworks || []);
+    } finally { setLoadingHw(false); }
+  }, []);
+
+  useEffect(() => { void fetchHomeworks(); }, [fetchHomeworks]);
+
+  const allVideos = courseFolders.flatMap(f => (f.videos ?? []).map(v => ({ ...v, folderName: f.name })));
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const payload: Record<string, unknown> = {
+        title: form.title,
+        description: form.description || undefined,
+        type: form.type,
+        courseId: form.courseId || selectedCourse?.id || undefined,
+        videoId: form.videoId || undefined,
+        dueAt: form.dueAt || undefined,
+        timeLimitMinutes: form.timeLimitMinutes,
+        isPublished: form.isPublished,
+      };
+      if (form.type === "link") payload.linkUrl = form.linkUrl;
+      if (form.type === "terminal") {
+        payload.expectedOutput = form.expectedOutput;
+        payload.codeTemplate = form.codeTemplate || undefined;
+        payload.codeLanguage = form.codeLanguage;
+      }
+      if (form.type === "upload") payload.allowedFileTypes = form.allowedFileTypes || undefined;
+      if (form.type === "exam") payload.questions = form.questions;
+
+      const res = await fetch("/api/admin/homework", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        notify("success", "تم إنشاء الواجب بنجاح ✅");
+        setShowForm(false);
+        void fetchHomeworks();
+        setForm(f => ({ ...f, title: "", description: "", linkUrl: "", videoId: "", expectedOutput: "", codeTemplate: "", questions: [{ question: "", imageUrl: "", optionA: "", optionB: "", optionC: "", optionD: "", correctAnswer: "A" }] }));
+      } else {
+        notify("error", data.error || "تعذر إنشاء الواجب");
+      }
+    } finally { setSaving(false); }
+  };
+
+  const deleteHw = async (hwId: string) => {
+    const res = await fetch("/api/admin/homework", {
+      method: "DELETE",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ homeworkId: hwId }),
+    });
+    if (res.ok) { notify("success", "تم حذف الواجب"); void fetchHomeworks(); }
+    else notify("error", "تعذر حذف الواجب");
+  };
+
+  const togglePublish = async (hw: any) => {
+    const res = await fetch("/api/admin/homework", {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ homeworkId: hw.id, isPublished: !hw.isPublished }),
+    });
+    if (res.ok) { notify("success", hw.isPublished ? "تم إخفاء الواجب" : "تم نشر الواجب ✅"); void fetchHomeworks(); }
+    else notify("error", "تعذر تحديث حالة الواجب");
+  };
+
+  const TYPE_LABELS: Record<string, string> = {
+    link: "🔗 رابط خارجي",
+    exam: "📝 اختبار MCQ",
+    terminal: "💻 كود / Terminal",
+    upload: "📎 رفع ملف",
+  };
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-lg font-black text-[var(--ink)]">📚 إدارة الواجبات</h2>
+        <button onClick={() => setShowForm(s => !s)} className={btn}>
+          {showForm ? "إلغاء" : "+ واجب جديد"}
+        </button>
+      </div>
+
+      {/* Course context hint */}
+      {selectedCourse && (
+        <div className="text-xs text-[var(--ink-muted)] bg-sky-500/8 border border-sky-500/20 rounded-xl px-4 py-2.5">
+          الكورس المختار حالياً: <strong className="text-sky-500">{selectedCourse.title}</strong>
+        </div>
+      )}
+
+      {/* Create Form */}
+      {showForm && (
+        <form onSubmit={submit} className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-5 space-y-4">
+          <h3 className="font-bold text-[var(--ink)]">واجب جديد</h3>
+
+          {/* Type selector */}
+          <div>
+            <label className={label}>نوع الواجب</label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {(["exam","terminal","upload","link"] as const).map(t => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setForm(f => ({ ...f, type: t }))}
+                  className={`py-2 px-3 rounded-xl text-xs font-bold border-2 transition-colors text-center ${form.type === t ? "border-sky-500 bg-sky-500/10 text-sky-500" : "border-[var(--border)] text-[var(--ink-muted)] hover:border-sky-400/40"}`}
+                >
+                  {TYPE_LABELS[t]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Course & Lesson Selectors */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className={label}>الكورس التابع له الواجب</label>
+              <select
+                value={form.courseId}
+                onChange={e => setForm(f => ({ ...f, courseId: e.target.value, videoId: "" }))}
+                className={input}
+              >
+                <option value="">— اختر الكورس —</option>
+                {courses.map(c => (
+                  <option key={c.id} value={c.id}>{c.title}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className={label}>ربط بدرس محدد (اختياري)</label>
+              <select
+                value={form.videoId}
+                onChange={e => setForm(f => ({ ...f, videoId: e.target.value }))}
+                className={input}
+                disabled={!form.courseId || loadingFolders}
+              >
+                {!form.courseId ? (
+                  <option value="">اختر الكورس أولاً</option>
+                ) : loadingFolders ? (
+                  <option value="">جارٍ تحميل الدروس...</option>
+                ) : allVideos.length === 0 ? (
+                  <option value="">لا توجد دروس في هذا الكورس بعد</option>
+                ) : (
+                  <>
+                    <option value="">— الكورس ككل (بدون تحديد درس) —</option>
+                    {allVideos.map(v => (
+                      <option key={v.id} value={v.id}>
+                        📁 {v.folderName} ← 🎥 {v.title}
+                      </option>
+                    ))}
+                  </>
+                )}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className={label}>عنوان الواجب *</label>
+            <input required value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} className={input} placeholder="مثال: واجب الدرس الأول" />
+          </div>
+
+          <div>
+            <label className={label}>وصف (اختياري)</label>
+            <textarea rows={2} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} className={`${input} resize-none`} />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className={label}>تاريخ التسليم</label>
+              <input type="datetime-local" value={form.dueAt} onChange={e => setForm(f => ({ ...f, dueAt: e.target.value }))} className={input} dir="ltr" />
+            </div>
+            <div>
+              <label className={label}>مدة الاختبار (دقيقة)</label>
+              <input type="number" min={1} max={300} value={form.timeLimitMinutes} onChange={e => setForm(f => ({ ...f, timeLimitMinutes: Number(e.target.value) || 30 }))} className={input} dir="ltr" />
+            </div>
+          </div>
+
+          {/* Type-specific fields */}
+          {form.type === "link" && (
+            <div>
+              <label className={label}>الرابط الخارجي *</label>
+              <input required type="url" value={form.linkUrl} onChange={e => setForm(f => ({ ...f, linkUrl: e.target.value }))} className={input} dir="ltr" placeholder="https://…" />
+            </div>
+          )}
+
+          {form.type === "terminal" && (
+            <>
+              <div>
+                <label className={label}>لغة البرمجة</label>
+                <select value={form.codeLanguage} onChange={e => setForm(f => ({ ...f, codeLanguage: e.target.value }))} className={input}>
+                  <option value="python">Python</option>
+                  <option value="javascript">JavaScript</option>
+                  <option value="cpp">C++</option>
+                  <option value="java">Java</option>
+                  <option value="other">أخرى</option>
+                </select>
+              </div>
+              <div>
+                <label className={label}>الناتج المتوقع (expected output) *</label>
+                <textarea required rows={4} value={form.expectedOutput} onChange={e => setForm(f => ({ ...f, expectedOutput: e.target.value }))} className={`${input} font-mono resize-y`} dir="ltr" placeholder="Hello World&#10;Sum = 15" />
+                <p className="text-[10px] text-[var(--ink-muted)] mt-1">الفراغات وتغيير السطر لا تؤثر في التصحيح التلقائي</p>
+              </div>
+              <div>
+                <label className={label}>كود بدئي للطالب (اختياري)</label>
+                <textarea rows={4} value={form.codeTemplate} onChange={e => setForm(f => ({ ...f, codeTemplate: e.target.value }))} className={`${input} font-mono resize-y`} dir="ltr" placeholder="# أكمل الكود هنا&#10;name = input()" />
+              </div>
+            </>
+          )}
+
+          {form.type === "upload" && (
+            <div>
+              <label className={label}>أنواع الملفات المسموحة</label>
+              <input value={form.allowedFileTypes} onChange={e => setForm(f => ({ ...f, allowedFileTypes: e.target.value }))} className={input} dir="ltr" placeholder="pdf,py,js,zip" />
+              <p className="text-[10px] text-[var(--ink-muted)] mt-1">افصل بفاصلة، اتركه فارغاً للسماح بأي نوع</p>
+            </div>
+          )}
+
+          {form.type === "exam" && (
+            <div className="space-y-3">
+              <label className={label}>الأسئلة</label>
+              {form.questions.map((q, qi) => (
+                <div key={qi} className="border border-[var(--border)] rounded-xl p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-[var(--ink-muted)]">سؤال {qi + 1}</span>
+                    {form.questions.length > 1 && (
+                      <button type="button" onClick={() => setForm(f => ({ ...f, questions: f.questions.filter((_, i) => i !== qi) }))} className="text-xs text-red-500 hover:underline">حذف</button>
+                    )}
+                  </div>
+                  <input required value={q.question} onChange={e => { const qs = [...form.questions]; qs[qi] = { ...qs[qi], question: e.target.value }; setForm(f => ({ ...f, questions: qs })); }} className={input} placeholder="نص السؤال *" />
+                  <input value={q.imageUrl} onChange={e => { const qs = [...form.questions]; qs[qi] = { ...qs[qi], imageUrl: e.target.value }; setForm(f => ({ ...f, questions: qs })); }} className={input} placeholder="رابط صورة (اختياري)" dir="ltr" />
+                  <div className="grid grid-cols-2 gap-2">
+                    {(["A","B","C","D"] as const).map(opt => (
+                      <div key={opt} className="flex gap-1.5 items-center">
+                        <button
+                          type="button"
+                          onClick={() => { const qs = [...form.questions]; qs[qi] = { ...qs[qi], correctAnswer: opt }; setForm(f => ({ ...f, questions: qs })); }}
+                          className={`w-6 h-6 rounded-full text-xs font-black shrink-0 transition-colors ${q.correctAnswer === opt ? "bg-emerald-500 text-white" : "bg-[var(--border)] text-[var(--ink-muted)] hover:bg-emerald-500/30"}`}
+                        >{opt}</button>
+                        <input required value={q[`option${opt}` as keyof typeof q] as string} onChange={e => { const qs = [...form.questions]; (qs[qi] as any)[`option${opt}`] = e.target.value; setForm(f => ({ ...f, questions: qs })); }} className={`${input} flex-1`} placeholder={`الخيار ${opt}`} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              <button type="button" onClick={() => setForm(f => ({ ...f, questions: [...f.questions, { question: "", imageUrl: "", optionA: "", optionB: "", optionC: "", optionD: "", correctAnswer: "A" }] }))} className="text-sm text-sky-500 hover:underline">+ إضافة سؤال</button>
+            </div>
+          )}
+
+          <div className="flex items-center gap-3 pt-2">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input type="checkbox" checked={form.isPublished} onChange={e => setForm(f => ({ ...f, isPublished: e.target.checked }))} className="w-4 h-4 rounded" />
+              <span className="text-sm font-semibold text-[var(--ink)]">نشر فور الإنشاء</span>
+            </label>
+          </div>
+
+          <button type="submit" disabled={saving} className={`${btn} w-full`}>
+            {saving ? "جارٍ الحفظ..." : "إنشاء الواجب"}
+          </button>
+        </form>
+      )}
+
+      {/* Homeworks List */}
+      <div className="space-y-2">
+        <h3 className="text-sm font-bold text-[var(--ink-muted)]">الواجبات الحالية ({homeworks.length})</h3>
+        {loadingHw ? (
+          <div className="text-center py-8 text-[var(--ink-muted)] text-sm">جارٍ التحميل...</div>
+        ) : homeworks.length === 0 ? (
+          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-10 text-center text-[var(--ink-muted)] text-sm">
+            لا توجد واجبات بعد — أنشئ واجباً أولاً
+          </div>
+        ) : (
+          homeworks.map(hw => (
+            <div key={hw.id} className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-4 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="font-bold text-[var(--ink)] truncate">{hw.title}</p>
+                  <span className="text-xs bg-sky-500/10 text-sky-500 px-2 py-0.5 rounded-full font-bold">{TYPE_LABELS[hw.type] ?? hw.type}</span>
+                  {(hw.reviewQueueCount ?? 0) > 0 && (
+                    <span className="text-xs bg-amber-500/15 text-amber-500 px-2 py-0.5 rounded-full font-bold">🔍 {hw.reviewQueueCount} معلق</span>
+                  )}
+                </div>
+                <p className="text-xs text-[var(--ink-muted)] mt-0.5">
+                  {hw._count?.submissions ?? 0} تسليم · {hw.video?.title ?? "الكورس كله"}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={() => togglePublish(hw)}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-colors ${hw.isPublished ? "text-emerald-500 bg-emerald-500/10 hover:bg-emerald-500/20" : "text-[var(--ink-muted)] bg-[var(--border)] hover:bg-[var(--border)]/70"}`}
+                >
+                  {hw.isPublished ? "✅ منشور" : "إخفاء"}
+                </button>
+                <button onClick={() => deleteHw(hw.id)} className="px-2.5 py-1.5 rounded-lg text-xs font-bold text-red-500 hover:bg-red-500/10 transition-colors">
+                  حذف
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}

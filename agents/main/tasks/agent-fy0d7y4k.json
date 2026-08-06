@@ -1,0 +1,13 @@
+{
+  "taskId": "agent-fy0d7y4k",
+  "description": "Audit superadmin & RBAC",
+  "status": "failed",
+  "detached": true,
+  "startedAt": 1785695851341,
+  "endedAt": 1785696247059,
+  "stopReason": "429 Rate limit exceeded.",
+  "timeoutMs": 7200000,
+  "kind": "agent",
+  "agentId": "agent-4",
+  "subagentType": "explore"
+}

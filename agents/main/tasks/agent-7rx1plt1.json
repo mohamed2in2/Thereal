@@ -1,0 +1,13 @@
+{
+  "taskId": "agent-7rx1plt1",
+  "description": "Audit AI engine security",
+  "status": "failed",
+  "detached": true,
+  "startedAt": 1785695851332,
+  "endedAt": 1785696234383,
+  "stopReason": "429 Rate limit exceeded.",
+  "timeoutMs": 7200000,
+  "kind": "agent",
+  "agentId": "agent-2",
+  "subagentType": "explore"
+}

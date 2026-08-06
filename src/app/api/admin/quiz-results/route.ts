@@ -1,0 +1,157 @@
+import { logAdminAction } from "@/lib/admin-auth";
+import { NextRequest, NextResponse } from "next/server";
+import { getSession } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+
+// GET — teacher gets quiz results for their quizzes
+export async function GET(req: NextRequest) {
+
+      try {
+      const session = await getSession();
+      if (!session || (session.role !== "teacher" && session.role !== "superadmin")) {
+        return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
+      }
+
+      const quizId = req.nextUrl.searchParams.get("quizId");
+      const courseId = req.nextUrl.searchParams.get("courseId");
+
+      // Get teacher's courses
+      const teacherCourses = await prisma.course.findMany({
+        where: { teacherId: session.id },
+        select: { id: true },
+      });
+      const courseIds = teacherCourses.map((c) => c.id);
+
+      if (courseIds.length === 0) {
+        return NextResponse.json({ results: [] });
+      }
+
+      // Build filter
+      const where: Record<string, unknown> = {
+        quiz: {
+          folder: {
+            courseId: courseId ? { equals: courseId, in: courseIds } : { in: courseIds },
+          },
+        },
+      };
+      if (quizId) where.quizId = quizId;
+
+      const results = await prisma.quizResult.findMany({
+        where,
+        orderBy: { completedAt: "desc" },
+        include: {
+          student: { select: { id: true, name: true, email: true, phone: true } },
+          quiz: {
+            select: {
+              id: true,
+              title: true,
+              folder: {
+                select: {
+                  name: true,
+                  courseId: true,
+                  course: { select: { title: true } },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      return NextResponse.json({
+        results: results.map((r) => ({
+          id: r.id,
+          studentId: r.studentId,
+          student: r.student,
+          quizId: r.quizId,
+          quiz: {
+            id: r.quiz.id,
+            title: r.quiz.title,
+            folderName: r.quiz.folder?.name ?? "اختبار خطة",
+            courseId: r.quiz.folder?.courseId ?? "",
+            courseTitle: r.quiz.folder?.course?.title ?? "خطة دراسية",
+          },
+          score: r.score,
+          totalQ: r.totalQ,
+          allowRetake: r.allowRetake,
+          completedAt: r.completedAt,
+        })),
+      });
+    } catch (error) {
+        console.error("[admin/quiz-results] error:", error);
+        return NextResponse.json(
+          { error: "حدث خطأ داخلي" },
+          { status: 500 }
+        );
+      }
+}
+
+// PATCH — teacher toggles allowRetake for a specific result
+export async function PATCH(req: NextRequest) {
+
+      try {
+      const session = await getSession();
+
+    if (session && session.role === "superadmin") {
+      try {
+        await logAdminAction({
+          adminId: session.id,
+          adminName: session.name,
+          action: "SUPERADMIN_ACTION",
+          targetType: "API_ROUTE",
+          targetId: req.nextUrl ? req.nextUrl.pathname : req.url,
+          targetName: req.method,
+        });
+      } catch (e) {}
+    }
+      if (!session || (session.role !== "teacher" && session.role !== "superadmin")) {
+        return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
+      }
+
+      const { resultId, allowRetake } = await req.json();
+      if (!resultId || typeof allowRetake !== "boolean") {
+        return NextResponse.json({ error: "بيانات ناقصة" }, { status: 400 });
+      }
+
+      // Verify teacher owns the course
+      const result = await prisma.quizResult.findUnique({
+        where: { id: resultId },
+        include: {
+          quiz: {
+            include: {
+              folder: {
+                select: { course: { select: { teacherId: true } } },
+              },
+            },
+          },
+        },
+      });
+
+      if (!result) {
+        return NextResponse.json({ error: "النتيجة غير موجودة" }, { status: 404 });
+      }
+
+      if (result.quiz.folder && session.role === "teacher" && result.quiz.folder.course.teacherId !== session.id) {
+        return NextResponse.json({ error: "ليست لديك صلاحية" }, { status: 403 });
+      }
+
+      if (!result.quiz.folder && session.role !== "superadmin") {
+        return NextResponse.json({ error: "لا يمكن تعديل اختبارات الخطط إلا للمشرف العام" }, { status: 403 });
+      }
+
+      const updated = await prisma.quizResult.update({
+        where: { id: resultId },
+        data: { allowRetake },
+      });
+
+      return NextResponse.json({
+        result: updated,
+        message: allowRetake ? "تم السماح بإعادة الاختبار" : "تم إلغاء إعادة الاختبار",
+      });
+    } catch (error) {
+        console.error("[admin/quiz-results] error:", error);
+        return NextResponse.json(
+          { error: "حدث خطأ داخلي" },
+          { status: 500 }
+        );
+      }
+}
