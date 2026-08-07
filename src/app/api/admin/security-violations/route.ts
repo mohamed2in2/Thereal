@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
       where: { id: studentId },
       data: {
         // Suspend account if banned
-        isManualTeacherAccount: action === "ban" ? false : undefined,
+        isActive: action === "ban" ? false : true,
       },
     });
 
