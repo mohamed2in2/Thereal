@@ -1474,21 +1474,32 @@ export default function TeacherDashboardPage() {
                             ) : (
                               <>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                  {(["A", "B", "C", "D"] as const).map((opt) => (
-                                    <div key={opt} className="flex gap-2 items-center">
-                                      <button
-                                        type="button"
-                                        onClick={() => { const qs = [...newQuiz.questions]; qs[qi].correctAnswer = opt; setNewQuiz({ ...newQuiz, questions: qs }); }}
-                                        aria-label={`تعيين ${opt} كإجابة صحيحة`}
-                                        className={`shrink-0 w-7 h-7 rounded-lg text-xs font-bold transition-colors ${q.correctAnswer === opt ? "bg-emerald-500 text-white" : "bg-[var(--border)] text-[var(--ink-muted)] hover:text-[var(--ink)]"}`}
-                                      >
-                                        {opt}
-                                      </button>
-                                      <input type="text" value={q[`option${opt}` as keyof typeof q] as string}
-                                        onChange={(e) => { const qs = [...newQuiz.questions]; (qs[qi] as Record<string, string>)[`option${opt}`] = e.target.value; setNewQuiz({ ...newQuiz, questions: qs }); }}
-                                        placeholder={`الخيار ${opt}`} className={input} />
-                                    </div>
-                                  ))}
+                                  {(["A", "B", "C", "D"] as const).map((opt) => {
+                                    const optKey = `option${opt}` as "optionA" | "optionB" | "optionC" | "optionD";
+                                    return (
+                                      <div key={opt} className="flex gap-2 items-center">
+                                        <button
+                                          type="button"
+                                          onClick={() => { const qs = [...newQuiz.questions]; qs[qi].correctAnswer = opt; setNewQuiz({ ...newQuiz, questions: qs }); }}
+                                          aria-label={`تعيين ${opt} كإجابة صحيحة`}
+                                          className={`shrink-0 w-7 h-7 rounded-lg text-xs font-bold transition-colors ${q.correctAnswer === opt ? "bg-emerald-500 text-white" : "bg-[var(--border)] text-[var(--ink-muted)] hover:text-[var(--ink)]"}`}
+                                        >
+                                          {opt}
+                                        </button>
+                                        <input
+                                          type="text"
+                                          value={q[optKey] || ""}
+                                          onChange={(e) => {
+                                            const qs = [...newQuiz.questions];
+                                            qs[qi][optKey] = e.target.value;
+                                            setNewQuiz({ ...newQuiz, questions: qs });
+                                          }}
+                                          placeholder={`الخيار ${opt}`}
+                                          className={input}
+                                        />
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                                 <p className="text-[11px] text-[var(--ink-muted)]">اضغط على حرف الخيار لتحديده كإجابة صحيحة. الحالي: <span className="font-bold text-emerald-500">{q.correctAnswer}</span></p>
                               </>
