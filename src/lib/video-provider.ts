@@ -60,7 +60,7 @@ export const PROVIDER_LABELS: Record<VideoProvider, string> = {
   vdocipher: "VdoCipher",
   bunny: "Bunny Stream",
   youtube: "YouTube Private",
-  alasly: "منصة الأصلي (Alasly Protected)",
+  alasly: "Native (Super Native Security)",
 };
 
 /** Validates a provider ID format per provider rules */
@@ -69,7 +69,7 @@ export function validateProviderId(provider: VideoProvider, id: string): string 
 
   switch (provider) {
     case "alasly":
-      if (!/^[a-z0-9-]+$/i.test(id)) return "معرف درس منصة الأصلي يجب أن يكون UUID صالحاً";
+      if (!/^[a-z0-9-]+$/i.test(id)) return "معرف درس Native يجب أن يكون UUID صالحاً";
       break;
     case "vdocipher":
       if (!/^[a-z0-9-]+$/i.test(id)) return "معرف VdoCipher يحتوي على أحرف وأرقام وشرطات فقط";

@@ -1252,7 +1252,7 @@ export default function TeacherDashboardPage() {
                           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                             {([
                               { value: "vdocipher", label: "VdoCipher", badge: "أعلى حماية DRM", level: "الأعلى أماناً" },
-                              { value: "alasly", label: "منصة الأصلي", badge: "Super Native", level: "حماية فائقة" },
+                              { value: "alasly", label: "Native", badge: "Super Native", level: "عالي" },
                               { value: "bunny", label: "Bunny CDN", badge: "حماية متوسطة", level: "متوسط" },
                               { value: "youtube", label: "YouTube", badge: "مجاني / اقتصادي", level: "منخفض التكلفة" },
                             ] as const).map(({ value, label: pl, badge, level }) => {
@@ -1279,7 +1279,7 @@ export default function TeacherDashboardPage() {
                           <div>
                             <label className={label}>
                               {newVideo.videoProvider === "vdocipher" && "VdoCipher Video ID — أعلى حماية مشفرة (Highest DRM)"}
-                              {newVideo.videoProvider === "alasly" && "معرف درس منصة الأصلي — حماية فائقة (Super Native Security)"}
+                              {newVideo.videoProvider === "alasly" && "معرف درس Native — حماية عالية (Super Native Security)"}
                               {newVideo.videoProvider === "bunny" && "Bunny Stream Video GUID — حماية متوسطة (Medium CDN Security)"}
                               {newVideo.videoProvider === "youtube" && "YouTube Video ID (11 حرف) — مخصص للكورسات المجانية ومنخفضة التكلفة"}
                             </label>
@@ -1293,7 +1293,7 @@ export default function TeacherDashboardPage() {
                             />
                             <p className="text-[10px] text-[var(--ink-muted)] mt-1.5">
                               {newVideo.videoProvider === "vdocipher" && "من لوحة VdoCipher ‹ Videos ‹ انسخ الـ ID (أعلى درجات الحماية ضد التحميل والتسريب)"}
-                              {newVideo.videoProvider === "alasly" && "محمي بنظام Super Native Security مع علامات مائية متحركة وحماية ضد تسجيل الشاشة"}
+                              {newVideo.videoProvider === "alasly" && "محمي بنظام Super Native Security بحماية عالية، مع علامات مائية متحركة وحماية ضد تسجيل الشاشة"}
                               {newVideo.videoProvider === "bunny" && "من Bunny Stream ‹ Library ‹ Video GUID (حماية متوسطة وسريعة)"}
                               {newVideo.videoProvider === "youtube" && "من رابط الفيديو: youtube.com/watch?v=الجزء (اقتصادي جداً للكورسات والمحاضرات المجانية)"}
                             </p>
