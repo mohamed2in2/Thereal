@@ -552,7 +552,6 @@ export default function CourseProductPage() {
                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
                               {[
                                 { id: "vf_cash", label: "فودافون كاش", color: "#E60000" },
-                                { id: "et_cash", label: "اتصالات كاش (e&)", color: "#76B900" },
                               ].map(m => (
                                 <button key={m.id} type="button" onClick={() => setSelectedWalletMethod(m.id as any)}
                                   className="py-2 px-1 rounded-lg text-xs font-bold border cursor-pointer transition-all text-center flex items-center justify-center gap-1"

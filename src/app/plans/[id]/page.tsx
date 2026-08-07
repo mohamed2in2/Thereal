@@ -338,7 +338,7 @@ export default function PlanProductPage() {
                     {payMode === "wallet" && (
                       <div className="p-3.5 rounded-xl space-y-3" style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}>
                         <p className="text-xs text-center leading-relaxed" style={{ color: "var(--ink-2)" }}>
-                          سيتم تحويلك لصفحة الدفع الموحّدة لاختيار طريقة الدفع المناسبة (فوري، كروت البنك، فودافون كاش، اتصالات كاش، أورانج كاش) وإتمام العملية بأمان.
+                          سيتم تحويلك لصفحة الدفع الموحّدة لاختيار طريقة الدفع المناسبة (فوري، كروت البنك، فودافون كاش، أورانج كاش) وإتمام العملية بأمان.
                         </p>
                         <button onClick={() => {
                           if (!user) { router.push(`/login?redirect_url=/plans/${planId}`); return; }

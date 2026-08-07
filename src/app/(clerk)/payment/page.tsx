@@ -85,7 +85,7 @@ function PaymentContent() {
         setUnsupportedNotice(null);
       } else if (found && !found.available) {
         setUnsupportedNotice(
-          `طريقة الدفع المحددة (${found.label}) غير متاحة حالياً عبر البوابة. تم توجيهك لاختيار إحدى الوسائل المفعلة أدناه (فوري، البطاقات، أورانج كاش، فودافون، أو اتصالات كاش).`
+          `طريقة الدفع المحددة (${found.label}) غير متاحة حالياً عبر البوابة. تم توجيهك لاختيار إحدى الوسائل المفعلة أدناه (فوري، البطاقات، أورانج كاش، أو فودافون كاش).`
         );
         setSelectedMethodId("vf_cash");
       }
@@ -363,7 +363,7 @@ function PaymentContent() {
                     📱 بوابة Sha7nawy (gate.sha7nawy.com)
                   </p>
                   <p className="text-[11px] text-teal-700 dark:text-teal-400 mt-1 font-medium">
-                    تخدم: فودافون كاش (*9*1#) واتصالات كاش (تطبيق e& Money).
+                    تخدم: فودافون كاش (*9*1#).
                   </p>
                 </div>
               </div>

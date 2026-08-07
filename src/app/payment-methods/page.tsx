@@ -41,7 +41,7 @@ export default function PaymentMethodsPage() {
                 طرق الدفع والشحن المعتمدة والآمنة
               </h1>
               <p className="text-sm sm:text-base text-emerald-100 leading-relaxed font-medium">
-                ادفع شحن رصيدك أو اشترك في كورساتك بسهولة عبر فوري، البطاقات البنكية، ومحفظة أورانج (عبر Shake-Out) أو فودافون كاش واتصالات كاش (عبر Sha7nawy). جميع العمليات مشفرة ومؤمنة 100%.
+                ادفع شحن رصيدك أو اشترك في كورساتك بسهولة عبر فوري، البطاقات البنكية، ومحفظة أورانج (عبر Shake-Out) أو فودافون كاش (عبر Sha7nawy). جميع العمليات مشفرة ومؤمنة 100%.
               </p>
 
               <div className="flex flex-wrap items-center gap-3 pt-2">
