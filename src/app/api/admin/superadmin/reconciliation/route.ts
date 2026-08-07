@@ -7,7 +7,7 @@ import { SHAKEOUT_PENDING_TYPE, SHAKEOUT_CREDITED_TYPE } from "@/lib/shakeout";
 
 export async function GET(req: NextRequest) {
   const session = await getSession();
-  if (!session || !hasPermission(session.role, "view_all_analytics")) {
+  if (!session || session.role !== "superadmin") {
     return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
   }
 
