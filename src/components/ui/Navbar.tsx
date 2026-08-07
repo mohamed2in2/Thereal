@@ -52,6 +52,8 @@ function subscribe(cb: () => void) {
 const getSnapshot       = (): Theme => getResolvedTheme();
 const getServerSnapshot = (): Theme => "light";
 
+import { ParentVerificationBanner } from "@/components/ui/ParentVerificationBanner";
+
 export function Navbar({ user }: NavbarProps) {
   const pathname = usePathname();
   const router   = useRouter();
@@ -176,10 +178,12 @@ export function Navbar({ user }: NavbarProps) {
   );
 
   return (
-    <header
-      className="sticky top-0 z-[var(--z-sticky)] bg-[var(--surface)] border-b border-[var(--border)]"
-      style={{ boxShadow: "var(--shadow-sm)" }}
-    >
+    <>
+      <ParentVerificationBanner />
+      <header
+        className="sticky top-0 z-[var(--z-sticky)] bg-[var(--surface)] border-b border-[var(--border)]"
+        style={{ boxShadow: "var(--shadow-sm)" }}
+      >
       <div
         className="max-w-[1320px] mx-auto px-3 sm:px-7 h-[60px] sm:h-[74px] flex justify-between lg:grid lg:grid-cols-[1fr_auto_1fr] items-center gap-1.5 sm:gap-[18px]"
       >
@@ -482,5 +486,6 @@ export function Navbar({ user }: NavbarProps) {
         </div>
       </div>
     </header>
+    </>
   );
 }

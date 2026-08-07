@@ -2,13 +2,92 @@
 
 import { use, useEffect, useState } from "react";
 
+interface ChildGateInfo {
+  name: string;
+  stage: string | null;
+  maskedStudentPhone: string;
+}
+
+interface ExamItem {
+  title: string;
+  score: number;
+  maxScore: number;
+  percent: number;
+  status: string;
+  date: string;
+}
+
+interface TeacherNote {
+  teacherName: string;
+  content: string;
+  date: string;
+}
+
+interface SubscriptionItem {
+  id: string;
+  teacherName: string;
+  teacherPhone: string | null;
+  planLabel: string;
+  amount: number;
+  createdAt: string;
+  status: string;
+}
+
+interface ReportData {
+  student: {
+    id: string;
+    name: string;
+    educationalStage: string | null;
+    points: number;
+    parentPhone: string | null;
+    phone: string | null;
+  };
+  overallAveragePercent: number | null;
+  overallStatusBadge: { label: string; color: string; text: string } | null;
+  attendancePercent: number | null;
+  homeworkStats: {
+    completed: number;
+    pending: number;
+    late: number | null;
+  };
+  recentExams: ExamItem[];
+  teacherNotes: TeacherNote[];
+  subscriptions: SubscriptionItem[];
+}
+
 export default function ParentPortalPage({ params }: { params: Promise<{ token: string }> }) {
   const resolvedParams = use(params);
   const token = resolvedParams.token;
 
   const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<any>(null);
+  const [stage, setStage] = useState<"GATE" | "REPORT" | "DEAD">("DEAD");
+  const [gateChild, setGateChild] = useState<ChildGateInfo | null>(null);
+  const [reportData, setReportData] = useState<ReportData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [verifying, setVerifying] = useState(false);
+
+  // Font size scaling state (stored in localStorage)
+  const [fontScale, setFontScale] = useState<number>(1);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("parent_font_scale");
+      if (saved) {
+        const val = parseFloat(saved);
+        if (!isNaN(val) && val >= 0.8 && val <= 1.5) setFontScale(val);
+      }
+    } catch {}
+  }, []);
+
+  const changeFontScale = (delta: number) => {
+    setFontScale((prev) => {
+      const next = Math.min(Math.max(parseFloat((prev + delta).toFixed(1)), 0.8), 1.4);
+      try {
+        localStorage.setItem("parent_font_scale", String(next));
+      } catch {}
+      return next;
+    });
+  };
 
   useEffect(() => {
     async function loadPortal() {
@@ -16,12 +95,22 @@ export default function ParentPortalPage({ params }: { params: Promise<{ token: 
         const res = await fetch(`/api/parent/portal?token=${encodeURIComponent(token)}`);
         const json = await res.json();
         if (res.ok && json.success) {
-          setData(json);
+          if (json.stage === "GATE") {
+            setStage("GATE");
+            setGateChild(json.child);
+          } else if (json.stage === "REPORT") {
+            setStage("REPORT");
+            setReportData(json);
+          } else {
+            setStage("DEAD");
+          }
         } else {
-          setError(json.error || "رابط ولي الأمر غير صالح أو تم التعديل عليه");
+          setStage("DEAD");
+          setError(json.error || "الرابط غير صالح أو تم التعديل عليه");
         }
       } catch (err: any) {
-        setError(err?.message || "حدث خطأ أثناء تحميل التقارير");
+        setStage("DEAD");
+        setError(err?.message || "حدث خطأ أثناء تحميل البيانات");
       } finally {
         setLoading(false);
       }
@@ -29,240 +118,407 @@ export default function ParentPortalPage({ params }: { params: Promise<{ token: 
     loadPortal();
   }, [token]);
 
+  // Submit GATE confirmation answer (YES / NO)
+  const handleVerifyAnswer = async (answer: "YES" | "NO") => {
+    setVerifying(true);
+    try {
+      const res = await fetch("/api/parent/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, answer }),
+      });
+      const json = await res.json();
+      if (res.ok && json.ok) {
+        if (json.stage === "REPORT") {
+          // Re-fetch report data
+          const repRes = await fetch(`/api/parent/portal?token=${encodeURIComponent(token)}`);
+          const repJson = await repRes.json();
+          if (repRes.ok && repJson.stage === "REPORT") {
+            setReportData(repJson);
+            setStage("REPORT");
+          } else {
+            setStage("DEAD");
+          }
+        } else {
+          setStage("DEAD");
+        }
+      } else {
+        setStage("DEAD");
+      }
+    } catch {
+      setStage("DEAD");
+    } finally {
+      setVerifying(false);
+    }
+  };
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-6 text-center dir-rtl">
-        <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-        <h2 className="text-lg font-bold text-white">جاري تحميل تقرير الطالب...</h2>
-        <p className="text-xs text-slate-400 mt-1">يرجى الانتظار لحظات</p>
+      <div className="min-h-screen bg-[#FBF8F1] text-[#1A1A1A] flex flex-col items-center justify-center p-6 text-center font-serif" dir="rtl">
+        <div className="w-10 h-10 border-4 border-[#0F7B4F] border-t-transparent rounded-full animate-spin mb-4" />
+        <h2 className="text-xl font-bold text-[#1A1A1A]">جارٍ تحميل تقرير الطالب...</h2>
       </div>
     );
   }
 
-  if (error || !data) {
+  // ══════════════════════════════════════════════════════════════════════════
+  // GATE VIEW (Verification Required)
+  // ══════════════════════════════════════════════════════════════════════════
+  if (stage === "GATE" && gateChild) {
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-6 text-center dir-rtl">
-        <div className="w-16 h-16 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center text-3xl mb-4 border border-rose-500/30">
-          ⚠️
+      <div
+        className="min-h-screen bg-[#FBF8F1] text-[#1A1A1A] p-4 sm:p-6 flex flex-col items-center justify-center font-serif"
+        dir="rtl"
+        style={{ fontSize: `${fontScale * 19}px`, lineHeight: 1.9 }}
+      >
+        <style jsx global>{`
+          @import url('https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400;1,700&family=Noto+Naskh+Arabic:wght@400..700&display=swap');
+          body {
+            font-family: 'Amiri', 'Noto Naskh Arabic', serif;
+            background-color: #FBF8F1;
+            color: #1A1A1A;
+          }
+        `}</style>
+
+        <div className="w-full max-w-lg bg-white border-2 border-[#1A1A1A] p-6 sm:p-8 shadow-xl rounded-2xl space-y-6">
+          {/* Header */}
+          <div className="border-b-2 border-[#1A1A1A] pb-4 text-center">
+            <p className="text-xs uppercase tracking-widest font-sans font-bold text-gray-600 mb-1">Code-UP منصة التعليم</p>
+            <h1 className="text-2xl sm:text-3xl font-black text-[#1A1A1A]">تأكيد صفة ولي الأمر</h1>
+          </div>
+
+          <div className="space-y-4 text-center">
+            <p className="text-lg text-[#1A1A1A] leading-relaxed">
+              مرحباً بحضرتك. للتأكد من وصول التقرير لشخصكم الكريم:
+            </p>
+
+            <div className="bg-[#FBF8F1] border border-gray-400 p-4 rounded-xl space-y-1">
+              <p className="text-xl font-bold text-[#0F7B4F]">{gateChild.name}</p>
+              {gateChild.stage && <p className="text-base text-gray-700">{gateChild.stage}</p>}
+              <p className="text-sm font-mono text-gray-600">رقم الطالب: {gateChild.maskedStudentPhone}</p>
+            </div>
+
+            <p className="text-xl font-bold text-[#1A1A1A] pt-2">
+              هل حضرتك ولي أمر الطالب المذكور؟
+            </p>
+          </div>
+
+          {/* Action buttons (min 56px tall) */}
+          <div className="space-y-3 pt-2">
+            <button
+              onClick={() => handleVerifyAnswer("YES")}
+              disabled={verifying}
+              className="w-full min-h-[56px] py-3 px-6 rounded-xl bg-[#0F7B4F] hover:bg-[#0b5f3d] disabled:opacity-50 text-white font-bold text-lg transition-colors flex items-center justify-center gap-2 shadow-md cursor-pointer"
+            >
+              {verifying ? "جارٍ التحقق..." : "أيوه، أنا ولي أمره"}
+            </button>
+
+            <button
+              onClick={() => handleVerifyAnswer("NO")}
+              disabled={verifying}
+              className="w-full min-h-[56px] py-3 px-6 rounded-xl bg-[#B3261E] hover:bg-[#8f1e18] disabled:opacity-50 text-white font-bold text-lg transition-colors flex items-center justify-center gap-2 shadow-md cursor-pointer"
+            >
+              {verifying ? "جارٍ التحقق..." : "لأ، مش أنا"}
+            </button>
+          </div>
         </div>
-        <h2 className="text-xl font-bold text-white mb-2">عذراً، الرابط غير متاح</h2>
-        <p className="text-sm text-slate-400 max-w-sm leading-relaxed mb-6">{error}</p>
-        <a
-          href="https://wa.me/201012345678"
-          target="_blank"
-          rel="noreferrer"
-          className="px-6 py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm shadow-lg transition-all"
-        >
-          💬 التواصل مع الدعم الفني منصة Code-UP
-        </a>
       </div>
     );
   }
 
-  const { student, overallAveragePercent, overallStatusBadge, attendancePercent, homeworkStats, recentExams, teacherNotes, structuredAdvice } = data;
+  // ══════════════════════════════════════════════════════════════════════════
+  // DEAD VIEW (Link Unknown, Expired, or Rejected)
+  // ══════════════════════════════════════════════════════════════════════════
+  if (stage === "DEAD" || !reportData) {
+    return (
+      <div
+        className="min-h-screen bg-[#FBF8F1] text-[#1A1A1A] p-4 sm:p-6 flex flex-col items-center justify-center font-serif"
+        dir="rtl"
+        style={{ fontSize: `${fontScale * 19}px`, lineHeight: 1.9 }}
+      >
+        <div className="w-full max-w-md bg-white border-2 border-[#1A1A1A] p-8 text-center space-y-5 rounded-2xl shadow-xl">
+          <div className="w-16 h-16 bg-red-100 text-[#B3261E] border border-red-300 rounded-full flex items-center justify-center text-3xl mx-auto">
+            ⚠️
+          </div>
+          <h1 className="text-2xl font-black text-[#1A1A1A]">عذراً، الرابط غير متاح</h1>
+          <p className="text-base text-gray-700 leading-relaxed">
+            {error || "الرابط المطلوب غير صالح، أو انتهت صلاحيته، أو تم إلغاؤه بناءً على طلب ولي الأمر."}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // REPORT VIEW (Newspaper Theme)
+  // ══════════════════════════════════════════════════════════════════════════
+  const { student, overallAveragePercent, overallStatusBadge, homeworkStats, recentExams, teacherNotes, subscriptions } = reportData;
+
+  const formattedDate = new Date().toLocaleDateString("ar-EG", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+
+  // Calculate total paid across subscriptions
+  const totalPaid = subscriptions.reduce((sum, s) => sum + (s.amount || 0), 0);
+
+  // Find primary teacher phone from subscriptions if available
+  const primaryTeacherPhone = subscriptions.find((s) => s.teacherPhone)?.teacherPhone;
+
+  // Compose The Lead (الافتتاحية) in العامية الرسمية using real data only
+  const leadSentences: string[] = [];
+  if (overallAveragePercent !== null) {
+    leadSentences.push(`ابنك ${student.name} متوسط درجاته حتى الآن ${overallAveragePercent}٪.`);
+  } else {
+    leadSentences.push(`تقرير متابعة أداء الطالب ${student.name}.`);
+  }
+
+  if (homeworkStats.completed > 0) {
+    leadSentences.push(`سلّم ${homeworkStats.completed} واجب دراسي.`);
+  }
+  if (homeworkStats.pending > 0) {
+    leadSentences.push(`وفيه ${homeworkStats.pending} واجب في الانتظار.`);
+  }
+
+  const leadText = leadSentences.join(" ");
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans p-4 sm:p-6 pb-20 dir-rtl selection:bg-emerald-500 selection:text-slate-950">
-      <div className="max-w-xl mx-auto space-y-5">
-        {/* TOP BRAND BAR */}
-        <div className="flex items-center justify-between bg-slate-900/60 p-4 rounded-2xl border border-slate-800 backdrop-blur-md">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-lg font-bold text-emerald-400">
-              UP
+    <div
+      className="min-h-screen bg-[#FBF8F1] text-[#1A1A1A] font-serif p-4 sm:p-8 pb-20 selection:bg-[#0F7B4F] selection:text-white"
+      dir="rtl"
+      style={{ fontSize: `${fontScale * 19}px`, lineHeight: 1.9 }}
+    >
+      <style jsx global>{`
+        @import url('https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400;1,700&family=Noto+Naskh+Arabic:wght@400..700&display=swap');
+        body {
+          font-family: 'Amiri', 'Noto Naskh Arabic', serif;
+          background-color: #FBF8F1;
+          color: #1A1A1A;
+        }
+        @media print {
+          .no-print {
+            display: none !important;
+          }
+          body {
+            background-color: #ffffff !important;
+            color: #000000 !important;
+          }
+          .newspaper-box {
+            border: 1px solid #000000 !important;
+            box-shadow: none !important;
+          }
+        }
+      `}</style>
+
+      {/* Floating Font Scale Toolbar (Pinned Top Left) */}
+      <div className="no-print fixed top-3 left-3 z-50 bg-white border-2 border-[#1A1A1A] rounded-xl px-3 py-1.5 shadow-md flex items-center gap-2 text-sm font-sans font-bold">
+        <span className="text-gray-700 text-xs">حجم الخط:</span>
+        <button
+          onClick={() => changeFontScale(0.1)}
+          aria-label="تكبير الخط"
+          className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 text-[#1A1A1A] flex items-center justify-center font-bold"
+        >
+          أ+
+        </button>
+        <button
+          onClick={() => changeFontScale(-0.1)}
+          aria-label="تصغير الخط"
+          className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 text-[#1A1A1A] flex items-center justify-center font-bold"
+        >
+          أ-
+        </button>
+      </div>
+
+      <div className="max-w-2xl mx-auto space-y-6">
+
+        {/* 1. MASTHEAD (الترويسة) */}
+        <header className="newspaper-box border-b-4 border-t-4 border-[#1A1A1A] py-5 px-4 text-center space-y-2 bg-white">
+          <div className="flex items-center justify-between text-xs font-sans font-bold text-gray-700 border-b border-gray-300 pb-2">
+            <span>منصة Code-UP التعليمية</span>
+            <span>{formattedDate}</span>
+            <span>تقرير متابعة دوري</span>
+          </div>
+          <h1 className="text-3xl sm:text-4xl font-black text-[#1A1A1A] tracking-tight pt-1">
+            تقرير متابعة الطالب
+          </h1>
+          <p className="text-xl font-bold text-[#0F7B4F]">{student.name}</p>
+          {student.educationalStage && (
+            <p className="text-sm text-gray-700 font-sans font-semibold">{student.educationalStage}</p>
+          )}
+        </header>
+
+        {/* 2. THE LEAD (الافتتاحية) */}
+        <section className="newspaper-box bg-white border-2 border-[#1A1A1A] p-5 sm:p-6 rounded-xl space-y-2">
+          <h2 className="text-base font-sans font-bold text-[#0F7B4F] uppercase tracking-wider">الافتتاحية</h2>
+          <p className="text-xl leading-relaxed text-[#1A1A1A] font-bold">
+            «{leadText}»
+          </p>
+        </section>
+
+        {/* 3. KEY STATS (الأرقام المهمة) */}
+        <section className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Average percent card */}
+          <div className="newspaper-box bg-white border-2 border-[#1A1A1A] p-5 rounded-xl text-center space-y-1">
+            <h3 className="text-sm font-sans font-bold text-gray-700">متوسط درجات الطالب</h3>
+            {overallAveragePercent !== null ? (
+              <>
+                <div className="text-5xl font-black text-[#0F7B4F] py-1">{overallAveragePercent}٪</div>
+                <div className="text-base font-bold text-[#1A1A1A]">
+                  {overallStatusBadge ? `${overallAveragePercent}٪ — يعني ${overallStatusBadge.label}` : `${overallAveragePercent}٪`}
+                </div>
+              </>
+            ) : (
+              <div className="py-4 text-base text-gray-500 font-bold">لا توجد درجات مسجلة بعد</div>
+            )}
+          </div>
+
+          {/* Homework card */}
+          <div className="newspaper-box bg-white border-2 border-[#1A1A1A] p-5 rounded-xl text-center space-y-1">
+            <h3 className="text-sm font-sans font-bold text-gray-700">إجمالي الواجبات والتطبيقات</h3>
+            <div className="text-5xl font-black text-[#1A1A1A] py-1">
+              {homeworkStats.completed + homeworkStats.pending}
             </div>
-            <div>
-              <h1 className="text-sm font-extrabold text-white">Code-UP Educational Platform</h1>
-              <p className="text-[11px] text-slate-400">بوابة متابعة ولي الأمر التفاعلية 🎓</p>
+            <div className="text-base font-bold text-gray-800">
+              {homeworkStats.completed} مُكتمل · {homeworkStats.pending} في الانتظار
             </div>
           </div>
-          <span className="text-[11px] font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
-            تقرير حي مباشر
-          </span>
-        </div>
+        </section>
 
-        {/* HEADER REPORT CARD - STUDENT OVERALL PROFILE */}
-        <div className="bg-gradient-to-b from-slate-900 to-slate-900/90 p-6 rounded-3xl border border-slate-800 shadow-xl space-y-4">
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-2xl bg-emerald-500/15 border-2 border-emerald-500/40 flex items-center justify-center text-3xl shrink-0 shadow-inner">
-              👤
+        {/* 4. EXAM RESULTS (نتائج الامتحانات) */}
+        {recentExams && recentExams.length > 0 && (
+          <section className="newspaper-box bg-white border-2 border-[#1A1A1A] p-5 sm:p-6 rounded-xl space-y-4">
+            <div className="flex items-center justify-between border-b-2 border-[#1A1A1A] pb-2">
+              <h2 className="text-xl font-black text-[#1A1A1A]">نتائج الامتحانات والاختبارات</h2>
+              <span className="text-xs font-sans font-bold text-gray-700">عدد {recentExams.length} اختبارات</span>
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-xl font-extrabold text-white">{student.name}</h2>
-              </div>
-              <p className="text-xs text-slate-400 mt-1 font-medium">{student.educationalStage}</p>
-              <div className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-bold shadow-sm">
-                <span>{overallStatusBadge.label}</span>
-                <span className="text-slate-300">({overallStatusBadge.text})</span>
-              </div>
-            </div>
-          </div>
-        </div>
 
-        {/* STATS OVERVIEW CARDS GRID */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-slate-900/80 p-4 rounded-2xl border border-slate-800 text-center space-y-1">
-            <p className="text-xs text-slate-400 font-bold">المعدل العام للدرجات</p>
-            <p className="text-2xl font-black text-emerald-400">{overallAveragePercent}%</p>
-            <p className="text-[10px] text-slate-500 font-semibold">ممتاز جداً 🟢</p>
-          </div>
-
-          <div className="bg-slate-900/80 p-4 rounded-2xl border border-slate-800 text-center space-y-1">
-            <p className="text-xs text-slate-400 font-bold">نسبة الحضور والالتزام</p>
-            <p className="text-2xl font-black text-sky-400">{attendancePercent}%</p>
-            <p className="text-[10px] text-slate-500 font-semibold">منظم في المواعيد 🟢</p>
-          </div>
-        </div>
-
-        {/* EXAM & QUIZ RESULTS TABLE */}
-        <div className="bg-slate-900/80 p-5 rounded-3xl border border-slate-800 space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="font-extrabold text-white text-sm flex items-center gap-2">
-              <span>📊 أحدث نتائج الاختبارات والامتحانات</span>
-            </h3>
-            <span className="text-xs text-slate-400">آخر 8 اختبارات</span>
-          </div>
-
-          <div className="overflow-x-auto rounded-xl border border-slate-800/80">
-            <table className="w-full text-right text-xs">
-              <thead className="bg-slate-950 text-slate-400 border-b border-slate-800 font-bold">
-                <tr>
-                  <th className="p-3">اسم الاختبار</th>
-                  <th className="p-3 text-center">الدرجة</th>
-                  <th className="p-3 text-center">النسبة</th>
-                  <th className="p-3 text-center">التقييم</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60 font-semibold">
-                {recentExams && recentExams.length > 0 ? (
-                  recentExams.map((ex: any, idx: number) => (
-                    <tr key={idx} className="hover:bg-slate-800/40 transition-colors">
-                      <td className="p-3 text-slate-200">{ex.title}</td>
-                      <td className="p-3 text-center font-mono text-slate-300">
+            <div className="overflow-x-auto">
+              <table className="w-full text-right text-base border-collapse">
+                <thead>
+                  <tr className="border-b-2 border-[#1A1A1A] text-gray-800 font-bold">
+                    <th className="py-2.5 px-3">اسم الاختبار</th>
+                    <th className="py-2.5 px-3 text-center">الدرجة</th>
+                    <th className="py-2.5 px-3 text-center">النسبة</th>
+                    <th className="py-2.5 px-3 text-center">التقييم</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-300">
+                  {recentExams.map((ex, idx) => (
+                    <tr key={idx} className="hover:bg-[#FBF8F1]">
+                      <td className="py-3 px-3 font-bold text-[#1A1A1A]">{ex.title}</td>
+                      <td className="py-3 px-3 text-center font-mono font-bold text-gray-800" dir="ltr">
                         {ex.score} / {ex.maxScore}
                       </td>
-                      <td className="p-3 text-center font-mono font-bold text-white">{ex.percent}%</td>
-                      <td className="p-3 text-center text-base">{ex.status}</td>
+                      <td className="py-3 px-3 text-center font-mono font-bold text-[#0F7B4F]">{ex.percent}٪</td>
+                      <td className="py-3 px-3 text-center">
+                        {ex.percent >= 85 ? (
+                          <span className="text-[#0F7B4F] font-bold">ممتاز</span>
+                        ) : ex.percent >= 65 ? (
+                          <span className="text-amber-700 font-bold">مقبول</span>
+                        ) : (
+                          <span className="text-[#B3261E] font-bold">ضعيف</span>
+                        )}
+                      </td>
                     </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={4} className="p-4 text-center text-slate-500 text-xs">
-                      لا توجد نتائج مسجلة مؤخراً
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* HOMEWORK TRACKING CARDS */}
-        <div className="bg-slate-900/80 p-5 rounded-3xl border border-slate-800 space-y-3">
-          <h3 className="font-extrabold text-white text-sm">📚 متابعة تسليم الواجبات والتطبيقات</h3>
-          <div className="grid grid-cols-3 gap-2.5 text-center">
-            <div className="bg-slate-950/60 p-3 rounded-2xl border border-slate-800">
-              <p className="text-xs text-slate-400 font-bold">المكتملة ✅</p>
-              <p className="text-lg font-bold text-emerald-400 mt-1">{homeworkStats.completed}</p>
+                  ))}
+                </tbody>
+              </table>
             </div>
-            <div className="bg-slate-950/60 p-3 rounded-2xl border border-slate-800">
-              <p className="text-xs text-slate-400 font-bold">في الانتظار 🟡</p>
-              <p className="text-lg font-bold text-amber-400 mt-1">{homeworkStats.pending}</p>
-            </div>
-            <div className="bg-slate-950/60 p-3 rounded-2xl border border-slate-800">
-              <p className="text-xs text-slate-400 font-bold">المتأخرة 🔴</p>
-              <p className="text-lg font-bold text-rose-400 mt-1">{homeworkStats.late}</p>
-            </div>
-          </div>
-        </div>
-
-        {/* STRUCTURED 4-CARD ACADEMIC ADVICE */}
-        <div className="bg-slate-900/80 p-5 rounded-3xl border border-slate-800 space-y-3">
-          <h3 className="font-extrabold text-white text-sm flex items-center gap-2">
-            <span>💡 تقرير وتوجيهات معلم المادة لولي الأمر</span>
-          </h3>
-
-          <div className="space-y-2.5">
-            {/* Card 1: Strengths */}
-            <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 space-y-1">
-              <p className="font-bold text-emerald-400 text-xs flex items-center gap-1.5">
-                <span>✅</span> نقاط القوة (Strengths)
-              </p>
-              <p className="text-xs text-slate-300 leading-relaxed font-medium">
-                {structuredAdvice.strengths}
-              </p>
-            </div>
-
-            {/* Card 2: Needs Attention */}
-            <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/25 space-y-1">
-              <p className="font-bold text-amber-400 text-xs flex items-center gap-1.5">
-                <span>⚠️</span> تحتاج اهتمام ومتابعة (Needs Attention)
-              </p>
-              <p className="text-xs text-slate-300 leading-relaxed font-medium">
-                {structuredAdvice.needsAttention}
-              </p>
-            </div>
-
-            {/* Card 3: Recommendation */}
-            <div className="p-3.5 rounded-2xl bg-sky-500/10 border border-sky-500/25 space-y-1">
-              <p className="font-bold text-sky-400 text-xs flex items-center gap-1.5">
-                <span>📚</span> توصيات دراسية لولي الأمر
-              </p>
-              <p className="text-xs text-slate-300 leading-relaxed font-medium">
-                {structuredAdvice.recommendation}
-              </p>
-            </div>
-
-            {/* Card 4: Teacher Advice */}
-            <div className="p-3.5 rounded-2xl bg-purple-500/10 border border-purple-500/25 space-y-1">
-              <p className="font-bold text-purple-400 text-xs flex items-center gap-1.5">
-                <span>👨‍🏫</span> نصيحة معلم المادة
-              </p>
-              <p className="text-xs text-slate-300 leading-relaxed font-medium">
-                {structuredAdvice.teacherAdvice}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* TEACHER DIRECT NOTES */}
-        {teacherNotes && teacherNotes.length > 0 && (
-          <div className="bg-slate-900/80 p-5 rounded-3xl border border-slate-800 space-y-3">
-            <h3 className="font-extrabold text-white text-sm">📝 ملاحظات المعلم المباشرة</h3>
-            <div className="space-y-2">
-              {teacherNotes.map((note: any, idx: number) => (
-                <div key={idx} className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 space-y-1 text-xs">
-                  <div className="flex items-center justify-between text-slate-400 font-bold">
-                    <span>{note.teacherName}</span>
-                    <span className="font-mono text-[10px]">{note.date}</span>
-                  </div>
-                  <p className="text-slate-200 leading-relaxed font-medium">{note.content}</p>
-                </div>
-              ))}
-            </div>
-          </div>
+          </section>
         )}
 
-        {/* LARGE TOUCH ACTION BUTTONS FOR PARENTS (MIN 48PX) */}
-        <div className="space-y-3 pt-2">
-          <a
-            href="https://wa.me/201012345678?text=%D9%85%D8%B1%D8%AD%D8%A8%D8%A7%D9%8B%20%D8%A3%D9%86%D8%A7%20%D9%88%D9%84%D9%8A%20%D8%A3%D9%85%D8%B1%20%D8%A7%D9%84%D8%B7%D8%A7%D9%84%D8%A8%20"
-            target="_blank"
-            rel="noreferrer"
-            className="w-full h-14 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-base flex items-center justify-center gap-2 shadow-xl transition-all active:scale-[0.98] cursor-pointer"
-          >
-            <span>💬</span> التواصل مع المعلم عبر الواتساب
-          </a>
+        {/* 5. HOMEWORK TRACKING (الواجبات) */}
+        <section className="newspaper-box bg-white border-2 border-[#1A1A1A] p-5 rounded-xl space-y-3">
+          <h2 className="text-xl font-black text-[#1A1A1A] border-b-2 border-[#1A1A1A] pb-2">متابعة الواجبات</h2>
+          <div className="grid grid-cols-2 gap-3 text-center">
+            <div className="bg-[#FBF8F1] border border-gray-300 p-3 rounded-lg">
+              <p className="text-xs font-sans font-bold text-gray-700">الواجبات المسلّمة</p>
+              <p className="text-3xl font-black text-[#0F7B4F] mt-1">{homeworkStats.completed}</p>
+            </div>
+            <div className="bg-[#FBF8F1] border border-gray-300 p-3 rounded-lg">
+              <p className="text-xs font-sans font-bold text-gray-700">في انتظار التسليم</p>
+              <p className="text-3xl font-black text-amber-700 mt-1">{homeworkStats.pending}</p>
+            </div>
+          </div>
+        </section>
 
-          <a
-            href="https://wa.me/201012345678"
-            target="_blank"
-            rel="noreferrer"
-            className="w-full h-14 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-sm flex items-center justify-center gap-2 border border-slate-700 transition-all active:scale-[0.98] cursor-pointer"
+        {/* 6. SUBSCRIPTIONS & PAYMENTS (الاشتراكات والمدفوعات) */}
+        {subscriptions && subscriptions.length > 0 && (
+          <section className="newspaper-box bg-white border-2 border-[#1A1A1A] p-5 sm:p-6 rounded-xl space-y-4">
+            <h2 className="text-xl font-black text-[#1A1A1A] border-b-2 border-[#1A1A1A] pb-2">الاشتراكات والمدفوعات</h2>
+            <div className="overflow-x-auto">
+              <table className="w-full text-right text-base border-collapse">
+                <thead>
+                  <tr className="border-b-2 border-[#1A1A1A] text-gray-800 font-bold">
+                    <th className="py-2.5 px-3">المعلم</th>
+                    <th className="py-2.5 px-3">نوع الاشتراك</th>
+                    <th className="py-2.5 px-3 text-center">التاريخ</th>
+                    <th className="py-2.5 px-3 text-center">المبلغ</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-300">
+                  {subscriptions.map((sub) => (
+                    <tr key={sub.id} className="hover:bg-[#FBF8F1]">
+                      <td className="py-3 px-3 font-bold text-[#1A1A1A]">{sub.teacherName}</td>
+                      <td className="py-3 px-3 text-gray-800">{sub.planLabel}</td>
+                      <td className="py-3 px-3 text-center font-mono text-xs text-gray-700">{sub.createdAt}</td>
+                      <td className="py-3 px-3 text-center font-bold text-[#0F7B4F]">{sub.amount} جنيه</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="border-t-2 border-[#1A1A1A] pt-3 text-left font-bold text-lg text-[#1A1A1A]">
+              إجمالي المدفوع: <span className="text-[#0F7B4F] font-black">{totalPaid} جنيه</span>
+            </div>
+          </section>
+        )}
+
+        {/* 7. TEACHER NOTES (كلام المدرس) */}
+        <section className="newspaper-box bg-white border-2 border-[#1A1A1A] p-5 sm:p-6 rounded-xl space-y-3">
+          <h2 className="text-xl font-black text-[#1A1A1A] border-b-2 border-[#1A1A1A] pb-2">ملاحظات المعلم</h2>
+          {teacherNotes && teacherNotes.length > 0 ? (
+            <div className="space-y-4">
+              {teacherNotes.map((note, idx) => (
+                <blockquote key={idx} className="bg-[#FBF8F1] border-s-4 border-[#0F7B4F] p-4 rounded-e-xl space-y-1">
+                  <div className="flex items-center justify-between text-xs font-sans font-bold text-gray-700">
+                    <span>{note.teacherName}</span>
+                    <span className="font-mono text-gray-500">{note.date}</span>
+                  </div>
+                  <p className="text-lg text-[#1A1A1A] font-bold leading-relaxed">«{note.content}»</p>
+                </blockquote>
+              ))}
+            </div>
+          ) : (
+            <p className="text-base text-gray-600 py-4 text-center font-bold">
+              لسه مفيش ملاحظات مكتوبة من المدرس.
+            </p>
+          )}
+        </section>
+
+        {/* 8. CONTACT BUTTONS (التواصل) — Min 56px Tall */}
+        <section className="no-print space-y-3 pt-4">
+          {primaryTeacherPhone && (
+            <a
+              href={`https://wa.me/${primaryTeacherPhone.replace(/\+/g, "")}`}
+              target="_blank"
+              rel="noreferrer"
+              className="w-full min-h-[56px] rounded-xl bg-[#0F7B4F] hover:bg-[#0b5f3d] text-white font-bold text-lg flex items-center justify-center gap-2 shadow-md transition-colors no-underline cursor-pointer"
+            >
+              💬 كلّم المدرس عبر الواتساب
+            </a>
+          )}
+
+          <button
+            onClick={() => window.print()}
+            className="w-full min-h-[56px] rounded-xl bg-[#1A1A1A] hover:bg-gray-800 text-white font-bold text-lg flex items-center justify-center gap-2 shadow-md transition-colors cursor-pointer"
           >
-            <span>🛠️</span> التواصل مع الدعم الفني لمنصة Code-UP
-          </a>
-        </div>
+            🖨️ طباعة التقرير (نسخة ورقية)
+          </button>
+        </section>
+
       </div>
     </div>
   );

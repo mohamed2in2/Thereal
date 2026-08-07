@@ -89,6 +89,11 @@ model User {
   teacherSubscriptions    TeacherSubscription[]        @relation("TeacherSubscriptions")
   studentSubscriptions    TeacherSubscription[]        @relation("StudentSubscriptions")
 
+  parentVerified           Boolean                      @default(false)
+  parentVerifiedAt         DateTime?
+  parentVerificationStatus String                       @default("PENDING")
+  parentVerificationEvents ParentVerificationEvent[]
+
   @@index([role])
   @@index([educationalStage])
   @@index([email])
@@ -1411,21 +1416,49 @@ model WhatsAppDailyCounter {
   @@unique([date, provider])
 }
 
+enum ParentVerificationStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+  REVOKED
+}
+
 /// Cryptographically Secure 365-Day Permanent Parent Portal Token (SHA-256 Hashed)
 model ParentToken {
-  id             String    @id @default(cuid())
-  studentId      String    @unique
-  student        User      @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  tokenHash      String    @unique // SHA-256 hex hash of the raw URL token
-  expiresAt      DateTime  // 365 days from creation
-  sentAt         DateTime? // Timestamp when sent via WhatsApp
-  accessCount    Int       @default(0)
-  lastAccessedAt DateTime?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id                  String                   @id @default(cuid())
+  studentId           String                   @unique
+  student             User                     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  tokenHash           String                   @unique // SHA-256 hex hash of the raw URL token
+  status              ParentVerificationStatus @default(PENDING)
+  confirmedAt         DateTime?
+  confirmedByIp       String?
+  rejectedAt          DateTime?
+  revokedAt           DateTime?
+  parentPhoneSnapshot String?   // the exact number this link was sent to
+  issueCount          Int                      @default(0)
+  expiresAt           DateTime  // 365 days from creation
+  sentAt              DateTime? // Timestamp when sent via WhatsApp
+  accessCount         Int                      @default(0)
+  lastAccessedAt      DateTime?
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
 
+  @@index([status])
   @@index([tokenHash])
   @@index([studentId])
+}
+
+model ParentVerificationEvent {
+  id        String   @id @default(cuid())
+  studentId String
+  student   User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  action    String   // SENT | OPENED | CONFIRMED | REJECTED | REISSUED | REVOKED_BY_ADMIN
+  phone     String?
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([studentId, createdAt])
 }
 
 /// Parent Portal Access Audit Log

@@ -28,7 +28,7 @@ export async function GET() {
 
   const user = await prisma.user.findUnique({
     where: { id: studentId },
-    select: { name: true, points: true, loginStreak: true, lastLoginDate: true },
+    select: { name: true, points: true, loginStreak: true, lastLoginDate: true, parentVerified: true, parentVerificationStatus: true, parentPhone: true },
   });
 
   const [watchedRows, quizResults, enrollments, sessions] = await Promise.all([
@@ -152,6 +152,9 @@ export async function GET() {
       achievements,
       achievementsUnlocked: achievements.filter((a) => a.unlocked).length,
       weaknesses,
+      parentVerified: user?.parentVerified ?? false,
+      parentVerificationStatus: user?.parentVerificationStatus ?? "PENDING",
+      parentPhone: user?.parentPhone ?? null,
     },
     {
       headers: {

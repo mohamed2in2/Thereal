@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 
-type NotificationType = "streak_milestone" | "exam_live" | "grade_resolved" | "referral_joined" | "project_graded";
+type NotificationType = "streak_milestone" | "exam_live" | "grade_resolved" | "referral_joined" | "project_graded" | "parent_verification_required";
 
 interface NotificationPayload {
   userId: string;
@@ -17,6 +17,16 @@ export async function createNotification(payload: NotificationPayload): Promise<
   } catch {
     // Non-critical — if this fails the user just won't see the notification
   }
+}
+
+export async function notifyParentVerificationRequired(studentId: string): Promise<void> {
+  await createNotification({
+    userId: studentId,
+    type: "parent_verification_required",
+    title: "محتاجين رقم ولي أمرك الحقيقي",
+    body: "الرقم اللي مسجّل قال إنه مش ولي أمرك. من فضلك ضيف رقم ولي أمرك الصحيح عشان يقدر يتابع مستواك.",
+    link: "/account",
+  });
 }
 
 /** Award streak-milestone notification at 7, 14, 30, 60, 100 days. */

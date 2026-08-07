@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { whatsappOrchestrator } from "./orchestrator";
+import { notifyParentVerificationRequired } from "@/lib/notifications";
 
 const TOKEN_EXPIRY_DAYS = 365;
 
@@ -31,24 +32,39 @@ export function getAppBaseUrl(): string {
 }
 
 /**
+ * Validates Egyptian mobile numbers (010, 011, 012, 015 or E.164 +20...)
+ */
+export function isValidEgyptianMobile(phone: string): boolean {
+  if (!phone || typeof phone !== "string") return false;
+  const clean = phone.trim().replace(/\s+/g, "");
+  if (/^01[0125]\d{8}$/.test(clean)) return true;
+  if (/^\+201[0125]\d{8}$/.test(clean)) return true;
+  return false;
+}
+
+/**
  * Gets or creates a permanent 365-day Parent Portal token for a student
  * Returns { rawToken, parentToken }
  */
-export async function getOrCreateParentToken(studentId: string) {
+export async function getOrCreateParentToken(studentId: string, options?: { regenerate?: boolean }) {
   let existing = await prisma.parentToken.findUnique({
     where: { studentId },
   });
 
   const now = new Date();
-
-  // If token exists and is not expired, we generate a fresh raw token and update its hash
   const rawToken = generateSecureToken();
   const tokenHash = hashToken(rawToken);
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + TOKEN_EXPIRY_DAYS);
 
-  if (existing && existing.expiresAt > now) {
-    // Return existing record but attach new rawToken for link creation if needed
+  if (existing && existing.expiresAt > now && !options?.regenerate) {
+    existing = await prisma.parentToken.update({
+      where: { studentId },
+      data: {
+        tokenHash,
+        updatedAt: now,
+      },
+    });
     return { rawToken, parentToken: existing };
   }
 
@@ -131,9 +147,27 @@ export async function validateParentToken(rawToken: string, ip: string = "127.0.
 
   if (!parentToken) return null;
 
-  // Check expiration (365 days)
+  // Reject dead/revoked tokens
+  if (parentToken.status === "REJECTED" || parentToken.status === "REVOKED") {
+    return null;
+  }
+
+  // Check expiration
   if (new Date() > parentToken.expiresAt) {
     return null; // Expired
+  }
+
+  // Log OPENED event on first access of a PENDING token
+  if (parentToken.status === "PENDING" && parentToken.accessCount === 0) {
+    prisma.parentVerificationEvent.create({
+      data: {
+        studentId: parentToken.studentId,
+        action: "OPENED",
+        phone: parentToken.parentPhoneSnapshot || parentToken.student?.parentPhone || null,
+        ip,
+        userAgent: userAgent || null,
+      },
+    }).catch(() => {});
   }
 
   // Increment access count & log access event asynchronously
@@ -158,6 +192,219 @@ export async function validateParentToken(rawToken: string, ip: string = "127.0.
     .catch(() => {});
 
   return parentToken;
+}
+
+/**
+ * Confirm parent identity when recipient taps "YES"
+ */
+export async function confirmParentToken(rawToken: string, ip: string = "127.0.0.1", userAgent?: string) {
+  if (!rawToken || typeof rawToken !== "string") return null;
+
+  const targetHash = hashToken(rawToken);
+  const parentToken = await prisma.parentToken.findUnique({
+    where: { tokenHash: targetHash },
+    include: { student: true },
+  });
+
+  if (!parentToken || !parentToken.student) return null;
+
+  if (parentToken.status === "REJECTED" || parentToken.status === "REVOKED") {
+    return null;
+  }
+
+  const now = new Date();
+
+  await prisma.parentToken.update({
+    where: { id: parentToken.id },
+    data: {
+      status: "CONFIRMED",
+      confirmedAt: now,
+      confirmedByIp: ip,
+      updatedAt: now,
+    },
+  });
+
+  await prisma.user.update({
+    where: { id: parentToken.studentId },
+    data: {
+      parentVerified: true,
+      parentVerifiedAt: now,
+      parentVerificationStatus: "CONFIRMED",
+    },
+  });
+
+  await prisma.parentVerificationEvent.create({
+    data: {
+      studentId: parentToken.studentId,
+      action: "CONFIRMED",
+      phone: parentToken.parentPhoneSnapshot || parentToken.student.parentPhone || null,
+      ip,
+      userAgent: userAgent || null,
+    },
+  });
+
+  return { ok: true, studentId: parentToken.studentId };
+}
+
+/**
+ * Reject parent identity when recipient taps "NO" — CRITICAL CRYPTOGRAPHIC BURN
+ * Overwrites tokenHash with an unrelated random hash so old URL is permanently dead.
+ */
+export async function rejectParentToken(rawToken: string, ip: string = "127.0.0.1", userAgent?: string) {
+  if (!rawToken || typeof rawToken !== "string") return null;
+
+  const targetHash = hashToken(rawToken);
+  const parentToken = await prisma.parentToken.findUnique({
+    where: { tokenHash: targetHash },
+    include: { student: true },
+  });
+
+  if (!parentToken || !parentToken.student) return null;
+
+  const now = new Date();
+  const deadHash = hashToken(generateSecureToken());
+
+  await prisma.parentToken.update({
+    where: { id: parentToken.id },
+    data: {
+      tokenHash: deadHash,
+      status: "REJECTED",
+      rejectedAt: now,
+      revokedAt: now,
+      updatedAt: now,
+    },
+  });
+
+  await prisma.user.update({
+    where: { id: parentToken.studentId },
+    data: {
+      parentVerified: false,
+      parentVerificationStatus: "REJECTED",
+    },
+  });
+
+  await prisma.parentVerificationEvent.create({
+    data: {
+      studentId: parentToken.studentId,
+      action: "REJECTED",
+      phone: parentToken.parentPhoneSnapshot || parentToken.student.parentPhone || null,
+      ip,
+      userAgent: userAgent || null,
+    },
+  });
+
+  notifyParentVerificationRequired(parentToken.studentId).catch(() => {});
+
+  return { ok: true, studentId: parentToken.studentId };
+}
+
+/**
+ * Student re-issues parent link with a new phone number
+ */
+export async function reissueParentToken(studentId: string, newParentPhone: string, ip: string = "127.0.0.1", userAgent?: string) {
+  if (!isValidEgyptianMobile(newParentPhone)) {
+    throw new Error("رقم الهاتف غير صحيح. يجب أن يكون رقم موبايل مصري يبدأ بـ 010 أو 011 أو 012 أو 015.");
+  }
+
+  const cleanPhone = newParentPhone.trim().replace(/\s+/g, "");
+
+  const student = await prisma.user.findUnique({
+    where: { id: studentId },
+    select: { id: true, name: true, parentPhone: true },
+  });
+
+  if (!student) {
+    throw new Error("المتعلم غير موجود.");
+  }
+
+  const existingToken = await prisma.parentToken.findUnique({
+    where: { studentId },
+  });
+
+  if (existingToken?.parentPhoneSnapshot && existingToken.parentPhoneSnapshot === cleanPhone) {
+    throw new Error("الرقم ده نفس الرقم القديم. من فضلك اكتب رقم ولي أمرك الحقيقي.");
+  }
+
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+  const recentReissues = await prisma.parentVerificationEvent.count({
+    where: {
+      studentId,
+      action: "REISSUED",
+      createdAt: { gte: sevenDaysAgo },
+    },
+  });
+
+  if (recentReissues >= 3) {
+    throw new Error("وصلت للحد الأقصى لتغيير رقم ولي الأمر خلال هذا الأسبوع (3 مرات). يرجى التواصل مع الدعم.");
+  }
+
+  const rawToken = generateSecureToken();
+  const tokenHash = hashToken(rawToken);
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + TOKEN_EXPIRY_DAYS);
+  const now = new Date();
+
+  const parentToken = await prisma.parentToken.upsert({
+    where: { studentId },
+    create: {
+      studentId,
+      tokenHash,
+      status: "PENDING",
+      parentPhoneSnapshot: cleanPhone,
+      issueCount: 1,
+      expiresAt,
+    },
+    update: {
+      tokenHash,
+      status: "PENDING",
+      parentPhoneSnapshot: cleanPhone,
+      issueCount: { increment: 1 },
+      confirmedAt: null,
+      confirmedByIp: null,
+      rejectedAt: null,
+      revokedAt: null,
+      sentAt: null,
+      expiresAt,
+      updatedAt: now,
+    },
+  });
+
+  await prisma.user.update({
+    where: { id: studentId },
+    data: {
+      parentPhone: cleanPhone,
+      parentVerified: false,
+      parentVerificationStatus: "PENDING",
+    },
+  });
+
+  await prisma.parentVerificationEvent.create({
+    data: {
+      studentId,
+      action: "REISSUED",
+      phone: cleanPhone,
+      ip,
+      userAgent: userAgent || null,
+    },
+  });
+
+  const portalUrl = `${getAppBaseUrl()}/p/${rawToken}`;
+  const dispatchResult = await whatsappOrchestrator.sendParentPortalLink(
+    cleanPhone,
+    student.name,
+    portalUrl
+  );
+
+  if (dispatchResult.success) {
+    await prisma.parentToken.update({
+      where: { id: parentToken.id },
+      data: { sentAt: new Date() },
+    });
+  }
+
+  return { rawToken, parentToken, dispatchResult };
 }
 
 /**
