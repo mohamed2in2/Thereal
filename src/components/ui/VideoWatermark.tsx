@@ -5,37 +5,32 @@ import { useEffect, useRef, useState } from "react";
 /**
  * Anti-screen-recording forensic watermark.
  *
- * Every 10 seconds the viewer's identifier flashes at a new random position.
- * The flash also triggers a 500ms visual disruption (brief opacity drop on the
- * player wrapper) that interrupts any screen recording at a predictable cadence —
- * making leaked recordings obviously degraded.
+ * Every 3 seconds the viewer's identifier moves to a new random position on screen.
+ * High contrast with a subtle translucent pill so it is always readable without
+ * obscuring the underlying video lesson.
  *
  * pointer-events:none so it never blocks player controls.
  */
 
-const VISIBLE_MS  = 10_000; // watermark visible for 10 s …
-const CYCLE_MS    = 10_000; // … repeating every 10 s
-const DISRUPT_MS  = 500;    // 0.5 s visual disruption
-const OPACITY     = 0.22;   // slightly more visible than before
+const CYCLE_MS = 3_000; // moves every 3 seconds
+const VISIBLE_MS = 2_800; // remains active during cycle
 
-// Keep the label fully on-screen (right-anchored text, dir=ltr).
 function randomPos() {
-  return { top: `${8 + Math.random() * 74}%`, left: `${6 + Math.random() * 68}%` };
+  // Keep safely within view boundaries
+  return {
+    top: `${10 + Math.floor(Math.random() * 75)}%`,
+    left: `${8 + Math.floor(Math.random() * 70)}%`,
+  };
 }
-
-export type WatermarkHandle = {
-  /** Called by parent player wrapper to connect the disruption callback. */
-  onDisrupt: (fn: () => void) => void;
-};
 
 interface Props {
   label: string;
-  /** Optional callback fired whenever the watermark flashes (for player disruption). */
+  /** Optional callback fired whenever the watermark moves (for player disruption). */
   onFlash?: () => void;
 }
 
 export function VideoWatermark({ label, onFlash }: Props) {
-  const [visible, setVisible] = useState(false);
+  const [visible, setVisible] = useState(true);
   const [pos, setPos] = useState(randomPos);
   const [motionOk, setMotionOk] = useState(true);
   const onFlashRef = useRef(onFlash);
@@ -44,21 +39,15 @@ export function VideoWatermark({ label, onFlash }: Props) {
   useEffect(() => {
     setMotionOk(!window.matchMedia("(prefers-reduced-motion: reduce)").matches);
 
-    let hideTimer: ReturnType<typeof setTimeout>;
     const flash = () => {
       setPos(randomPos());
       setVisible(true);
-      // Trigger player disruption
       onFlashRef.current?.();
-      hideTimer = setTimeout(() => setVisible(false), VISIBLE_MS);
     };
 
-    flash(); // first appearance shortly after load
+    flash();
     const cycle = setInterval(flash, CYCLE_MS);
-    return () => {
-      clearInterval(cycle);
-      clearTimeout(hideTimer);
-    };
+    return () => clearInterval(cycle);
   }, []);
 
   if (!label) return null;
@@ -66,15 +55,14 @@ export function VideoWatermark({ label, onFlash }: Props) {
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden select-none z-10" aria-hidden>
       <span
-        className="absolute font-mono text-[11px] sm:text-sm font-semibold tracking-wider whitespace-nowrap"
+        className="absolute font-mono text-[11px] sm:text-xs font-bold tracking-widest whitespace-nowrap px-2.5 py-1 rounded-md bg-black/40 backdrop-blur-[1px] border border-white/20 text-white/85 shadow-lg"
         dir="ltr"
         style={{
           top: pos.top,
           left: pos.left,
-          color: `rgba(255,255,255,${OPACITY})`,
-          textShadow: "0 1px 4px rgba(0,0,0,0.75)",
-          opacity: visible ? 1 : 0,
-          transition: motionOk ? "opacity 0.4s ease-in-out" : "none",
+          textShadow: "0 1px 4px rgba(0,0,0,0.9), 0 0 8px rgba(0,0,0,0.8)",
+          opacity: visible ? 0.85 : 0,
+          transition: motionOk ? "top 0.4s ease-in-out, left 0.4s ease-in-out, opacity 0.3s ease" : "none",
         }}
       >
         {label}

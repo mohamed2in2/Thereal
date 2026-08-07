@@ -1251,24 +1251,25 @@ export default function TeacherDashboardPage() {
                           {/* Provider selector */}
                           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                             {([
-                              { value: "vdocipher", label: "VdoCipher", badge: "DRM" },
-                              { value: "bunny", label: "Bunny", badge: "CDN" },
-                              { value: "youtube", label: "YouTube", badge: "خاص" },
-                              { value: "alasly", label: "منصة الأصلي", badge: "محمي" },
-                            ] as const).map(({ value, label: pl, badge }) => {
+                              { value: "vdocipher", label: "VdoCipher", badge: "أعلى حماية DRM", level: "الأعلى أماناً" },
+                              { value: "alasly", label: "منصة الأصلي", badge: "Super Native", level: "حماية فائقة" },
+                              { value: "bunny", label: "Bunny CDN", badge: "حماية متوسطة", level: "متوسط" },
+                              { value: "youtube", label: "YouTube", badge: "مجاني / اقتصادي", level: "منخفض التكلفة" },
+                            ] as const).map(({ value, label: pl, badge, level }) => {
                               const active = newVideo.videoProvider === value;
                               return (
                                 <button
                                   key={value}
                                   type="button"
                                   onClick={() => setNewVideo({ ...newVideo, videoProvider: value, providerVideoId: "" })}
-                                  className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 text-xs font-bold transition-all ${
-                                    active ? "border-sky-500 bg-sky-500/10 text-sky-500 dark:text-sky-300" : "border-[var(--border)] text-[var(--ink-muted)] hover:border-[var(--ink-muted)]/40"
+                                  className={`flex flex-col items-center gap-1 p-2.5 rounded-xl border-2 text-xs font-bold transition-all ${
+                                    active ? "border-sky-500 bg-sky-500/10 text-sky-500 dark:text-sky-300 shadow-sm" : "border-[var(--border)] text-[var(--ink-muted)] hover:border-[var(--ink-muted)]/40"
                                   }`}
                                 >
                                   <IconShield className="w-4 h-4" />
-                                  <span>{pl}</span>
-                                  <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${active ? "bg-sky-500/20" : "bg-[var(--border)]"}`}>{badge}</span>
+                                  <span className="truncate w-full text-center">{pl}</span>
+                                  <span className={`text-[8.5px] px-1.5 py-0.5 rounded-full font-bold ${active ? "bg-sky-500/20 text-sky-600 dark:text-sky-300" : "bg-[var(--border)]"}`}>{badge}</span>
+                                  <span className="text-[8px] text-[var(--ink-muted)] font-normal">{level}</span>
                                 </button>
                               );
                             })}
@@ -1277,23 +1278,24 @@ export default function TeacherDashboardPage() {
                           {/* Provider ID */}
                           <div>
                             <label className={label}>
-                              {newVideo.videoProvider === "vdocipher" && "VdoCipher Video ID"}
-                              {newVideo.videoProvider === "bunny" && "Bunny Stream Video GUID"}
-                              {newVideo.videoProvider === "youtube" && "YouTube Video ID (11 حرف)"}
-                              {newVideo.videoProvider === "alasly" && "معرف درس منصة الأصلي (Alasly Lesson ID)"}
+                              {newVideo.videoProvider === "vdocipher" && "VdoCipher Video ID — أعلى حماية مشفرة (Highest DRM)"}
+                              {newVideo.videoProvider === "alasly" && "معرف درس منصة الأصلي — حماية فائقة (Super Native Security)"}
+                              {newVideo.videoProvider === "bunny" && "Bunny Stream Video GUID — حماية متوسطة (Medium CDN Security)"}
+                              {newVideo.videoProvider === "youtube" && "YouTube Video ID (11 حرف) — مخصص للكورسات المجانية ومنخفضة التكلفة"}
                             </label>
                             <input
                               type="text"
                               value={newVideo.providerVideoId}
                               onChange={(e) => setNewVideo({ ...newVideo, providerVideoId: e.target.value.trim() })}
-                              placeholder={newVideo.videoProvider === "vdocipher" ? "مثال: abc123def456" : newVideo.videoProvider === "bunny" ? "مثال: 12345678-abcd-…" : "مثال: dQw4w9WgXcQ"}
+                              placeholder={newVideo.videoProvider === "vdocipher" ? "مثال: abc123def456" : newVideo.videoProvider === "bunny" ? "مثال: 12345678-abcd-…" : newVideo.videoProvider === "alasly" ? "مثال: dQw4w9WgXcQ أو معرف الدرس" : "مثال: dQw4w9WgXcQ"}
                               dir="ltr"
                               className={`${input} font-mono`}
                             />
                             <p className="text-[10px] text-[var(--ink-muted)] mt-1.5">
-                              {newVideo.videoProvider === "vdocipher" && "من لوحة VdoCipher ‹ Videos ‹ انسخ الـ ID"}
-                              {newVideo.videoProvider === "bunny" && "من Bunny Stream ‹ Library ‹ Video GUID"}
-                              {newVideo.videoProvider === "youtube" && "من رابط الفيديو: youtube.com/watch?v=الجزء"}
+                              {newVideo.videoProvider === "vdocipher" && "من لوحة VdoCipher ‹ Videos ‹ انسخ الـ ID (أعلى درجات الحماية ضد التحميل والتسريب)"}
+                              {newVideo.videoProvider === "alasly" && "محمي بنظام Super Native Security مع علامات مائية متحركة وحماية ضد تسجيل الشاشة"}
+                              {newVideo.videoProvider === "bunny" && "من Bunny Stream ‹ Library ‹ Video GUID (حماية متوسطة وسريعة)"}
+                              {newVideo.videoProvider === "youtube" && "من رابط الفيديو: youtube.com/watch?v=الجزء (اقتصادي جداً للكورسات والمحاضرات المجانية)"}
                             </p>
                           </div>
 
