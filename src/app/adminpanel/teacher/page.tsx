@@ -1534,8 +1534,12 @@ export default function TeacherDashboardPage() {
                         <input type="text" value={courseSettings.subject} onChange={(e) => setCourseSettings({ ...courseSettings, subject: e.target.value })} className={input} />
                       </div>
                       <div className="md:col-span-2">
-                        <label className={label}>المرحلة التدريبية</label>
-                        <input type="text" value={courseSettings.educationalStage} onChange={(e) => setCourseSettings({ ...courseSettings, educationalStage: e.target.value })} className={input} />
+                        <label className={label}>المرحلة التدريبية *</label>
+                        <select value={courseSettings.educationalStage} onChange={(e) => setCourseSettings({ ...courseSettings, educationalStage: e.target.value })} className={input}>
+                          <option value="">اختر المرحلة</option>
+                          <option value="sec_1">أولى بكالوريا (sec_1)</option>
+                          <option value="sec_2">ثانية بكالوريا (sec_2)</option>
+                        </select>
                       </div>
                       <div className="md:col-span-2">
                         <label className={label}>الصورة المصغرة (رابط أو رفع من الجهاز)</label>
@@ -1607,7 +1611,14 @@ export default function TeacherDashboardPage() {
                 {/* ── PRICING TAB ── */}
                 {courseTab === "pricing" && (
                   <div className={cardPad}>
-                    <h3 className="font-bold text-[var(--ink)] mb-4 flex items-center gap-2"><IconTag className="w-4 h-4 text-sky-500" /> تسعير الكورس</h3>
+                    <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                      <h3 className="font-bold text-[var(--ink)] flex items-center gap-2"><IconTag className="w-4 h-4 text-sky-500" /> تسعير الكورس</h3>
+                      {selectedCourse?.educationalStage && (
+                        <span className="px-3 py-1 rounded-full text-xs font-bold bg-sky-500/10 text-sky-500 border border-sky-500/20">
+                          🎓 المرحلة: {selectedCourse.educationalStage === "sec_1" ? "أولى بكالوريا" : selectedCourse.educationalStage === "sec_2" ? "ثانية بكالوريا" : selectedCourse.educationalStage}
+                        </span>
+                      )}
+                    </div>
                     <form onSubmit={savePricingSettings} className="space-y-4 max-w-xl">
                       <div className="flex items-center gap-3">
                         <button type="button" onClick={() => setPricingSettings({ ...pricingSettings, isPaid: false })}
