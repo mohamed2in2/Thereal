@@ -152,6 +152,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
               q: {
                 question: string;
                 questionType?: string;
+                imageUrl?: string;
                 optionA?: string;
                 optionB?: string;
                 optionC?: string;
@@ -162,6 +163,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             ) => ({
               question: q.question.trim(),
               questionType: q.questionType === "essay" ? "essay" : "mcq",
+              imageUrl: q.imageUrl?.trim() || null,
               optionA: q.questionType === "essay" ? "" : (q.optionA?.trim() || ""),
               optionB: q.questionType === "essay" ? "" : (q.optionB?.trim() || ""),
               optionC: q.questionType === "essay" ? "" : (q.optionC?.trim() || ""),

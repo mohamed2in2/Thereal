@@ -11,6 +11,7 @@ import { TeacherQuizResults } from "@/components/admin/TeacherQuizResults";
 import { TeacherOverview } from "@/components/admin/TeacherOverview";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { TeacherPublicProfile } from "@/components/admin/TeacherPublicProfile";
+import { TeacherExamDashboard } from "@/components/admin/TeacherExamDashboard";
 import { EDUCATIONAL_STAGES, SUBJECTS } from "@/types";
 import {
   IconMenu, IconPlus, IconTrash, IconFolder, IconVideo, IconFile, IconLink,
@@ -800,6 +801,15 @@ export default function TeacherDashboardPage() {
           {/* ════════ TEACHER SUBSCRIPTIONS ════════ */}
           {activeSection === "teacher-subscriptions" && <TeacherSubscriptionsSection />}
 
+          {/* ════════ EXAM DASHBOARD ════════ */}
+          {activeSection === "exam-dashboard" && (
+            <TeacherExamDashboard
+              onNavigateToEssayGrading={() => setActiveSection("in-video-responses")}
+              onNavigateToResults={() => setActiveSection("quiz-results")}
+              onNavigateToCreateQuiz={() => setActiveSection("courses")}
+            />
+          )}
+
           {/* ════════ IN-VIDEO RESPONSES ════════ */}
           {activeSection === "in-video-responses" && <InVideoResponsesSection />}
 
@@ -1390,6 +1400,54 @@ export default function TeacherDashboardPage() {
                             </div>
                             <input type="text" value={q.question} onChange={(e) => { const qs = [...newQuiz.questions]; qs[qi].question = e.target.value; setNewQuiz({ ...newQuiz, questions: qs }); }} placeholder="نص السؤال" className={input} />
                             
+                            {/* Question image attachment */}
+                            <div className="space-y-1.5 pt-1">
+                              <label className={label}>صورة توضيحية للسؤال (مسألة / رسم بياني / شكل - اختياري)</label>
+                              <div className="flex gap-2">
+                                <input
+                                  type="text"
+                                  value={q.imageUrl || ""}
+                                  onChange={(e) => { const qs = [...newQuiz.questions]; qs[qi].imageUrl = e.target.value; setNewQuiz({ ...newQuiz, questions: qs }); }}
+                                  placeholder="رابط الصورة https://… أو اختر صورة من الجهاز"
+                                  className={`${input} font-mono text-xs flex-1`}
+                                  dir="ltr"
+                                />
+                                <label className={`${ghostBtn} cursor-pointer text-xs shrink-0 py-1.5`}>
+                                  📷 رفع صورة
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={async (e) => {
+                                      const file = e.target.files?.[0];
+                                      if (file) {
+                                        try {
+                                          const url = await fileToResizedDataUrl(file, 800);
+                                          const qs = [...newQuiz.questions];
+                                          qs[qi].imageUrl = url;
+                                          setNewQuiz({ ...newQuiz, questions: qs });
+                                        } catch {
+                                          notify("error", "تعذر رفع الصورة");
+                                        }
+                                      }
+                                    }}
+                                  />
+                                </label>
+                              </div>
+                              {q.imageUrl && (
+                                <div className="mt-2 relative w-full max-w-sm rounded-xl overflow-hidden border border-[var(--border)] bg-[var(--surface)] p-1">
+                                  <img src={q.imageUrl} alt="توضيح السؤال" className="w-full max-h-40 object-contain rounded-lg" />
+                                  <button
+                                    type="button"
+                                    onClick={() => { const qs = [...newQuiz.questions]; qs[qi].imageUrl = ""; setNewQuiz({ ...newQuiz, questions: qs }); }}
+                                    className="absolute top-2 left-2 bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-md font-bold hover:bg-red-600 transition-colors shadow-sm"
+                                  >
+                                    مسح الصورة ✕
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+
                             {q.questionType === "essay" ? (
                               <div className="p-3 bg-purple-500/10 border border-purple-500/20 rounded-lg text-xs text-purple-600 dark:text-purple-300 font-bold flex items-center gap-2">
                                 <span>📝 سؤال مقالي:</span>

@@ -10,6 +10,7 @@ type QuizQuestion = {
   id: string;
   question: string;
   questionType?: string;
+  imageUrl?: string | null;
   optionA: string;
   optionB: string;
   optionC: string;
@@ -396,13 +397,25 @@ export default function QuizPage() {
                   key={question.id}
                   className="rounded-[1.75rem] border border-white/60 bg-white/90 p-5 shadow-lg dark:border-white/10 dark:bg-slate-900/90 sm:p-6"
                 >
-                  <div className="mb-4 flex items-center gap-3">
-                    <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-sky-100 font-black text-sky-700 dark:bg-sky-500/20 dark:text-sky-300">
-                      {index + 1}
-                    </span>
-                    <h2 className="text-lg font-bold leading-relaxed text-slate-900 dark:text-white">
-                      {question.question}
-                    </h2>
+                  <div className="mb-4 flex flex-col gap-3">
+                    <div className="flex items-center gap-3">
+                      <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-sky-100 font-black text-sky-700 dark:bg-sky-500/20 dark:text-sky-300 shrink-0">
+                        {index + 1}
+                      </span>
+                      <h2 className="text-lg font-bold leading-relaxed text-slate-900 dark:text-white">
+                        {question.question}
+                      </h2>
+                    </div>
+
+                    {question.imageUrl && (
+                      <div className="my-1 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-800/60">
+                        <img
+                          src={question.imageUrl}
+                          alt="صورة توضيحية للسؤال"
+                          className="max-h-80 w-full object-contain rounded-xl"
+                        />
+                      </div>
+                    )}
                   </div>
 
                   {question.questionType === "essay" ? (

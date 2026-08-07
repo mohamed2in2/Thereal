@@ -372,6 +372,7 @@ model QuizQuestion {
   quizId        String
   question      String
   questionType  String @default("mcq") // "mcq" | "essay"
+  imageUrl      String? // Optional image/diagram URL attached to the question
   optionA       String @default("")
   optionB       String @default("")
   optionC       String @default("")
@@ -458,6 +459,7 @@ model QuizAnswer {
   questionType   String     @default("mcq") // "mcq" | "essay"
   selectedAnswer String? // null = skipped for MCQ
   essayAnswer    String? // text response for Essay
+  imageUrl       String? // Snapshot of question's image URL
   correctAnswer  String     @default("")
   isCorrect      Boolean    @default(false)
   status         String     @default("APPROVED") // "PENDING" | "APPROVED" | "DISAPPROVED"
