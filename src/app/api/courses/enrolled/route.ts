@@ -10,14 +10,19 @@ export async function GET() {
     if (!session) {
       return NextResponse.json({ error: "يجب تسجيل الدخول أولاً" }, { status: 401 });
     }
-    // Teachers and staff don't have an enrolled-courses library
-    if (session.role === "teacher" || session.role === "staff") {
+    // Staff accounts don't have an enrolled-courses library
+    if (session.role === "staff") {
       return NextResponse.json({ success: true, enrolledCourses: [] });
     }
 
-    // Get enrolled courses with minimal data first
+    // Get enrolled or owned courses with minimal data
     const enrolledCourses = await prisma.course.findMany({
-      where: {
+      where: session.role === "teacher" ? {
+        OR: [
+          { teacherId: session.id },
+          { accessCodes: { some: { studentId: session.id } } },
+        ],
+      } : {
         accessCodes: {
           some: {
             studentId: session.id,

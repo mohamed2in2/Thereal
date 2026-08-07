@@ -24,13 +24,24 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         where: { id, teacherId: session.id },
       });
       if (!ownsCourse) {
-        return NextResponse.json(
-          {
-            error: "أنت مُعلّم — يمكنك معاينة كورساتك الخاصة فقط.",
-            code: "TEACHER_NOT_ALLOWED",
-          },
-          { status: 403 }
-        );
+        const hasAccess = await prisma.accessCode.findFirst({
+          where: { courseId: id, studentId: session.id },
+        });
+        const courseRow = await prisma.course.findUnique({
+          where: { id },
+          select: { isPaid: true, price: true },
+        });
+        const isFree = !courseRow?.isPaid || (courseRow?.price ?? 0) === 0;
+
+        if (!hasAccess && !isFree) {
+          return NextResponse.json(
+            {
+              error: "أنت مُعلّم — يمكنك معاينة كورساتك الخاصة أو الكورسات المسجل بها فقط.",
+              code: "TEACHER_NOT_ALLOWED",
+            },
+            { status: 403 }
+          );
+        }
       }
       isTeacherPreview = true;
     }

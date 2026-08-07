@@ -8,7 +8,7 @@ import { checkVideoAccess } from "@/lib/authorization";
 
 // Verify an existing watch session (used when loading the watch page on refresh)
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getStudentSession();
+  const session = await getSession();
   if (!session) return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
 
   const { id: videoId } = await params;
@@ -17,6 +17,51 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   if (!sessionToken) {
     return NextResponse.json({ error: "token مطلوب" }, { status: 400 });
+  }
+
+  if (sessionToken === "preview" || sessionToken === "free") {
+    const video = await prisma.video.findUnique({
+      where: { id: videoId },
+      include: {
+        folder: {
+          select: {
+            publishAt: true,
+            course: { select: { id: true, title: true, teacherId: true } },
+          },
+        },
+      },
+    });
+    if (!video) return NextResponse.json({ error: "الفيديو غير موجود" }, { status: 404 });
+    const isOwner = session.role === "teacher" && video.folder.course.teacherId === session.id;
+    if (!video.isFree && session.role !== "admin" && session.role !== "superadmin" && !isOwner) {
+      return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
+    }
+    const profile = await prisma.teacherProfile.findUnique({
+      where: { teacherId: video.folder.course.teacherId },
+      select: { slug: true },
+    });
+    return NextResponse.json({
+      videoId,
+      sessionToken,
+      sessionId: "preview",
+      isExpired: false,
+      startedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
+      remainingWatches: 999,
+      totalWatches: 999,
+      usedWatches: 0,
+      teacherSlug: profile?.slug ?? "",
+      studentPlan: "course",
+      video: {
+        id: video.id,
+        title: video.title,
+        vdoCipherId: video.vdoCipherId,
+        videoProvider: video.videoProvider,
+        providerVideoId: video.providerVideoId,
+        courseId: video.folder.course.id,
+        courseTitle: video.folder.course.title,
+      },
+    });
   }
 
   const watchSession = await prisma.videoWatchSession.findUnique({

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getStudentSession } from "@/lib/auth";
+import { getSession } from "@/lib/auth";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -26,12 +26,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     let hasAccess = false;
     let isOwnerTeacher = false;
     try {
-      const session = await getStudentSession();
+      const session = await getSession();
       if (session) {
         isOwnerTeacher = session.role === "teacher" && course.teacherId === session.id;
         const isAdminPreview = session.role === "admin" || session.role === "superadmin";
         const hasCode = !!(await prisma.accessCode.findFirst({ where: { courseId: course.id, studentId: session.id } }));
-        hasAccess = hasCode || isOwnerTeacher || isAdminPreview;
+        hasAccess = hasCode || isOwnerTeacher || isAdminPreview || (session.role === "teacher" && (!course.isPaid || course.price === 0));
       }
     } catch {
       // If auth fails, just show as no-access

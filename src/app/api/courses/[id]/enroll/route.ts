@@ -9,9 +9,9 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     if (!session) {
       return NextResponse.json({ error: "يجب تسجيل الدخول أولاً" }, { status: 401 });
     }
-    if (session.role === "teacher" || session.role === "staff") {
+    if (session.role === "staff") {
       return NextResponse.json(
-        { error: `حساب ${session.role === "teacher" ? "المعلم" : "الموظف"} لا يمكنه التسجيل في الكورسات — هذا الإجراء مخصص للمتعلمين فقط.` },
+        { error: "حساب الموظف لا يمكنه التسجيل في الكورسات — هذا الإجراء مخصص للمتعلمين والمعلمين." },
         { status: 403 }
       );
     }
