@@ -45,8 +45,13 @@ export function Footer() {
           <h4 className="text-xs font-bold mb-4 tracking-wider" style={{ color: "#5E7186" }}>قانوني</h4>
           <ul className="space-y-3">
             <li>
+              <Link href="/terms" className="text-sm no-underline hover:text-white transition-colors" style={{ color: "#A8B8C8" }}>
+                شروط الاستخدام
+              </Link>
+            </li>
+            <li>
               <Link href="/privacy" className="text-sm no-underline hover:text-white transition-colors" style={{ color: "#A8B8C8" }}>
-                الشروط وسياسة الخصوصية
+                سياسة الخصوصية
               </Link>
             </li>
           </ul>
