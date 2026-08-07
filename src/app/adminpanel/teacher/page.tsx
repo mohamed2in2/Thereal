@@ -121,6 +121,24 @@ const SECTION_TITLES: Record<string, string> = {
   review: "مراجعة الإجابات",
 };
 
+interface QuizQuestionInput {
+  question: string;
+  questionType?: string;
+  imageUrl?: string;
+  optionA: string;
+  optionB: string;
+  optionC: string;
+  optionD: string;
+  correctAnswer: string;
+}
+
+interface NewQuizState {
+  title: string;
+  folderId: string;
+  timeLimitMinutes: number;
+  questions: QuizQuestionInput[];
+}
+
 export default function TeacherDashboardPage() {
   const router = useRouter();
   const { success: toastSuccess, error: toastError } = useToast();
@@ -143,10 +161,10 @@ export default function TeacherDashboardPage() {
   const [newFolder, setNewFolder] = useState("");
   const [newFolderPublishAt, setNewFolderPublishAt] = useState("");
   const [newVideo, setNewVideo] = useState({ title: "", videoProvider: "vdocipher", providerVideoId: "", durationMinutes: 0, maxWatchesPerUser: 3, publishAt: "", folderId: "" });
-  const [newQuiz, setNewQuiz] = useState({
+  const [newQuiz, setNewQuiz] = useState<NewQuizState>({
     title: "", folderId: "",
     timeLimitMinutes: 30,
-    questions: [{ question: "", optionA: "", optionB: "", optionC: "", optionD: "", correctAnswer: "A" }],
+    questions: [{ question: "", questionType: "mcq", imageUrl: "", optionA: "", optionB: "", optionC: "", optionD: "", correctAnswer: "A" }],
   });
   const [newMaterial, setNewMaterial] = useState({ title: "", url: "", type: "pdf", folderId: "" });
   const [courseSettings, setCourseSettings] = useState({
