@@ -91,20 +91,25 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const breakdown = quiz.questions.map((question: any) => {
     const yourAnswer = answers[question.id] ?? null;
-    const isCorrect = yourAnswer === question.correctAnswer;
+    const isEssay = question.questionType === "essay";
+    const isCorrect = isEssay ? false : yourAnswer === question.correctAnswer;
     return {
       questionId: question.id,
+      questionType: question.questionType || (isEssay ? "essay" : "mcq"),
       question: question.question,
-      optionA: question.optionA,
-      optionB: question.optionB,
-      optionC: question.optionC,
-      optionD: question.optionD,
-      yourAnswer,
-      correctAnswer: question.correctAnswer,
+      optionA: question.optionA || "",
+      optionB: question.optionB || "",
+      optionC: question.optionC || "",
+      optionD: question.optionD || "",
+      yourAnswer: isEssay ? null : yourAnswer,
+      essayAnswer: isEssay ? (yourAnswer || "") : null,
+      correctAnswer: isEssay ? "" : (question.correctAnswer || "A"),
       isCorrect,
+      status: isEssay ? "PENDING" : "APPROVED",
     };
   });
 
+  const hasEssayQuestions = breakdown.some((item: any) => item.questionType === "essay");
   const correct = breakdown.filter((item: any) => item.isCorrect).length;
   const score = Number(((correct / totalQ) * 100).toFixed(2));
   const passed = score >= 50;
@@ -125,9 +130,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         quizId,
         questionId:     b.questionId,
         resultId:       result.id,
+        questionType:   b.questionType,
         selectedAnswer: b.yourAnswer,
+        essayAnswer:    b.essayAnswer,
         correctAnswer:  b.correctAnswer,
         isCorrect:      b.isCorrect,
+        status:         b.status,
         question:       b.question,
         optionA:        b.optionA,
         optionB:        b.optionB,

@@ -371,11 +371,12 @@ model QuizQuestion {
   id            String @id @default(cuid())
   quizId        String
   question      String
-  optionA       String
-  optionB       String
-  optionC       String
-  optionD       String
-  correctAnswer String
+  questionType  String @default("mcq") // "mcq" | "essay"
+  optionA       String @default("")
+  optionB       String @default("")
+  optionC       String @default("")
+  optionD       String @default("")
+  correctAnswer String @default("A")
   order         Int    @default(0)
   quiz          Quiz   @relation(fields: [quizId], references: [id], onDelete: Cascade)
 }
@@ -454,14 +455,19 @@ model QuizAnswer {
   quizId         String
   questionId     String
   resultId       String
-  selectedAnswer String? // null = skipped
-  correctAnswer  String
-  isCorrect      Boolean
+  questionType   String     @default("mcq") // "mcq" | "essay"
+  selectedAnswer String? // null = skipped for MCQ
+  essayAnswer    String? // text response for Essay
+  correctAnswer  String     @default("")
+  isCorrect      Boolean    @default(false)
+  status         String     @default("APPROVED") // "PENDING" | "APPROVED" | "DISAPPROVED"
+  teacherReply   String?
+  reviewedAt     DateTime?
   question       String // snapshot so it works even if question is later edited
-  optionA        String
-  optionB        String
-  optionC        String
-  optionD        String
+  optionA        String     @default("")
+  optionB        String     @default("")
+  optionC        String     @default("")
+  optionD        String     @default("")
   createdAt      DateTime   @default(now())
   result         QuizResult @relation(fields: [resultId], references: [id], onDelete: Cascade)
 
@@ -469,6 +475,7 @@ model QuizAnswer {
   @@index([quizId])
   @@index([resultId])
   @@index([questionId])
+  @@index([status])
 }
 
 model DailyStudyPlan {

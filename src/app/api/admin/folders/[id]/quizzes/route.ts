@@ -54,34 +54,38 @@ function validateQuizData(title: string, questions: any[]): { valid: boolean; er
       return { valid: false, error: `السؤال ${i + 1} طويل جداً (الحد الأقصى ${MAX_QUESTION_LENGTH} حرف)` };
     }
 
-    const options = ["optionA", "optionB", "optionC", "optionD"];
-    const filledOptions = options.filter((opt) => q[opt] && q[opt].trim().length > 0);
+    const isEssay = q.questionType === "essay";
 
-    if (filledOptions.length < MIN_OPTIONS) {
-      return { valid: false, error: `السؤال ${i + 1} يجب أن يحتوي على خيارين على الأقل` };
-    }
+    if (!isEssay) {
+      const options = ["optionA", "optionB", "optionC", "optionD"];
+      const filledOptions = options.filter((opt) => q[opt] && q[opt].trim().length > 0);
 
-    for (const opt of filledOptions) {
-      if (!q[opt] || typeof q[opt] !== "string") {
-        return { valid: false, error: `السؤال ${i + 1} يحتوي على خيار غير صحيح` };
+      if (filledOptions.length < MIN_OPTIONS) {
+        return { valid: false, error: `السؤال ${i + 1} يجب أن يحتوي على خيارين على الأقل` };
       }
 
-      if (q[opt].trim().length === 0) {
-        return { valid: false, error: `السؤال ${i + 1} يحتوي على خيار فارغ` };
+      for (const opt of filledOptions) {
+        if (!q[opt] || typeof q[opt] !== "string") {
+          return { valid: false, error: `السؤال ${i + 1} يحتوي على خيار غير صحيح` };
+        }
+
+        if (q[opt].trim().length === 0) {
+          return { valid: false, error: `السؤال ${i + 1} يحتوي على خيار فارغ` };
+        }
+
+        if (q[opt].length > MAX_OPTION_LENGTH) {
+          return { valid: false, error: `خيار في السؤال ${i + 1} طويل جداً (الحد الأقصى ${MAX_OPTION_LENGTH} حرف)` };
+        }
       }
 
-      if (q[opt].length > MAX_OPTION_LENGTH) {
-        return { valid: false, error: `خيار في السؤال ${i + 1} طويل جداً (الحد الأقصى ${MAX_OPTION_LENGTH} حرف)` };
+      if (!q.correctAnswer || typeof q.correctAnswer !== "string") {
+        return { valid: false, error: `السؤال ${i + 1} لا يحتوي على إجابة صحيحة` };
       }
-    }
 
-    if (!q.correctAnswer || typeof q.correctAnswer !== "string") {
-      return { valid: false, error: `السؤال ${i + 1} لا يحتوي على إجابة صحيحة` };
-    }
-
-    const correctOption = `option${q.correctAnswer}`;
-    if (!options.includes(correctOption) || !q[correctOption] || q[correctOption].trim().length === 0) {
-      return { valid: false, error: `السؤال ${i + 1} يحتوي على إجابة صحيحة غير موجودة` };
+      const correctOption = `option${q.correctAnswer}`;
+      if (!options.includes(correctOption) || !q[correctOption] || q[correctOption].trim().length === 0) {
+        return { valid: false, error: `السؤال ${i + 1} يحتوي على إجابة صحيحة غير موجودة` };
+      }
     }
   }
 
@@ -147,20 +151,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             (
               q: {
                 question: string;
-                optionA: string;
-                optionB: string;
-                optionC: string;
-                optionD: string;
-                correctAnswer: string;
+                questionType?: string;
+                optionA?: string;
+                optionB?: string;
+                optionC?: string;
+                optionD?: string;
+                correctAnswer?: string;
               },
               i: number
             ) => ({
               question: q.question.trim(),
-              optionA: q.optionA?.trim() || "",
-              optionB: q.optionB?.trim() || "",
-              optionC: q.optionC?.trim() || "",
-              optionD: q.optionD?.trim() || "",
-              correctAnswer: q.correctAnswer,
+              questionType: q.questionType === "essay" ? "essay" : "mcq",
+              optionA: q.questionType === "essay" ? "" : (q.optionA?.trim() || ""),
+              optionB: q.questionType === "essay" ? "" : (q.optionB?.trim() || ""),
+              optionC: q.questionType === "essay" ? "" : (q.optionC?.trim() || ""),
+              optionD: q.questionType === "essay" ? "" : (q.optionD?.trim() || ""),
+              correctAnswer: q.questionType === "essay" ? "A" : (q.correctAnswer || "A"),
               order: i,
             })
           ),

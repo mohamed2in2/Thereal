@@ -1373,31 +1373,55 @@ export default function TeacherDashboardPage() {
 
                         {newQuiz.questions.map((q, qi) => (
                           <div key={qi} className="rounded-xl border border-[var(--border)] bg-[var(--bg)] p-4 space-y-3">
-                            <p className="text-sm font-bold text-[var(--ink)]">السؤال {qi + 1}</p>
-                            <input type="text" value={q.question} onChange={(e) => { const qs = [...newQuiz.questions]; qs[qi].question = e.target.value; setNewQuiz({ ...newQuiz, questions: qs }); }} placeholder="نص السؤال" className={input} />
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                              {(["A", "B", "C", "D"] as const).map((opt) => (
-                                <div key={opt} className="flex gap-2 items-center">
-                                  <button
-                                    type="button"
-                                    onClick={() => { const qs = [...newQuiz.questions]; qs[qi].correctAnswer = opt; setNewQuiz({ ...newQuiz, questions: qs }); }}
-                                    aria-label={`تعيين ${opt} كإجابة صحيحة`}
-                                    className={`shrink-0 w-7 h-7 rounded-lg text-xs font-bold transition-colors ${q.correctAnswer === opt ? "bg-emerald-500 text-white" : "bg-[var(--border)] text-[var(--ink-muted)] hover:text-[var(--ink)]"}`}
-                                  >
-                                    {opt}
-                                  </button>
-                                  <input type="text" value={q[`option${opt}` as keyof typeof q] as string}
-                                    onChange={(e) => { const qs = [...newQuiz.questions]; (qs[qi] as Record<string, string>)[`option${opt}`] = e.target.value; setNewQuiz({ ...newQuiz, questions: qs }); }}
-                                    placeholder={`الخيار ${opt}`} className={input} />
-                                </div>
-                              ))}
+                            <div className="flex items-center justify-between gap-3">
+                              <p className="text-sm font-bold text-[var(--ink)]">السؤال {qi + 1}</p>
+                              <select
+                                value={q.questionType || "mcq"}
+                                onChange={(e) => {
+                                  const qs = [...newQuiz.questions];
+                                  qs[qi].questionType = e.target.value;
+                                  setNewQuiz({ ...newQuiz, questions: qs });
+                                }}
+                                className={`${input} w-48 py-1 text-xs`}
+                              >
+                                <option value="mcq">اختيار من متعدد (MCQ)</option>
+                                <option value="essay">سؤال مقالي (تصحيح يدوي)</option>
+                              </select>
                             </div>
-                            <p className="text-[11px] text-[var(--ink-muted)]">اضغط على حرف الخيار لتحديده كإجابة صحيحة. الحالي: <span className="font-bold text-emerald-500">{q.correctAnswer}</span></p>
+                            <input type="text" value={q.question} onChange={(e) => { const qs = [...newQuiz.questions]; qs[qi].question = e.target.value; setNewQuiz({ ...newQuiz, questions: qs }); }} placeholder="نص السؤال" className={input} />
+                            
+                            {q.questionType === "essay" ? (
+                              <div className="p-3 bg-purple-500/10 border border-purple-500/20 rounded-lg text-xs text-purple-600 dark:text-purple-300 font-bold flex items-center gap-2">
+                                <span>📝 سؤال مقالي:</span>
+                                <span>يكتب الطالب إجابة نصية حرة وتظهر لك في لوحة المعلم لمراجعتها وتصحيحها ورصد الدرجات.</span>
+                              </div>
+                            ) : (
+                              <>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                  {(["A", "B", "C", "D"] as const).map((opt) => (
+                                    <div key={opt} className="flex gap-2 items-center">
+                                      <button
+                                        type="button"
+                                        onClick={() => { const qs = [...newQuiz.questions]; qs[qi].correctAnswer = opt; setNewQuiz({ ...newQuiz, questions: qs }); }}
+                                        aria-label={`تعيين ${opt} كإجابة صحيحة`}
+                                        className={`shrink-0 w-7 h-7 rounded-lg text-xs font-bold transition-colors ${q.correctAnswer === opt ? "bg-emerald-500 text-white" : "bg-[var(--border)] text-[var(--ink-muted)] hover:text-[var(--ink)]"}`}
+                                      >
+                                        {opt}
+                                      </button>
+                                      <input type="text" value={q[`option${opt}` as keyof typeof q] as string}
+                                        onChange={(e) => { const qs = [...newQuiz.questions]; (qs[qi] as Record<string, string>)[`option${opt}`] = e.target.value; setNewQuiz({ ...newQuiz, questions: qs }); }}
+                                        placeholder={`الخيار ${opt}`} className={input} />
+                                    </div>
+                                  ))}
+                                </div>
+                                <p className="text-[11px] text-[var(--ink-muted)]">اضغط على حرف الخيار لتحديده كإجابة صحيحة. الحالي: <span className="font-bold text-emerald-500">{q.correctAnswer}</span></p>
+                              </>
+                            )}
                           </div>
                         ))}
 
                         <div className="flex flex-col sm:flex-row gap-3">
-                          <button type="button" onClick={() => setNewQuiz({ ...newQuiz, questions: [...newQuiz.questions, { question: "", optionA: "", optionB: "", optionC: "", optionD: "", correctAnswer: "A" }] })} className={ghostBtn}>
+                          <button type="button" onClick={() => setNewQuiz({ ...newQuiz, questions: [...newQuiz.questions, { question: "", questionType: "mcq", optionA: "", optionB: "", optionC: "", optionD: "", correctAnswer: "A" }] })} className={ghostBtn}>
                             <IconPlus className="w-4 h-4" /> سؤال جديد
                           </button>
                           <button type="submit" disabled={!newQuiz.folderId || !newQuiz.title} className={`${primaryBtn} flex-1`}>

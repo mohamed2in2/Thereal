@@ -9,6 +9,7 @@ import { useToast } from "@/components/ui/Toast";
 type QuizQuestion = {
   id: string;
   question: string;
+  questionType?: string;
   optionA: string;
   optionB: string;
   optionC: string;
@@ -28,14 +29,17 @@ type QuizPayload = {
 
 type ResultBreakdown = {
   questionId: string;
+  questionType?: string;
   question: string;
   optionA: string;
   optionB: string;
   optionC: string;
   optionD: string;
   yourAnswer: string | null;
+  essayAnswer?: string | null;
   correctAnswer: string;
   isCorrect: boolean;
+  status?: string;
 };
 
 type QuizResult = {
@@ -401,27 +405,43 @@ export default function QuizPage() {
                     </h2>
                   </div>
 
-                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                    {optionLabels.map((label) => {
-                      const fieldName = `option${label}` as const;
-                      const active = answers[question.id] === label;
-                      return (
-                        <button
-                          key={label}
-                          type="button"
-                          onClick={() => setAnswers((current) => ({ ...current, [question.id]: label }))}
-                          className={`rounded-2xl border px-4 py-4 text-right transition-all ${
-                            active
-                              ? "border-sky-500 bg-sky-50 text-sky-900 shadow-sm dark:border-sky-400 dark:bg-sky-500/15 dark:text-sky-100"
-                              : "border-slate-200 bg-slate-50/80 text-slate-700 hover:border-sky-300 hover:bg-sky-50 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-200 dark:hover:border-sky-500/60"
-                          }`}
-                        >
-                          <div className="mb-2 text-xs font-bold tracking-[0.2em] opacity-70">{label}</div>
-                          <div className="text-sm leading-7">{question[fieldName]}</div>
-                        </button>
-                      );
-                    })}
-                  </div>
+                  {question.questionType === "essay" ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-xs font-bold text-sky-500">
+                        <span>📝 سؤال مقالي</span>
+                        <span className="text-slate-500 dark:text-slate-400 font-normal">(اكتب إجابتك النصية كاملة)</span>
+                      </div>
+                      <textarea
+                        rows={4}
+                        value={answers[question.id] || ""}
+                        onChange={(e) => setAnswers((current) => ({ ...current, [question.id]: e.target.value }))}
+                        placeholder="اكتب إجابتك المقالية بالتفصيل هنا..."
+                        className="w-full rounded-2xl border border-slate-200 bg-slate-50/80 p-4 text-sm text-slate-900 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20 dark:border-slate-700 dark:bg-slate-800/70 dark:text-white"
+                      />
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                      {optionLabels.map((label) => {
+                        const fieldName = `option${label}` as const;
+                        const active = answers[question.id] === label;
+                        return (
+                          <button
+                            key={label}
+                            type="button"
+                            onClick={() => setAnswers((current) => ({ ...current, [question.id]: label }))}
+                            className={`rounded-2xl border px-4 py-4 text-right transition-all ${
+                              active
+                                ? "border-sky-500 bg-sky-50 text-sky-900 shadow-sm dark:border-sky-400 dark:bg-sky-500/15 dark:text-sky-100"
+                                : "border-slate-200 bg-slate-50/80 text-slate-700 hover:border-sky-300 hover:bg-sky-50 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-200 dark:hover:border-sky-500/60"
+                            }`}
+                          >
+                            <div className="mb-2 text-xs font-bold tracking-[0.2em] opacity-70">{label}</div>
+                            <div className="text-sm leading-7">{question[fieldName]}</div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </article>
               ))}
             </section>
