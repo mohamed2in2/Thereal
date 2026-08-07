@@ -118,7 +118,6 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      // B11: Clean fallback URL format with no stray doubled curly braces
       const finalCheckoutUrl = soCheckoutUrl || `https://dash.shake-out.com/invoice/${reference}`;
 
       return NextResponse.json({

@@ -30,7 +30,7 @@ export const PAYMENT_CATEGORIES: readonly PaymentCategoryMetadata[] = [
     id: "wallet",
     label: "المحافظ الإلكترونية",
     labelEn: "Mobile Wallets",
-    description: "فودافون كاش، اتصالات كاش، أورانج كاش، و WE Pay عبر الهاتف المحمول",
+    description: "فودافون كاش، اتصالات كاش، وأورانج كاش عبر الهاتف المحمول",
   },
   {
     id: "instant",
@@ -155,29 +155,33 @@ export const PAYMENT_METHODS: readonly PaymentMethodConfig[] = [
     shortNote: "البوابة التلقائية متوقفة مؤقتاً — يرجى استخدام كود الشحن",
     instructions: [],
   },
-
-  /* ─── Shake-Out Gateway (dash.shake-out.com) ────────────────────────── */
   {
     id: "or_cash",
     label: "أورانج كاش",
     labelEn: "Orange Cash",
-    description: "ادفع فوراً من محفظة أورانج كاش عبر الهاتف المحمول (بوابة Shake-Out).",
+    description: "ادفع فوراً من محفظة أورانج كاش عبر الهاتف المحمول (بوابة Sha7nawy).",
     category: "wallet",
-    provider: "shakeout",
+    provider: "sha7nawy",
     brandColor: "#FF7900",
     brandForeground: "#FFFFFF",
     monogram: "OR",
     needsPhone: true,
     requiresReference: false,
-    available: false,
-    unavailableNote: "غير متاحة حالياً — يرجى استخدام كود الشحن أو رصيد المنصة",
+    available: true,
     processingSpeed: "تأكيد فوري",
     feePercentage: 2,
     minAmount: 5,
     maxAmount: 10000,
-    shortNote: "طريقة غير متاحة حالياً على البوابة",
-    instructions: [],
+    shortNote: "اقبل طلب الدفع من تطبيق أورانج كاش وأدخل الرقم السري لتأكيد الخصم",
+    instructions: [
+      "سيصلك إشعار بطلب الدفع على رقم محفظة أورانج كاش خلال ثوانٍ.",
+      "افتح تطبيق Orange Cash على هاتفك.",
+      "اقبل طلب الدفع المعلق وأدخل الرقم السري للمحفظة.",
+      "سيتم شحن رصيدك تلقائياً فور تأكيد الدفع.",
+    ],
   },
+
+  /* ─── Shake-Out Gateway (dash.shake-out.com) — Fawry only ────────────── */
   {
     id: "fawry",
     label: "فوري (Fawry Pay)",

@@ -3,7 +3,8 @@
  * Handles payment transactions for Sha7nawy-routed mobile wallet providers:
  * - Vodafone Cash (vf_cash) -> *9*1# prompt
  * - Etisalat Cash (et_cash) -> e& Money App prompt
- * (Fawry, Cards, and Orange Cash are routed via Shake-Out at dash.shake-out.com)
+ * - Orange Cash (or_cash)   -> Orange Cash app prompt
+ * (Fawry is the only method routed via Shake-Out at dash.shake-out.com)
  */
 
 import { getPaymentMethod, PAYMENT_METHODS } from "./payment-methods";
@@ -133,7 +134,7 @@ export async function createSha7nawyPayment(
     return {
       status: false,
       code: 400,
-      message: "بوابة Sha7nawy (gate.sha7nawy.com) قيد التفعيل. يرجى تجربة فوري أو البطاقات أو أورانج كاش عبر Shake-Out.",
+      message: "بوابة Sha7nawy (gate.sha7nawy.com) قيد التفعيل. يرجى استخدام فوري في الوقت الحالي.",
     };
   }
 

@@ -142,7 +142,7 @@ export async function createShakeOutPayment(
     const invoiceId = data.data?.invoice_id || "";
     const invoiceRef = data.data?.invoice_ref || "";
     const combinedRef = (invoiceId && invoiceRef) ? `${invoiceId}/${invoiceRef}` : (invoiceId || invoiceRef);
-    const finalUrl = checkoutUrl || (combinedRef ? `https://dash.shake-out.com/invoice/${combinedRef}` : undefined);
+    const finalUrl = checkoutUrl || (combinedRef ? `${baseUrl}/invoice/${combinedRef}` : undefined);
 
     return {
       status: true,
@@ -172,7 +172,7 @@ export async function createShakeOutPayment(
 
 /**
  * Checks status of a Shake-Out invoice
- * Endpoint: GET https://dash.shake-out.com/api/public/vendor/invoice-status/{invoice_id}/{invoice_ref}
+ * Endpoint: GET https://dash.shake-out.com/api/public/vendor/invoice-status/<invoice_id>/<invoice_ref>
  */
 export async function getShakeOutInvoiceStatus(invoiceId: string, invoiceRef?: string): Promise<ShakeOutCreateResponse> {
   const baseUrl = (process.env.SHAKEOUT_BASE_URL || "https://dash.shake-out.com").replace(/\/$/, "");
