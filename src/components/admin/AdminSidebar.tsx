@@ -86,6 +86,7 @@ const teacherSections = [
   { id: "my-page",               label: "صفحتي" },
   { id: "teacher-subscriptions", label: "حجوزات واشتراكات الطلاب" },
   { id: "courses",               label: "الكورسات" },
+  { id: "in-video-responses",    label: "📝 إجابات أسئلة الفيديو" },
   { id: "referred-students",     label: "متابعة الطلاب المُحالين" },
   { id: "quiz-results",      label: "نتائج الاختبارات" },
   { id: "homework",          label: "إدارة الواجبات" },

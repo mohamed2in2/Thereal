@@ -27,16 +27,12 @@ export async function POST(
 
   const body = (await req.json().catch(() => ({}))) as {
     selectedOption?: string;
+    essayAnswer?: string;
     answeredAtSecond?: number;
     watchSessionId?: string;
   };
 
-  const { selectedOption, answeredAtSecond, watchSessionId } = body;
-
-  // Validate option
-  if (!selectedOption || !["A", "B", "C", "D"].includes(selectedOption)) {
-    return NextResponse.json({ error: "اختيار غير صالح" }, { status: 400 });
-  }
+  const { selectedOption, essayAnswer, answeredAtSecond, watchSessionId } = body;
 
   // Validate answeredAtSecond
   if (typeof answeredAtSecond !== "number" || !Number.isFinite(answeredAtSecond)) {
@@ -49,12 +45,26 @@ export async function POST(
     select: {
       id: true,
       triggerSecond: true,
+      questionType: true,
       correctOption: true,
       explanation: true,
     },
   });
   if (!question) {
     return NextResponse.json({ error: "السؤال غير موجود" }, { status: 404 });
+  }
+
+  const isEssay = question.questionType === "essay";
+
+  // Validation based on question type
+  if (isEssay) {
+    if (!essayAnswer?.trim()) {
+      return NextResponse.json({ error: "يرجى كتابة الإجابة المقالية" }, { status: 400 });
+    }
+  } else {
+    if (!selectedOption || !["A", "B", "C", "D"].includes(selectedOption)) {
+      return NextResponse.json({ error: "اختيار غير صالح" }, { status: 400 });
+    }
   }
 
   // Validate answeredAtSecond is within ±15s of triggerSecond (anti-bypass)
@@ -78,10 +88,10 @@ export async function POST(
     if (!ws) {
       return NextResponse.json({ error: "جلسة المشاهدة غير صالحة" }, { status: 403 });
     }
-    // Allow answering even if session is near-expired — don't penalize mid-question
   }
 
-  const isCorrect = selectedOption === question.correctOption;
+  const isCorrect = isEssay ? false : selectedOption === question.correctOption;
+  const status = isEssay ? "PENDING" : "APPROVED";
 
   // Check if already answered in this session
   const existing = await prisma.videoQuestionResponse.findFirst({
@@ -98,6 +108,9 @@ export async function POST(
       isCorrect: existing.isCorrect,
       correctOption: question.correctOption,
       explanation: question.explanation,
+      status: existing.status,
+      essayAnswer: existing.essayAnswer,
+      teacherReply: existing.teacherReply,
       alreadyAnswered: true,
     });
   }
@@ -108,8 +121,10 @@ export async function POST(
       data: {
         videoQuestionId: questionId,
         studentId: session.id,
-        selectedOption,
+        selectedOption: isEssay ? null : selectedOption!,
+        essayAnswer: isEssay ? essayAnswer!.trim() : null,
         isCorrect,
+        status,
         answeredAtSecond: Math.round(answeredAtSecond),
         watchSessionId: watchSessionId ?? null,
       },
@@ -121,6 +136,7 @@ export async function POST(
         isCorrect,
         correctOption: question.correctOption,
         explanation: question.explanation,
+        status,
         alreadyAnswered: true,
       });
     }
@@ -131,5 +147,8 @@ export async function POST(
     isCorrect,
     correctOption: question.correctOption,
     explanation: question.explanation,
+    status,
+    isEssay,
+    message: isEssay ? "تم إرسال إجابتك المقالية بنجاح وسيقوم المعلم بمراجعتها" : undefined,
   });
 }

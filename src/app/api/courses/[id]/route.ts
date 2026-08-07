@@ -17,14 +17,22 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     //  - teacher            → blocked with a clear "you're a teacher" message
     //  - staff              → blocked
     const role = session.role;
+    let isTeacherPreview = false;
+
     if (role === "teacher") {
-      return NextResponse.json(
-        {
-          error: "أنت مُعلّم — صفحة دخول الكورس مخصّصة للطلاب فقط. تابع كورساتك من لوحة المعلّم.",
-          code: "TEACHER_NOT_ALLOWED",
-        },
-        { status: 403 }
-      );
+      const ownsCourse = await prisma.course.count({
+        where: { id, teacherId: session.id },
+      });
+      if (!ownsCourse) {
+        return NextResponse.json(
+          {
+            error: "أنت مُعلّم — يمكنك معاينة كورساتك الخاصة فقط.",
+            code: "TEACHER_NOT_ALLOWED",
+          },
+          { status: 403 }
+        );
+      }
+      isTeacherPreview = true;
     }
     if (role === "staff") {
       return NextResponse.json(
@@ -176,7 +184,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     // Mark-complete gate (% watched) is superadmin-configurable (was 80).
     const markCompleteThreshold = await getConfigNumberClamped("mark_complete_threshold", 1, 100);
-    return NextResponse.json({ course: safeCourse, markCompleteThreshold });
+    return NextResponse.json({ course: safeCourse, markCompleteThreshold, isTeacherPreview });
   } catch (error) {
     console.error("[courses/[id]] error:", error);
     return NextResponse.json({ error: "حدث خطأ داخلي" }, { status: 500 });

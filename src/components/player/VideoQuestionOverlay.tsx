@@ -89,7 +89,7 @@ export function VideoQuestionOverlay({
         animate={{ opacity: 1, x: 0, y: 0 }}
         exit={{ opacity: 0, x: 20, y: -10 }}
         transition={{ type: "spring", damping: 25, stiffness: 300 }}
-        className="absolute top-3 left-3 z-25 w-[280px] sm:w-[320px] max-w-[85%]"
+        className="absolute top-3 left-3 z-25 w-[280px] sm:w-[320px] max-w-[85%] max-h-[85vh] overflow-y-auto"
         dir="rtl"
         onClick={(e) => e.stopPropagation()}
       >

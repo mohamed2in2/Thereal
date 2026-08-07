@@ -224,6 +224,7 @@ export default function CourseLearningPage() {
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState("");
   const [accessBlock, setAccessBlock] = useState<{ message: string; teacher: boolean } | null>(null);
+  const [isTeacherPreview, setIsTeacherPreview] = useState(false);
   const [user, setUser] = useState<{ name: string; role: string; phone?: string | null } | null>(null);
 
   // Sidebar
@@ -271,13 +272,14 @@ export default function CourseLearningPage() {
   // Sequential lock: video[i] is locked if video[i-1] is not watched
   const isLocked = useCallback(
     (videoId: string) => {
+      if (isTeacherPreview) return false;
       // Teacher can allow free navigation — then nothing is locked.
       if (course?.sequentialAccess === false) return false;
       const idx = flatVideos.findIndex((v) => v.id === videoId);
       if (idx <= 0) return false;
       return !flatVideos[idx - 1].progress?.some((p) => p.watched);
     },
-    [flatVideos, course?.sequentialAccess]
+    [flatVideos, course?.sequentialAccess, isTeacherPreview]
   );
 
   const activeVideo = flatVideos.find((v) => v.id === activeVideoId) ?? null;
@@ -302,7 +304,7 @@ export default function CourseLearningPage() {
 
   // Per-video watch counts
   const videoRemainingWatches = (v: VideoItem) =>
-    Math.max(0, (v.maxWatchesPerUser ?? 3) - (v.usedWatches ?? 0));
+    isTeacherPreview ? 999 : Math.max(0, (v.maxWatchesPerUser ?? 3) - (v.usedWatches ?? 0));
   const hasNoWatches = activeVideo ? videoRemainingWatches(activeVideo) <= 0 : false;
 
   // ── Data loading ─────────────────────────────────────────────────────────
@@ -332,6 +334,9 @@ export default function CourseLearningPage() {
           return;
         }
         throw new Error(courseJson.error || "فشل تحميل الكورس");
+      }
+      if (courseJson.isTeacherPreview) {
+        setIsTeacherPreview(true);
       }
       const c = courseJson.course as CourseData;
       if (typeof courseJson.markCompleteThreshold === "number") {
@@ -628,7 +633,24 @@ export default function CourseLearningPage() {
 
       {/* ── Content ── */}
       {!loading && !pageError && !accessBlock && course && (
-        <div className="flex flex-1 overflow-hidden relative">
+        <div className="flex flex-col flex-1 overflow-hidden relative">
+          {/* Teacher Preview Banner */}
+          {isTeacherPreview && (
+            <div className="bg-sky-500/15 border-b border-sky-500/30 px-4 py-2 flex items-center justify-between gap-3 text-xs font-bold text-sky-500 shrink-0 z-20" dir="rtl">
+              <div className="flex items-center gap-2">
+                <span>👁️ وضع معاينة المعلم:</span>
+                <span className="font-normal text-[var(--ink-muted)]">يمكنك تصفح المحتوى والأسئلة والتنقل بحرّية دون قيود تسلسلية أو استهلاك محاولات.</span>
+              </div>
+              <button
+                onClick={() => router.push("/adminpanel/teacher")}
+                className="px-3 py-1 rounded-lg bg-sky-500 text-white hover:bg-sky-400 transition-colors shrink-0"
+              >
+                العودة للوحة المعلم
+              </button>
+            </div>
+          )}
+
+          <div className="flex flex-1 overflow-hidden relative">
 
           {/* Mobile drawer backdrop */}
           {navOpen && (
@@ -902,30 +924,30 @@ export default function CourseLearningPage() {
                           onProgress={handleTimeUpdate}
                           paused={playerPaused}
                           onEnded={() => void markCompleteFor(player!.videoId)}
-                        />
+                        >
+                          {/* Programmatic blocking question modal (pause mode) */}
+                          {activeQuestion && (
+                            <VideoQuestionModal
+                              question={activeQuestion}
+                              videoId={player!.videoId}
+                              watchSessionId={player!.watchSessionId}
+                              currentSecond={playerTimeRef.current}
+                              onAnswered={handleQuestionAnswered}
+                            />
+                          )}
 
-                        {/* Programmatic blocking question modal (pause mode) */}
-                        {activeQuestion && (
-                          <VideoQuestionModal
-                            question={activeQuestion}
-                            videoId={player!.videoId}
-                            watchSessionId={player!.watchSessionId}
-                            currentSecond={playerTimeRef.current}
-                            onAnswered={handleQuestionAnswered}
-                          />
-                        )}
-
-                        {/* Non-blocking overlay question (overlay mode) */}
-                        {activeOverlayQuestion && (
-                          <VideoQuestionOverlay
-                            question={activeOverlayQuestion}
-                            videoId={player!.videoId}
-                            watchSessionId={player!.watchSessionId}
-                            currentSecond={playerTimeRef.current}
-                            onAnswered={handleOverlayQuestionAnswered}
-                            onDismiss={handleOverlayQuestionDismissed}
-                          />
-                        )}
+                          {/* Non-blocking overlay question (overlay mode) */}
+                          {activeOverlayQuestion && (
+                            <VideoQuestionOverlay
+                              question={activeOverlayQuestion}
+                              videoId={player!.videoId}
+                              watchSessionId={player!.watchSessionId}
+                              currentSecond={playerTimeRef.current}
+                              onAnswered={handleOverlayQuestionAnswered}
+                              onDismiss={handleOverlayQuestionDismissed}
+                            />
+                          )}
+                        </SecurePlayer>
                       </div>
 
                       {/* ── Video progress + mark-complete bar ── */}
@@ -1224,6 +1246,8 @@ export default function CourseLearningPage() {
           </motion.div>
         )}
       </AnimatePresence>
+        </div>
+      )}
     </div>
   );
 }

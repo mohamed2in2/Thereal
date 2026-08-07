@@ -29,6 +29,7 @@ export function SecurePlayer({
   onPlay,
   className = "",
   paused = false,
+  children,
 }: {
   embedUrl: string;
   title: string;
@@ -47,6 +48,7 @@ export function SecurePlayer({
   onPlay?: () => void;
   className?: string;
   paused?: boolean;
+  children?: React.ReactNode;
 }) {
   const { ref: wrapRef, isFs, cssFs, toggle: toggleFs } = useFullscreen<HTMLDivElement>();
 
@@ -72,7 +74,9 @@ export function SecurePlayer({
           onPause={onPause}
           onPlay={onPlay}
           paused={paused}
-        />
+        >
+          {children}
+        </YouTubeSecurePlayer>
       );
   }
 
@@ -218,6 +222,9 @@ export function SecurePlayer({
           aria-hidden
         />
       )}
+
+      {/* Interactive overlays & modals */}
+      {children}
 
       {/* Our fullscreen control sits at the bottom-RIGHT, directly over the
           VdoCipher/Bunny iframe's own (inert — no allowfullscreen) fullscreen

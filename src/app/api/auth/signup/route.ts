@@ -9,6 +9,7 @@ import {
 } from "@/lib/auth";
 import { normalizeEgyptPhone } from "@/lib/phone";
 import { isPhoneVerificationBypassed } from "@/lib/aws-sms";
+import { maybeAutoSendParentPortalLink } from "@/lib/whatsapp/parentToken";
 
 function normalizeStage(value: string) {
   return value.trim();
@@ -139,6 +140,11 @@ export async function POST(req: NextRequest) {
         referredById,
         referredByTeacherId,
       },
+    });
+
+    // Auto-send Parent Portal WhatsApp link if enabled in settings
+    maybeAutoSendParentPortalLink(user.id).catch((err) => {
+      console.error("Auto-send parent portal link error on signup:", err);
     });
 
     if (referredByTeacherId) {

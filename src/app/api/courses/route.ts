@@ -80,7 +80,16 @@ export async function GET(req: NextRequest) {
     });
 
     const accessMap = new Set(accessCodes.map((code) => code.courseId));
-    const coursesWithAccess = courses.map((course) => ({ ...course, hasAccess: accessMap.has(course.id) }));
+    const coursesWithAccess = courses.map((course) => {
+      const isOwnerTeacher = session.role === "teacher" && course.teacherId === session.id;
+      const isAdminPreview = session.role === "admin" || session.role === "superadmin";
+      const hasAccess = accessMap.has(course.id) || isOwnerTeacher || isAdminPreview;
+      return {
+        ...course,
+        hasAccess,
+        isOwnerTeacher,
+      };
+    });
 
     const response = NextResponse.json({ courses: coursesWithAccess, teachers: formattedTeachers });
     response.headers.set("Cache-Control", "private, no-cache, no-store, max-age=0, must-revalidate");

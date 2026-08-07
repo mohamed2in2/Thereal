@@ -198,16 +198,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
   }
 
-  // Teacher/staff have no place in the student watch flow.
-  if (session.role === "teacher" || session.role === "staff") {
-    return NextResponse.json(
-      { error: "صفحة مشاهدة الكورس مخصّصة للطلاب فقط.", code: "ROLE_NOT_ALLOWED" },
-      { status: 403 }
-    );
-  }
-
-  // Admin / superadmin: preview playback — no enrollment, no quota, no slot used.
-  if (session.role === "admin" || session.role === "superadmin") {
+  // Owner Teacher / Admin / Superadmin: preview playback — no enrollment, no quota, no slot used.
+  const isOwnerTeacher = session.role === "teacher" && video.folder.course.teacherId === session.id;
+  if (session.role === "admin" || session.role === "superadmin" || isOwnerTeacher) {
     const embedResult = await resolveEmbedUrl(video);
     const expiresAt = new Date(now.getTime() + WATCH_DURATION_HOURS * 60 * 60 * 1000);
     return NextResponse.json({
@@ -221,6 +214,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       provider: embedResult.provider,
       preview: true,
     });
+  }
+
+  // Other Teachers/staff have no place in the student watch flow.
+  if (session.role === "teacher" || session.role === "staff") {
+    return NextResponse.json(
+      { error: "صفحة مشاهدة الكورس مخصّصة للطلاب فقط.", code: "ROLE_NOT_ALLOWED" },
+      { status: 403 }
+    );
   }
 
   // Device lock: a device-bound token whose device was reset/removed can't play.

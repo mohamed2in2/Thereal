@@ -4,9 +4,8 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
 }
 
 model User {
@@ -70,6 +69,7 @@ model User {
   folderPurchases     FolderPurchase[]
   videoPurchases      VideoPurchase[]
   securityViolations  SecurityViolation[]
+  videoQuestionResponses VideoQuestionResponse[]
 
   // ── Plans (الخطط الدراسية) System Reverse Relations ──
   planEnrollments         PlanEnrollment[]
@@ -698,12 +698,13 @@ model VideoQuestion {
   video           Video                   @relation(fields: [videoId], references: [id], onDelete: Cascade)
   triggerSecond   Int // e.g. 691 for 11:31
   mode            String                  @default("pause") // "pause" | "overlay"
+  questionType    String                  @default("mcq") // "mcq" | "essay"
   questionText    String
-  optionA         String
-  optionB         String
-  optionC         String
-  optionD         String
-  correctOption   String // "A" | "B" | "C" | "D"
+  optionA         String?
+  optionB         String?
+  optionC         String?
+  optionD         String?
+  correctOption   String? // "A" | "B" | "C" | "D" (null for essay)
   explanation     String?
   refireOnRewatch Boolean                 @default(false)
   createdAt       DateTime                @default(now())
@@ -719,8 +720,14 @@ model VideoQuestionResponse {
   videoQuestionId  String
   videoQuestion    VideoQuestion @relation(fields: [videoQuestionId], references: [id], onDelete: Cascade)
   studentId        String
-  selectedOption   String
-  isCorrect        Boolean
+  student          User          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  selectedOption   String? // A/B/C/D for MCQ
+  essayAnswer      String? // Written response text for essay questions
+  isCorrect        Boolean       @default(false)
+  status           String        @default("APPROVED") // "PENDING" | "APPROVED" | "DISAPPROVED"
+  teacherReply     String?
+  reviewedAt       DateTime?
+  reviewedById     String?
   answeredAtSecond Int // actual currentTime when answered, for analytics
   watchSessionId   String? // ties response to a specific viewing
   createdAt        DateTime      @default(now())
@@ -728,6 +735,7 @@ model VideoQuestionResponse {
   @@unique([videoQuestionId, studentId, watchSessionId])
   @@index([videoQuestionId])
   @@index([studentId])
+  @@index([status])
 }
 
 /// In-app notifications for students (streak milestones, new exams, grade outcomes, etc.)

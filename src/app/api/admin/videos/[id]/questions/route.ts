@@ -34,6 +34,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const body = await req.json().catch(() => ({})) as {
     triggerSecond?: number;
     mode?: string;
+    questionType?: string;
     questionText?: string;
     optionA?: string;
     optionB?: string;
@@ -44,20 +45,29 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     refireOnRewatch?: boolean;
   };
 
+  const questionType = body.questionType === "essay" ? "essay" : "mcq";
+
   // Validate required fields
-  if (
-    typeof body.triggerSecond !== "number" ||
-    !body.questionText?.trim() ||
-    !body.optionA?.trim() ||
-    !body.optionB?.trim() ||
-    !body.optionC?.trim() ||
-    !body.optionD?.trim() ||
-    !["A", "B", "C", "D"].includes(body.correctOption ?? "")
-  ) {
+  if (typeof body.triggerSecond !== "number" || !body.questionText?.trim()) {
     return NextResponse.json(
-      { error: "جميع الحقول مطلوبة: السؤال، الخيارات الأربعة، الإجابة الصحيحة، والتوقيت" },
+      { error: "نص السؤال وتوقيت العرض مطلوبان" },
       { status: 400 }
     );
+  }
+
+  if (questionType === "mcq") {
+    if (
+      !body.optionA?.trim() ||
+      !body.optionB?.trim() ||
+      !body.optionC?.trim() ||
+      !body.optionD?.trim() ||
+      !["A", "B", "C", "D"].includes(body.correctOption ?? "")
+    ) {
+      return NextResponse.json(
+        { error: "الخيارات الأربعة والإجابة الصحيحة مطلوبة لأسئلة الاختيار من متعدد" },
+        { status: 400 }
+      );
+    }
   }
 
   // Validate mode
@@ -96,12 +106,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       videoId,
       triggerSecond,
       mode,
-      questionText: body.questionText!.trim(),
-      optionA: body.optionA!.trim(),
-      optionB: body.optionB!.trim(),
-      optionC: body.optionC!.trim(),
-      optionD: body.optionD!.trim(),
-      correctOption: body.correctOption!,
+      questionType,
+      questionText: body.questionText.trim(),
+      optionA: questionType === "mcq" ? body.optionA!.trim() : null,
+      optionB: questionType === "mcq" ? body.optionB!.trim() : null,
+      optionC: questionType === "mcq" ? body.optionC!.trim() : null,
+      optionD: questionType === "mcq" ? body.optionD!.trim() : null,
+      correctOption: questionType === "mcq" ? body.correctOption! : null,
       explanation: body.explanation?.trim() || null,
       refireOnRewatch: body.refireOnRewatch ?? false,
     },
@@ -152,6 +163,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       id: q.id,
       triggerSecond: q.triggerSecond,
       mode: q.mode,
+      questionType: q.questionType || "mcq",
       questionText: q.questionText,
       optionA: q.optionA,
       optionB: q.optionB,

@@ -24,10 +24,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     if (!course) return NextResponse.json({ error: "الكورس غير موجود" }, { status: 404 });
 
     let hasAccess = false;
+    let isOwnerTeacher = false;
     try {
       const session = await getStudentSession();
       if (session) {
-        hasAccess = !!(await prisma.accessCode.findFirst({ where: { courseId: course.id, studentId: session.id } }));
+        isOwnerTeacher = session.role === "teacher" && course.teacherId === session.id;
+        const isAdminPreview = session.role === "admin" || session.role === "superadmin";
+        const hasCode = !!(await prisma.accessCode.findFirst({ where: { courseId: course.id, studentId: session.id } }));
+        hasAccess = hasCode || isOwnerTeacher || isAdminPreview;
       }
     } catch {
       // If auth fails, just show as no-access
@@ -76,6 +80,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         quizCount: f._count.quizzes,
       })),
       hasAccess,
+      isOwnerTeacher,
     };
 
     const response = NextResponse.json({ course: preview });

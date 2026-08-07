@@ -29,6 +29,7 @@ type CoursePreview = {
   freeVideos?: Array<{ id: string; title: string }>;
   hasAccess: boolean;
   allowDirectInstall: boolean;
+  isOwnerTeacher?: boolean;
 };
 
 function buildWhatsAppUrl(phone: string, message: string) {
@@ -473,12 +474,21 @@ export default function CourseProductPage() {
 
                 {/* CTA */}
                 {course.hasAccess ? (
-                  <button
-                    onClick={() => router.push(`/courses/${course.id}/learn`)}
-                    className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-base transition-colors"
-                  >
-                    ادخل الكورس الآن ←
-                  </button>
+                  <div className="space-y-2">
+                    <button
+                      onClick={() => router.push(`/courses/${course.id}/learn`)}
+                      className={`w-full py-3 rounded-xl text-white font-bold text-base transition-colors ${
+                        course.isOwnerTeacher ? "bg-sky-600 hover:bg-sky-500" : "bg-emerald-600 hover:bg-emerald-700"
+                      }`}
+                    >
+                      {course.isOwnerTeacher ? "👁️ معاينة الكورس كمعلّم ←" : "ادخل الكورس الآن ←"}
+                    </button>
+                    {course.isOwnerTeacher && (
+                      <p className="text-xs text-center text-sky-500 font-bold bg-sky-500/10 py-1.5 px-2 rounded-lg">
+                        أنت أستاذ هذا الكورس — يمكنك معاينته ودخوله مباشرة مجاناً دون الحاجة للدفع.
+                      </p>
+                    )}
+                  </div>
                 ) : (!course.isPaid || course.effectivePrice === 0) ? (
                   /* Free course — always direct install, no code needed */
                   <div className="space-y-3">

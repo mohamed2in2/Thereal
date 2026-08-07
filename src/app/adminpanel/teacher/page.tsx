@@ -102,11 +102,13 @@ const cardPad = `${card} p-5 sm:p-6`;
 
 import { ReferredStudentsSection } from "@/components/admin/teacher/ReferredStudentsSection";
 import { TeacherSubscriptionsSection } from "@/components/admin/teacher/TeacherSubscriptionsSection";
+import { InVideoResponsesSection } from "@/components/admin/InVideoResponsesSection";
 
 const SECTION_TITLES: Record<string, string> = {
   dashboard: "لوحة التحكم",
   "my-page": "صفحتي",
   "teacher-subscriptions": "حجوزات واشتراكات الطلاب",
+  "in-video-responses": "إجابات أسئلة الفيديو",
   "quiz-results": "نتائج الاختبارات",
   "create-course": "كورس جديد",
   codes: "أكواد الوصول",
@@ -578,6 +580,7 @@ export default function TeacherDashboardPage() {
     return addQuestionStates[videoId] || {
       triggerTimestamp: "",
       mode: "pause",
+      questionType: "mcq",
       questionText: "",
       optionA: "",
       optionB: "",
@@ -625,6 +628,7 @@ export default function TeacherDashboardPage() {
         body: JSON.stringify({
           triggerSecond: seconds,
           mode: state.mode,
+          questionType: state.questionType || "mcq",
           questionText: state.questionText,
           optionA: state.optionA,
           optionB: state.optionB,
@@ -796,6 +800,9 @@ export default function TeacherDashboardPage() {
           {/* ════════ TEACHER SUBSCRIPTIONS ════════ */}
           {activeSection === "teacher-subscriptions" && <TeacherSubscriptionsSection />}
 
+          {/* ════════ IN-VIDEO RESPONSES ════════ */}
+          {activeSection === "in-video-responses" && <InVideoResponsesSection />}
+
           {/* ════════ REFERRED STUDENTS ════════ */}
           {activeSection === "referred-students" && <ReferredStudentsSection />}
 
@@ -829,13 +836,23 @@ export default function TeacherDashboardPage() {
                             </p>
                           </div>
                         </button>
-                        <button
-                          onClick={() => deleteCourse(c.id)}
-                          aria-label="حذف الكورس"
-                          className="shrink-0 w-9 h-9 rounded-lg flex items-center justify-center text-[var(--error)] hover:bg-[var(--error)]/10 transition-colors"
-                        >
-                          <IconTrash className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => window.open(`/courses/${c.id}/learn`, "_blank")}
+                            title="معاينة الكورس كما يراه الطالب"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-sky-500 bg-sky-500/10 hover:bg-sky-500/20 transition-colors"
+                          >
+                            <IconEye className="w-3.5 h-3.5" /> <span className="hidden sm:inline">معاينة كطالب</span>
+                          </button>
+                          <button
+                            onClick={() => deleteCourse(c.id)}
+                            aria-label="حذف الكورس"
+                            className="w-9 h-9 rounded-lg flex items-center justify-center text-[var(--error)] hover:bg-[var(--error)]/10 transition-colors"
+                          >
+                            <IconTrash className="w-4 h-4" />
+                          </button>
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -996,11 +1013,15 @@ export default function TeacherDashboardPage() {
                                             <div className="space-y-3">
                                               {videoQuestions[video.id].map((q) => {
                                                 const timeFormatted = `${Math.floor(q.triggerSecond / 60)}:${String(q.triggerSecond % 60).padStart(2, "0")}`;
+                                                const isEssayQ = q.questionType === "essay";
                                                 return (
                                                   <div key={q.id} className="p-3 bg-[var(--bg)] border border-[var(--border)] rounded-xl flex flex-col gap-2 relative">
                                                     <div className="flex items-center justify-between gap-3">
                                                       <div className="flex items-center gap-2">
                                                         <span className="bg-sky-500/10 text-sky-500 text-[10px] font-bold px-2 py-0.5 rounded-lg" dir="ltr">⏱ {timeFormatted}</span>
+                                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-lg ${isEssayQ ? "bg-purple-500/10 text-purple-500" : "bg-blue-500/10 text-blue-500"}`}>
+                                                          {isEssayQ ? "📝 سؤال مقالي" : "اختيار من متعدد"}
+                                                        </span>
                                                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-lg ${q.mode === "pause" ? "bg-amber-500/10 text-amber-500" : "bg-teal-500/10 text-teal-500"}`}>
                                                           {q.mode === "pause" ? "إيقاف الفيديو" : "عرض بدون إيقاف"}
                                                         </span>
@@ -1017,12 +1038,14 @@ export default function TeacherDashboardPage() {
                                                       </button>
                                                     </div>
                                                     <p className="text-xs font-semibold text-[var(--ink)]">{q.questionText}</p>
-                                                    <div className="grid grid-cols-2 gap-2 text-[11px] text-[var(--ink-muted)] mt-1">
-                                                      <div className={q.correctOption === "A" ? "text-emerald-500 font-bold" : ""}>أ) {q.optionA}</div>
-                                                      <div className={q.correctOption === "B" ? "text-emerald-500 font-bold" : ""}>ب) {q.optionB}</div>
-                                                      <div className={q.correctOption === "C" ? "text-emerald-500 font-bold" : ""}>ج) {q.optionC}</div>
-                                                      <div className={q.correctOption === "D" ? "text-emerald-500 font-bold" : ""}>د) {q.optionD}</div>
-                                                    </div>
+                                                    {!isEssayQ && (
+                                                      <div className="grid grid-cols-2 gap-2 text-[11px] text-[var(--ink-muted)] mt-1">
+                                                        <div className={q.correctOption === "A" ? "text-emerald-500 font-bold" : ""}>أ) {q.optionA}</div>
+                                                        <div className={q.correctOption === "B" ? "text-emerald-500 font-bold" : ""}>ب) {q.optionB}</div>
+                                                        <div className={q.correctOption === "C" ? "text-emerald-500 font-bold" : ""}>ج) {q.optionC}</div>
+                                                        <div className={q.correctOption === "D" ? "text-emerald-500 font-bold" : ""}>د) {q.optionD}</div>
+                                                      </div>
+                                                    )}
                                                     {q.explanation && (
                                                       <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1">الشرح: {q.explanation}</p>
                                                     )}
@@ -1031,7 +1054,9 @@ export default function TeacherDashboardPage() {
                                                     {q.analytics && q.analytics.totalResponses > 0 && (
                                                       <div className="mt-2 border-t border-[var(--border)]/60 pt-2 flex items-center gap-4 text-[10px] text-[var(--ink-muted)]">
                                                         <span>إجمالي الإجابات: <strong>{q.analytics.totalResponses}</strong></span>
-                                                        <span>نسبة الإجابة الصحيحة: <strong className="text-emerald-500">{q.analytics.correctPercent}%</strong></span>
+                                                        {!isEssayQ && (
+                                                          <span>نسبة الإجابة الصحيحة: <strong className="text-emerald-500">{q.analytics.correctPercent}%</strong></span>
+                                                        )}
                                                         <span>متوسط زمن الاستجابة: <strong>+{q.analytics.avgResponseDelay}ث</strong></span>
                                                       </div>
                                                     )}
@@ -1044,7 +1069,18 @@ export default function TeacherDashboardPage() {
                                           {/* Add timed question form */}
                                           <form onSubmit={(e) => handleAddQuestion(e, video.id)} className="border-t border-[var(--border)] pt-3 space-y-3">
                                             <h5 className="text-[11px] font-bold text-[var(--ink)]">إضافة سؤال جديد للفيديو</h5>
-                                            <div className="grid grid-cols-2 gap-2">
+                                            <div className="grid grid-cols-3 gap-2">
+                                              <div>
+                                                <label className={label}>نوع السؤال *</label>
+                                                <select
+                                                  value={getAddQuestionState(video.id).questionType || "mcq"}
+                                                  onChange={(e) => updateAddQuestionState(video.id, { questionType: e.target.value })}
+                                                  className={input}
+                                                >
+                                                  <option value="mcq">اختيار من متعدد (MCQ)</option>
+                                                  <option value="essay">سؤال مقالي (تصحيح يدوي)</option>
+                                                </select>
+                                              </div>
                                               <div>
                                                 <label className={label}>التوقيت (ثواني أو MM:SS) *</label>
                                                 <input
@@ -1075,59 +1111,13 @@ export default function TeacherDashboardPage() {
                                               <input
                                                 type="text"
                                                 required
-                                                placeholder="ما هي نتيجة العملية السابقة؟"
+                                                placeholder="اكتب السؤال بوضوح للطالب..."
                                                 value={getAddQuestionState(video.id).questionText}
                                                 onChange={(e) => updateAddQuestionState(video.id, { questionText: e.target.value })}
                                                 className={input}
                                               />
                                             </div>
 
-                                            <div className="grid grid-cols-2 gap-2">
-                                              <div>
-                                                <label className={label}>الخيار أ *</label>
-                                                <input
-                                                  type="text"
-                                                  required
-                                                  value={getAddQuestionState(video.id).optionA}
-                                                  onChange={(e) => updateAddQuestionState(video.id, { optionA: e.target.value })}
-                                                  className={input}
-                                                />
-                                              </div>
-                                              <div>
-                                                <label className={label}>الخيار ب *</label>
-                                                <input
-                                                  type="text"
-                                                  required
-                                                  value={getAddQuestionState(video.id).optionB}
-                                                  onChange={(e) => updateAddQuestionState(video.id, { optionB: e.target.value })}
-                                                  className={input}
-                                                />
-                                              </div>
-                                              <div>
-                                                <label className={label}>الخيار ج *</label>
-                                                <input
-                                                  type="text"
-                                                  required
-                                                  value={getAddQuestionState(video.id).optionC}
-                                                  onChange={(e) => updateAddQuestionState(video.id, { optionC: e.target.value })}
-                                                  className={input}
-                                                />
-                                              </div>
-                                              <div>
-                                                <label className={label}>الخيار د *</label>
-                                                <input
-                                                  type="text"
-                                                  required
-                                                  value={getAddQuestionState(video.id).optionD}
-                                                  onChange={(e) => updateAddQuestionState(video.id, { optionD: e.target.value })}
-                                                  className={input}
-                                                />
-                                              </div>
-                                            </div>
-
-                                            <div className="grid grid-cols-2 gap-2">
-                                              <div>
-                                                <label className={label}>الإجابة الصحيحة *</label>
                                                 <select
                                                   value={getAddQuestionState(video.id).correctOption}
                                                   onChange={(e) => updateAddQuestionState(video.id, { correctOption: e.target.value })}

@@ -67,7 +67,7 @@ const fmt = (s: number) => {
 };
 
 export function YouTubeSecurePlayer({
-  videoId, title, watermark, onEnded, startSeconds = 0, onProgress, onTimeUpdate, onPause, onPlay, paused = false,
+  videoId, title, watermark, onEnded, startSeconds = 0, onProgress, onTimeUpdate, onPause, onPlay, paused = false, children,
 }: {
   videoId: string;
   title: string;
@@ -84,6 +84,7 @@ export function YouTubeSecurePlayer({
   /** Fired when playback resumes. */
   onPlay?: () => void;
   paused?: boolean;
+  children?: React.ReactNode;
 }) {
   const { ref: wrapRef, isFs, cssFs, toggle: toggleFs } = useFullscreen<HTMLDivElement>();
   const hostRef = useRef<HTMLDivElement>(null);
@@ -214,6 +215,87 @@ export function YouTubeSecurePlayer({
     setCur(t);
   };
 
+  const [seekBadge, setSeekBadge] = useState<string | null>(null);
+
+  // Keyboard controls for seeking (+5s/-5s), play/pause, fullscreen, mute
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      const p = playerRef.current;
+      if (!p) return;
+
+      const key = e.key;
+      const lowerKey = key.toLowerCase();
+
+      if (key === "ArrowRight" || lowerKey === "l") {
+        e.preventDefault();
+        const d = p.getDuration?.() || 0;
+        const c = p.getCurrentTime?.() || 0;
+        const n = Math.min(d > 0 ? d : c + 5, c + 5);
+        p.seekTo(n, true);
+        setCur(n);
+        setSeekBadge("⏩ +5ث");
+        clearTimeout(timer);
+        timer = setTimeout(() => setSeekBadge(null), 800);
+      } else if (key === "ArrowLeft" || lowerKey === "j") {
+        e.preventDefault();
+        const c = p.getCurrentTime?.() || 0;
+        const n = Math.max(0, c - 5);
+        p.seekTo(n, true);
+        setCur(n);
+        setSeekBadge("⏪ -5ث");
+        clearTimeout(timer);
+        timer = setTimeout(() => setSeekBadge(null), 800);
+      } else if (key === " " || lowerKey === "k") {
+        e.preventDefault();
+        if (playerRef.current) {
+          try {
+            const isP = playerRef.current.getPlayerState?.() === 1;
+            if (isP) playerRef.current.pauseVideo();
+            else playerRef.current.playVideo();
+          } catch {
+            /* noop */
+          }
+        }
+      } else if (lowerKey === "f") {
+        e.preventDefault();
+        toggleFs();
+      } else if (lowerKey === "m") {
+        e.preventDefault();
+        if (playerRef.current) {
+          try {
+            if (playerRef.current.isMuted()) {
+              playerRef.current.unMute();
+              setMuted(false);
+            } else {
+              playerRef.current.mute();
+              setMuted(true);
+            }
+          } catch {
+            /* noop */
+          }
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [toggleFs]);
+
   const pct = dur ? Math.min(100, (cur / dur) * 100) : 0;
 
   return (
@@ -254,6 +336,18 @@ export function YouTubeSecurePlayer({
 
       {/* Forensic watermark — child of the fullscreen element */}
       <VideoWatermark label={watermark} />
+
+      {/* Seek badge overlay */}
+      {seekBadge && (
+        <div className="absolute inset-0 z-25 flex items-center justify-center pointer-events-none">
+          <span className="px-4 py-2 rounded-2xl bg-black/80 backdrop-blur-md text-white font-bold text-sm shadow-2xl animate-fade-in border border-white/10" dir="ltr">
+            {seekBadge}
+          </span>
+        </div>
+      )}
+
+      {/* Interactive modals & overlays */}
+      {children}
 
       {/* Loading shimmer */}
       {!ready && (

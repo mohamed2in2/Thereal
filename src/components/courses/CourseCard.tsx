@@ -21,6 +21,7 @@ interface CourseCardProps {
     discountPercent?: number | null;
     discountExpiresAt?: string | null;
     allowDirectInstall?: boolean;
+    isOwnerTeacher?: boolean;
   };
   onCodeApplied: () => void;
 }
@@ -179,10 +180,21 @@ export function CourseCard({ course, onCodeApplied }: CourseCardProps) {
         {course.hasAccess && (
           <div
             className="absolute top-4 right-0 flex items-center gap-1.5 font-bold text-xs text-white"
-            style={{ padding: "6px 14px 6px 10px", background: "var(--brand)", borderRadius: "0 0 0 12px", boxShadow: "-3px 3px 12px rgba(14,110,98,.4)" }}
+            style={{
+              padding: "6px 14px 6px 10px",
+              background: course.isOwnerTeacher ? "#0284c7" : "var(--brand)",
+              borderRadius: "0 0 0 12px",
+              boxShadow: "-3px 3px 12px rgba(14,110,98,.4)",
+            }}
           >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
-            أنت مشترك
+            {course.isOwnerTeacher ? (
+              <>👁️ معاينة كطالب</>
+            ) : (
+              <>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+                أنت مشترك
+              </>
+            )}
           </div>
         )}
 
@@ -268,9 +280,12 @@ export function CourseCard({ course, onCodeApplied }: CourseCardProps) {
               <button
                 onClick={() => router.push(`/courses/${course.id}/learn`)}
                 className="w-full py-2.5 rounded-xl font-bold text-sm text-white transition-all active:scale-[0.98] hover:opacity-90"
-                style={{ background: "linear-gradient(135deg,var(--brand),var(--brand-strong))", boxShadow: "0 4px 14px -4px var(--brand-shadow)" }}
+                style={{
+                  background: course.isOwnerTeacher ? "linear-gradient(135deg,#0284c7,#0369a1)" : "linear-gradient(135deg,var(--brand),var(--brand-strong))",
+                  boxShadow: "0 4px 14px -4px var(--brand-shadow)",
+                }}
               >
-                الدخول للكورس ←
+                {course.isOwnerTeacher ? "👁️ معاينة الكورس ←" : "الدخول للكورس ←"}
               </button>
               <button
                 onClick={() => router.push(`/courses/${course.id}`)}

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getStudentSessionWithRetry } from '@/lib/auth'
 import { normalizeEgyptPhone } from '@/lib/phone'
+import { maybeAutoSendParentPortalLink } from '@/lib/whatsapp/parentToken'
 
 export async function POST(request: NextRequest) {
   try {
@@ -37,16 +38,16 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    let user = await prisma.user.findUnique({
+    let dbUser = await prisma.user.findUnique({
       where: { id: session.id },
     })
 
-    if (!user) {
-      user = await prisma.user.findUnique({ where: { email: session.email } })
+    if (!dbUser) {
+      dbUser = await prisma.user.findUnique({ where: { email: session.email } })
     }
 
-    if (!user) {
-      user = await prisma.user.create({
+    if (!dbUser) {
+      dbUser = await prisma.user.create({
         data: {
           email: session.email,
           name: session.name,
@@ -57,8 +58,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Update user profile with trimmed values
-    user = await prisma.user.update({
-      where: { id: user.id },
+    const updatedUser = await prisma.user.update({
+      where: { id: dbUser.id },
       data: {
         name: name.trim(),
         phone: normalizedPhone,
@@ -69,8 +70,12 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    maybeAutoSendParentPortalLink(updatedUser.id).catch((err) => {
+      console.error("Auto-send parent portal link error on profile completion:", err);
+    });
+
     return NextResponse.json(
-      { user },
+      { user: updatedUser },
       { status: 200 }
     )
   } catch (error) {
