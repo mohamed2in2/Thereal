@@ -103,6 +103,24 @@ export function AIAssistant() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Listen for custom trigger from "Ask AI" buttons under video players
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const customEvent = e as CustomEvent<{ initialPrompt?: string }>;
+      setMessages([WELCOME_MESSAGE]);
+      if (customEvent.detail?.initialPrompt) {
+        setInput(customEvent.detail.initialPrompt);
+      } else {
+        setInput("");
+      }
+      setSending(false);
+      setUnread(false);
+      setOpen(true);
+    };
+    window.addEventListener("open-ai-assistant", handler);
+    return () => window.removeEventListener("open-ai-assistant", handler);
+  }, []);
+
   const send = async (text?: string) => {
     const message = (text ?? input).trim();
     if (!message || sending) return;
@@ -140,15 +158,39 @@ export function AIAssistant() {
     }
   };
 
-  const hideOn = ["/adminpanel", "/login", "/signup", "/forgot-password", "/profile-setup"];
-  const shouldHide = hideOn.some((p) => pathname?.startsWith(p));
+  // Strictly block and remove AI assistant on all exam, quiz, and homework pages
+  const isExamOrHomework = [
+    "/exam",
+    "/exams",
+    "/daily-exam",
+    "/quiz",
+    "/quizzes",
+    "/homework",
+    "/homeworks",
+    "/wrong-questions",
+  ].some((p) => pathname?.includes(p));
 
-  if (!authChecked || !isStudent || !aiEnabled || shouldHide) return null;
+  // Admin & auth pages
+  const isAuthOrAdmin = [
+    "/adminpanel",
+    "/login",
+    "/signup",
+    "/forgot-password",
+    "/profile-setup",
+  ].some((p) => pathname?.startsWith(p));
+
+  // In lesson watch pages, hide the floating button so it doesn't overlap the video player or fullscreen button.
+  // Instead, the dedicated button under the video triggers the assistant modal smoothly.
+  const isWatchMode = pathname?.includes("/watch") || pathname?.includes("/learn");
+
+  if (!authChecked || !isStudent || !aiEnabled || isAuthOrAdmin || isExamOrHomework) {
+    return null;
+  }
 
   return (
     <>
-      {/* Floating Button */}
-      {!open && (
+      {/* Floating Button (Hidden in watch mode to avoid blocking fullscreen and video controls) */}
+      {!open && !isWatchMode && (
         <button
           onClick={() => {
             setMessages([WELCOME_MESSAGE]);

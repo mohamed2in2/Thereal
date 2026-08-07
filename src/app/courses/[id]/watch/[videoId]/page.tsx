@@ -531,6 +531,20 @@ export default function VideoWatchPage() {
                 </p>
               </div>
               <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.dispatchEvent(
+                      new CustomEvent("open-ai-assistant", {
+                        detail: { initialPrompt: `اشرحلي درس ${session.video.title}` },
+                      })
+                    );
+                  }}
+                  className="px-3.5 py-2 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white font-bold text-xs rounded-xl transition-all shadow-md hover:shadow-teal-500/20 active:scale-95 flex items-center gap-1.5 shrink-0 cursor-pointer border border-teal-400/30"
+                >
+                  <span>🤖</span>
+                  <span>اسأل المساعد الذكي</span>
+                </button>
                 {session.teacherSlug && (
                   <Link
                     href={

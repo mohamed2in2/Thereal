@@ -973,6 +973,22 @@ export default function CourseLearningPage() {
                             )}
                             {watchPct === null && <div className="flex-1" />}
 
+                            {/* Ask AI button under the video */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                window.dispatchEvent(
+                                  new CustomEvent("open-ai-assistant", {
+                                    detail: { initialPrompt: `اشرحلي درس ${activeVideo?.title || ""}` },
+                                  })
+                                );
+                              }}
+                              className="shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white shadow-sm hover:shadow-teal-500/20 active:scale-95 transition-all cursor-pointer border border-teal-400/30"
+                            >
+                              <span>🤖</span>
+                              <span>اسأل المساعد الذكي</span>
+                            </button>
+
                             {/* Mark-complete button */}
                             <button
                               onClick={() => void markCompleteFor(player!.videoId)}

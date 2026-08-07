@@ -83,23 +83,18 @@ export interface AIChatResult {
   source: "primary" | "backup" | "fallback";
 }
 
-const SYSTEM_PROMPT = `أنت "مرشد Code-UP"، الأخ الأكبر والموجه الذكي المشجع جداً للمتعلم على منصة Code-UP.
+const SYSTEM_PROMPT = `أنت "مرشد Code-UP"، الموجه الذكي والمعلم المساند للمتعلم على منصة Code-UP.
 
 شخصيتك وأسلوبك:
-- ترحب بالمتعلم بأسلوب دافئ للغاية، دمث ومحمس (استخدم كلمات دافئة مثل: "يا بطل"، "من عيوني"، "يا صديقي العزيز"، "سؤال ممتاز منك"، "ولا يهمك يا شاطر"، "أنا معك دايماً").
-- تتحدث باللغة العربية المصرية الودودة، السلسة والواضحة جداً.
-- يُمنع تماماً وبشكل قاطع استخدام أي حروف أو كلمات من لغات أخرى غير العربية والإنجليزية (ممنوع تماماً أي حروف روسية أو كيريلية أو رموز غريبة).
-- كن دائم التحفيز والإيجابية - شجع المتعلم على التعلم وبناء مستقبله بثقة.
-- إجاباتك عن المفاهيم البرمجية والتعليمية يجب أن تكون بسيطة، ممتعة، وملهمة وتستعين بأمثلة حية ومحببة.
-
-صلاحياتك:
-- لديك صلاحية لرؤية بيانات المتعلم (درجاته، تقدمه، كورساته، نقاط ضعفه).
-- تساعده في وضع خطط مذاكرة، شرح المفاهيم، رفع طلبات تعديل الدرجات، وتوجيهه في الموقع.
+- أسلوبك ودود ودافيء باللغة العربية المصرية المبسطة، وتتحدث مباشرة في صلب الموضوع بإيجاز ونقاط واضحة دون إطالة غير مفيدة.
+- ممنوع تماماً أي حروف أو رموز روسية أو كيريلية أو نصوص مكسورة.
+- تشرح المفاهيم البرمجية والعلمية بأمثلة حية وسريعة وسهلة الفهم.
+- تشجع الطالب وتساعده في تحليل الأداء، خطط المذاكرة، وطلبات تعديل الدرجات.
 
 قواعد الرد:
 - الرد يجب أن يكون JSON بالشكل التالي حصراً:
 {
-  "message": "ردك الدافئ والمحفز للمتعلم باللغة العربية المصرية",
+  "message": "ردك الودود المباشر والموجز باللغة العربية المصرية",
   "actions": [
     {
       "type": "create_grade_request" | "create_ticket" | "submit_feedback" | "navigate" | "show_insights" | "none",
@@ -142,26 +137,19 @@ function summarizeContext(ctx: StudentContext): string {
 
 الملف الشخصي:
 - الاسم: ${ctx.profile.name}
-- العمر: ${ctx.profile.age ?? "غير محدد"}
-- المرحلة التدريبية: ${ctx.profile.educationalStage ?? "غير محددة"}
+- المرحلة: ${ctx.profile.educationalStage ?? "غير محددة"}
 
-الإحصائيات العامة:
+الإحصائيات:
 - عدد الكورسات: ${ctx.overallStats.totalCourses}
 - متوسط الدرجات: ${ctx.overallStats.averageScore}%
-- عدد الكويزات المحلولة: ${ctx.overallStats.totalQuizzesTaken}
-- عدد الفيديوهات المشاهَدة: ${ctx.overallStats.totalVideosWatched}
+- كويزات: ${ctx.overallStats.totalQuizzesTaken}
+- فيديوهات: ${ctx.overallStats.totalVideosWatched}
 
-الكورسات وتقدم المتعلم فيها:
-${courseLines || "لم يسجل في كورسات بعد"}
+الكورسات:
+${courseLines || "لم يسجل بعد"}
 
-نقاط الضعف الحالية:
-${weakAreasText}
-
-رؤى سابقة من الذكاء الاصطناعي:
-${insightsText}
-
-ملاحظات المتعلم الأخيرة:
-${feedbackText}`;
+نقاط الضعف:
+${weakAreasText}`;
 }
 
 async function callGroq(messages: ChatMessage[]): Promise<AIChatResult | null> {
@@ -181,10 +169,10 @@ async function callGroq(messages: ChatMessage[]): Promise<AIChatResult | null> {
           { role: "system", content: sys },
           ...userMsgs.map((m) => ({ role: m.role, content: m.content })),
         ],
-        max_tokens: 1200,
+        max_tokens: 600,
         temperature: 0.3,
       }),
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(7000),
     });
     if (!res.ok) {
       const errData = await res.json().catch(() => ({}));
@@ -219,10 +207,10 @@ async function callPrimary(messages: ChatMessage[]): Promise<AIChatResult | null
           { role: "system", content: sys },
           ...userMsgs.map((m) => ({ role: m.role, content: m.content })),
         ],
-        max_tokens: 1200,
-        temperature: 0.6,
+        max_tokens: 600,
+        temperature: 0.5,
       }),
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(7000),
     });
     if (!res.ok) throw new Error(`Primary API: ${res.status}`);
     const data = (await res.json()) as { choices: Array<{ message: { content: string } }> };
@@ -253,9 +241,9 @@ async function callBackup(messages: ChatMessage[]): Promise<AIChatResult | null>
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: [{ parts: [{ text: promptText }] }],
-          generationConfig: { maxOutputTokens: 1200, temperature: 0.7 },
+          generationConfig: { maxOutputTokens: 600, temperature: 0.6 },
         }),
-        signal: AbortSignal.timeout(15000),
+        signal: AbortSignal.timeout(7000),
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
