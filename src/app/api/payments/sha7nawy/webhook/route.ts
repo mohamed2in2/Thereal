@@ -4,6 +4,7 @@ import {
   getSha7nawyPaymentInfo,
   SHA7NAWY_PENDING_TYPE,
   SHA7NAWY_CREDITED_TYPE,
+  SHA7NAWY_PAID_STATUSES,
   sha7nawyRefNote,
 } from "@/lib/sha7nawy";
 
@@ -13,8 +14,7 @@ export async function POST(req: NextRequest) {
     if (webhookSecret) {
       const incomingSecret =
         req.headers.get("x-webhook-secret") ||
-        req.headers.get("x-sha7nawy-secret") ||
-        req.nextUrl.searchParams.get("secret");
+        req.headers.get("x-sha7nawy-secret");
       if (!incomingSecret || incomingSecret !== webhookSecret) {
         const ip = req.headers.get("x-forwarded-for")?.split(",")[0] || req.headers.get("x-real-ip") || "127.0.0.1";
         console.warn(`[Sha7nawy Webhook] Unauthorized secret attempt from IP: ${ip}`);
@@ -35,12 +35,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, message: "Ignored non-transaction event" }, { status: 200 });
     }
 
-    if (status === "rejected") {
+    if (status === "rejected" || status === "failed") {
       console.warn(`[Sha7nawy Webhook] Transaction ${reference} was rejected/failed.`);
       return NextResponse.json({ success: true, processed: false, reason: "Transaction rejected" }, { status: 200 });
     }
 
-    const isCompleted = status === "completed" || status === "success" || status === "paid";
+    const isCompleted = SHA7NAWY_PAID_STATUSES.includes(String(status || "").toLowerCase());
     if (!isCompleted) {
       return NextResponse.json({ success: true, processed: false, reason: `Status is ${status}` }, { status: 200 });
     }
@@ -65,7 +65,8 @@ export async function POST(req: NextRequest) {
     }
 
     const verifiedData = verified.data;
-    if (verifiedData.status !== "completed") {
+    const verifiedStatus = String(verifiedData.status || "").toLowerCase();
+    if (!SHA7NAWY_PAID_STATUSES.includes(verifiedStatus)) {
       console.warn(`[Sha7nawy Webhook] Server status is ${verifiedData.status} for ref ${reference}`);
       return NextResponse.json({ error: "Verification status mismatch" }, { status: 400 });
     }
@@ -76,24 +77,32 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Reference mismatch" }, { status: 400 });
     }
 
-    // The pending entry recorded at payment-creation time is the source of truth.
-    const pendingTx = await prisma.balanceTransaction.findFirst({
+    // Guard 2: Reference match with strict boundary check (prevents prefix collisions while supporting legacy formats)
+    const refPrefix = sha7nawyRefNote(String(reference));
+
+    const candidates = await prisma.balanceTransaction.findMany({
       where: {
         type: SHA7NAWY_PENDING_TYPE,
-        note: sha7nawyRefNote(String(reference)),
+        note: { startsWith: refPrefix },
       },
-      select: { id: true, userId: true, amount: true },
+      select: { id: true, userId: true, amount: true, note: true },
     });
 
+    const pendingTx = candidates.find(
+      (c) => c.note === refPrefix || c.note?.startsWith(`${refPrefix}|`) || c.note?.startsWith(`${refPrefix} `)
+    ) ?? null;
+
     if (!pendingTx) {
-      // Idempotency: maybe it was already credited in an earlier webhook delivery.
-      const alreadyCredited = await prisma.balanceTransaction.findFirst({
+      const creditedCandidates = await prisma.balanceTransaction.findMany({
         where: {
           type: SHA7NAWY_CREDITED_TYPE,
-          note: sha7nawyRefNote(String(reference)),
+          note: { startsWith: refPrefix },
         },
-        select: { id: true },
+        select: { id: true, note: true },
       });
+      const alreadyCredited = creditedCandidates.find(
+        (c) => c.note === refPrefix || c.note?.startsWith(`${refPrefix}|`) || c.note?.startsWith(`${refPrefix} `) || c.note?.startsWith(`${refPrefix} —`)
+      ) ?? null;
       if (alreadyCredited) {
         return NextResponse.json({ success: true, processed: false, reason: "Already credited" }, { status: 200 });
       }
@@ -131,7 +140,7 @@ export async function POST(req: NextRequest) {
         where: { id: pendingTx.id, type: SHA7NAWY_PENDING_TYPE },
         data: {
           type: SHA7NAWY_CREDITED_TYPE,
-          note: `${sha7nawyRefNote(String(reference))} — شحن محفظة عبر Sha7nawy`,
+          note: `${pendingTx.note} — شحن محفظة عبر Sha7nawy`,
         },
       });
 

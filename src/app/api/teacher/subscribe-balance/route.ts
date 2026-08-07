@@ -65,24 +65,33 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // B14: Yearly plan grants 12 months (not 6)
+    // B14: Yearly plan grants 6 months (full 2-term academic year)
     const monthsMap: Record<string, number> = {
       monthly: 1,
       termly: 3,
-      yearly: 12,
+      yearly: 6,
     };
 
     const months = monthsMap[planType] || 1;
     const isLanguages = languageTrack === "languages" || languageTrack === "english";
-    const langRate = profile.priceLanguagesMonthly ?? 50;
-    const languageSurcharge = isLanguages ? langRate * months : 0;
+
+    // B9: Do not hide misconfiguration with a silent default — require explicit teacher setting
+    if (isLanguages && (profile.priceLanguagesMonthly === null || profile.priceLanguagesMonthly === undefined || profile.priceLanguagesMonthly < 0)) {
+      return NextResponse.json(
+        { error: "لسه الأستاذ محددش سعر مسار اللغات (Language Track). كلّم الدعم." },
+        { status: 400 }
+      );
+    }
+
+    const langRate = isLanguages ? (profile.priceLanguagesMonthly ?? 0) : 0;
+    const languageSurcharge = langRate * months;
     const numAmount = planPrice + languageSurcharge;
 
     const teacherName = profile.displayName || profile.slug;
     const planNames: Record<string, string> = {
       monthly: "شهر واحد (1 Month)",
       termly: "3 شهور (3 Months)",
-      yearly: "12 شهر (1 Year)",
+      yearly: "6 شهور (6 Months)",
     };
     const planLabel = `${planNames[planType] || "اشتراك"} ${isLanguages ? "(لغات / إنجليزي)" : "(عربي)"}`;
 

@@ -82,6 +82,8 @@ export const WALLET_INSTRUCTIONS: Record<string, string> = Object.fromEntries(
 export const SHA7NAWY_PENDING_TYPE = "credit_sha7nawy_pending";
 export const SHA7NAWY_CREDITED_TYPE = "credit_sha7nawy_wallet";
 
+export const SHA7NAWY_PAID_STATUSES = ["completed", "paid", "settled", "success"];
+
 export function sha7nawyRefNote(reference: string): string {
   return `sha7nawy_ref:${reference}`;
 }

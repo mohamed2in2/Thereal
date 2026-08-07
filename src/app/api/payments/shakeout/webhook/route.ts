@@ -14,8 +14,7 @@ export async function POST(req: NextRequest) {
     if (webhookSecret) {
       const incomingSecret =
         req.headers.get("x-webhook-secret") ||
-        req.headers.get("x-shakeout-secret") ||
-        req.nextUrl.searchParams.get("secret");
+        req.headers.get("x-shakeout-secret");
       if (!incomingSecret || incomingSecret !== webhookSecret) {
         const ip = req.headers.get("x-forwarded-for")?.split(",")[0] || req.headers.get("x-real-ip") || "127.0.0.1";
         console.warn(`[Shake-Out Webhook] Unauthorized secret attempt from IP: ${ip}`);
@@ -41,7 +40,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, processed: false, reason: "Transaction rejected" }, { status: 200 });
     }
 
-    const isCompleted = status === "completed" || status === "success" || status === "paid";
+    const isCompleted = SHAKEOUT_PAID_STATUSES.includes(String(status || "").toLowerCase());
     if (!isCompleted) {
       return NextResponse.json({ success: true, processed: false, reason: `Status is ${status}` }, { status: 200 });
     }
@@ -73,25 +72,32 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Verification status mismatch" }, { status: 400 });
     }
 
-    // Guard 2: Exact reference match (no substring contains, no split)
-    const exactRefNote = shakeOutRefNote(String(reference));
+    // Guard 2: Reference match with strict boundary check (prevents prefix collisions while supporting legacy formats)
+    const refPrefix = shakeOutRefNote(String(reference));
 
-    const pendingTx = await prisma.balanceTransaction.findFirst({
+    const candidates = await prisma.balanceTransaction.findMany({
       where: {
         type: SHAKEOUT_PENDING_TYPE,
-        note: exactRefNote,
+        note: { startsWith: refPrefix },
       },
-      select: { id: true, userId: true, amount: true },
+      select: { id: true, userId: true, amount: true, note: true },
     });
 
+    const pendingTx = candidates.find(
+      (c) => c.note === refPrefix || c.note?.startsWith(`${refPrefix}|`) || c.note?.startsWith(`${refPrefix} `)
+    ) ?? null;
+
     if (!pendingTx) {
-      const alreadyCredited = await prisma.balanceTransaction.findFirst({
+      const creditedCandidates = await prisma.balanceTransaction.findMany({
         where: {
           type: SHAKEOUT_CREDITED_TYPE,
-          note: exactRefNote,
+          note: { startsWith: refPrefix },
         },
-        select: { id: true },
+        select: { id: true, note: true },
       });
+      const alreadyCredited = creditedCandidates.find(
+        (c) => c.note === refPrefix || c.note?.startsWith(`${refPrefix}|`) || c.note?.startsWith(`${refPrefix} `) || c.note?.startsWith(`${refPrefix} —`)
+      ) ?? null;
       if (alreadyCredited) {
         return NextResponse.json({ success: true, processed: false, reason: "Already credited" }, { status: 200 });
       }
@@ -99,7 +105,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unknown transaction reference" }, { status: 400 });
     }
 
-    // Guard 3: Client match
+    // Guard 3: Client match (if provided by gateway)
     if (verifiedData.client && verifiedData.client !== pendingTx.userId) {
       console.warn(
         `[Shake-Out Webhook] Client mismatch: server client=${verifiedData.client} pending user=${pendingTx.userId}`
@@ -129,7 +135,7 @@ export async function POST(req: NextRequest) {
         where: { id: pendingTx.id, type: SHAKEOUT_PENDING_TYPE },
         data: {
           type: SHAKEOUT_CREDITED_TYPE,
-          note: `${exactRefNote} — شحن محفظة عبر Shake-Out`,
+          note: `${pendingTx.note} — شحن محفظة عبر Shake-Out`,
         },
       });
 

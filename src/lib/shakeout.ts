@@ -209,6 +209,7 @@ export async function getShakeOutInvoiceStatus(invoiceId: string, invoiceRef?: s
         method: invData.payment_method || "card",
         reference: invData.invoice_id || id,
         status: invData.invoice_status || "unknown",
+        client: invData.client || undefined,
         invoice_id: invData.invoice_id,
         invoice_ref: invData.invoice_ref,
       },
