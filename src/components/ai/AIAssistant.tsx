@@ -50,53 +50,40 @@ function writeAuthCache(isStudent: boolean, aiEnabled: boolean) {
 }
 
 export function AIAssistant() {
-  const router  = useRouter();
+  const router = useRouter();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
-  const [isStudent, setIsStudent] = useState(false);
-  const [aiEnabled, setAiEnabled] = useState(false);
+  const [hasUser, setHasUser] = useState(true);
+  const [aiEnabled, setAiEnabled] = useState(true);
   const [unread, setUnread] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  /*
-   * Auth check — lazy & cached.
-   * 1. Try sessionStorage cache first (0 network requests if hit).
-   * 2. If cache miss, wait 1.5s after mount so it doesn't race with critical
-   *    page requests (LCP data, course API, etc.), then fetch.
-   * 3. Result is cached for 10 minutes in sessionStorage.
-   */
   useEffect(() => {
-    const cached = readAuthCache();
-    if (cached) {
-      setIsStudent(cached.isStudent);
-      setAiEnabled(cached.aiEnabled);
-      setAuthChecked(true);
-      return;
-    }
+    // Quick auth & status check
+    fetch("/api/auth/me", { credentials: "include" })
+      .then((r) => r.json())
+      .then((auth) => {
+        if (auth?.user) {
+          setHasUser(true);
+        } else {
+          setHasUser(false);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setAuthChecked(true));
 
-    let cancelled = false;
-    const timer = setTimeout(async () => {
-      try {
-        const [auth, status] = await Promise.all([
-          fetch("/api/auth/me", { credentials: "include" }).then((r) => r.json()).catch(() => null),
-          fetch("/api/ai/status").then((r) => r.json()).catch(() => null),
-        ]);
-        if (cancelled) return;
-        const student = auth?.user?.role === "student";
-        const enabled = status?.enabled === true;
-        setIsStudent(student);
-        setAiEnabled(enabled);
-        writeAuthCache(student, enabled);
-      } catch { /* non-critical */ } finally {
-        if (!cancelled) setAuthChecked(true);
-      }
-    }, 1500); // 1.5s defer — lets critical page fetches land first
-
-    return () => { cancelled = true; clearTimeout(timer); };
+    fetch("/api/ai/status")
+      .then((r) => r.json())
+      .then((st) => {
+        if (st && typeof st.enabled === "boolean") {
+          setAiEnabled(st.enabled);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -108,14 +95,18 @@ export function AIAssistant() {
     const handler = (e: Event) => {
       const customEvent = e as CustomEvent<{ initialPrompt?: string }>;
       setMessages([WELCOME_MESSAGE]);
-      if (customEvent.detail?.initialPrompt) {
-        setInput(customEvent.detail.initialPrompt);
-      } else {
-        setInput("");
-      }
+      const initialText = customEvent.detail?.initialPrompt || "";
+      setInput(initialText);
       setSending(false);
       setUnread(false);
       setOpen(true);
+
+      // If an initial question about the lesson is provided, automatically query the AI assistant
+      if (initialText) {
+        setTimeout(() => {
+          void send(initialText);
+        }, 100);
+      }
     };
     window.addEventListener("open-ai-assistant", handler);
     return () => window.removeEventListener("open-ai-assistant", handler);
@@ -183,7 +174,7 @@ export function AIAssistant() {
   // Instead, the dedicated button under the video triggers the assistant modal smoothly.
   const isWatchMode = pathname?.includes("/watch") || pathname?.includes("/learn");
 
-  if (!authChecked || !isStudent || !aiEnabled || isAuthOrAdmin || isExamOrHomework) {
+  if (isAuthOrAdmin || isExamOrHomework || !aiEnabled) {
     return null;
   }
 
