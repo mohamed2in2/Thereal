@@ -136,7 +136,8 @@ export async function POST(req: NextRequest) {
         ? existingSub.expiresAt
         : now;
 
-    const expiresAt = new Date(baseDate.getTime() + months * 30 * 24 * 60 * 60 * 1000);
+    const expiresAt = new Date(baseDate);
+    expiresAt.setMonth(expiresAt.getMonth() + months);
 
     let updatedBalance = 0;
 

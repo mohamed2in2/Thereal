@@ -1,14 +1,9 @@
 /**
- * Mobile Wallet & Payment Gateway SDK Service (Shake-Out / Sha7nawy)
- * Handles payment transactions across Egyptian mobile carriers and providers:
+ * Sha7nawy Payment Gateway SDK Service (https://gate.sha7nawy.com)
+ * Handles payment transactions for Sha7nawy-routed mobile wallet providers:
  * - Vodafone Cash (vf_cash) -> *9*1# prompt
  * - Etisalat Cash (et_cash) -> e& Money App prompt
- * - Orange Cash (or_cash)   -> Wallet prompt
- * - WE Pay (we_pay)         -> WE Pay App prompt
- * - InstaPay (instapay)     -> Instant Payment Network
- * - Fawry (fawry)           -> Kiosk reference code
- * - Cards (bank_card, meeza)-> Visa, Mastercard & Meeza
- * - Platform & Vouchers (wallet_balance, voucher)
+ * (Fawry, Cards, and Orange Cash are routed via Shake-Out at dash.shake-out.com)
  */
 
 import { getPaymentMethod, PAYMENT_METHODS } from "./payment-methods";
