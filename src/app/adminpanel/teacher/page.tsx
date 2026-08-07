@@ -1118,34 +1118,84 @@ export default function TeacherDashboardPage() {
                                               />
                                             </div>
 
-                                                <select
-                                                  value={getAddQuestionState(video.id).correctOption}
-                                                  onChange={(e) => updateAddQuestionState(video.id, { correctOption: e.target.value })}
-                                                  className={input}
-                                                >
-                                                  <option value="A">الخيار أ</option>
-                                                  <option value="B">الخيار ب</option>
-                                                  <option value="C">الخيار ج</option>
-                                                  <option value="D">الخيار د</option>
-                                                </select>
-                                              </div>
-                                              <div>
-                                                <label className={label}>خيار التكرار</label>
-                                                <div className="flex items-center gap-2 h-[38px]">
-                                                  <input
-                                                    type="checkbox"
-                                                    id={`refire-${video.id}`}
-                                                    checked={getAddQuestionState(video.id).refireOnRewatch}
-                                                    onChange={(e) => updateAddQuestionState(video.id, { refireOnRewatch: e.target.checked })}
-                                                    className="w-4 h-4 text-sky-500 rounded border-[var(--border)] focus:ring-sky-500"
-                                                  />
-                                                  <label htmlFor={`refire-${video.id}`} className="text-xs text-[var(--ink)] select-none">تكرار السؤال عند إعادة التشغيل</label>
-                                                </div>
-                                              </div>
-                                            </div>
+                                            {getAddQuestionState(video.id).questionType !== "essay" && (
+                                               <>
+                                                 <div className="grid grid-cols-2 gap-2">
+                                                   <div>
+                                                     <label className={label}>الخيار أ *</label>
+                                                     <input
+                                                       type="text"
+                                                       required
+                                                       value={getAddQuestionState(video.id).optionA}
+                                                       onChange={(e) => updateAddQuestionState(video.id, { optionA: e.target.value })}
+                                                       className={input}
+                                                     />
+                                                   </div>
+                                                   <div>
+                                                     <label className={label}>الخيار ب *</label>
+                                                     <input
+                                                       type="text"
+                                                       required
+                                                       value={getAddQuestionState(video.id).optionB}
+                                                       onChange={(e) => updateAddQuestionState(video.id, { optionB: e.target.value })}
+                                                       className={input}
+                                                     />
+                                                   </div>
+                                                   <div>
+                                                     <label className={label}>الخيار ج *</label>
+                                                     <input
+                                                       type="text"
+                                                       required
+                                                       value={getAddQuestionState(video.id).optionC}
+                                                       onChange={(e) => updateAddQuestionState(video.id, { optionC: e.target.value })}
+                                                       className={input}
+                                                     />
+                                                   </div>
+                                                   <div>
+                                                     <label className={label}>الخيار د *</label>
+                                                     <input
+                                                       type="text"
+                                                       required
+                                                       value={getAddQuestionState(video.id).optionD}
+                                                       onChange={(e) => updateAddQuestionState(video.id, { optionD: e.target.value })}
+                                                       className={input}
+                                                     />
+                                                   </div>
+                                                 </div>
 
-                                            <div>
-                                              <label className={label}>الشرح / التفسير (اختياري)</label>
+                                                 <div className="grid grid-cols-2 gap-2">
+                                                   <div>
+                                                     <label className={label}>الإجابة الصحيحة *</label>
+                                                     <select
+                                                       value={getAddQuestionState(video.id).correctOption}
+                                                       onChange={(e) => updateAddQuestionState(video.id, { correctOption: e.target.value })}
+                                                       className={input}
+                                                     >
+                                                       <option value="A">الخيار أ</option>
+                                                       <option value="B">الخيار ب</option>
+                                                       <option value="C">الخيار ج</option>
+                                                       <option value="D">الخيار د</option>
+                                                     </select>
+                                                   </div>
+                                                   <div>
+                                                     <label className={label}>خيار التكرار</label>
+                                                     <div className="flex items-center gap-2 h-[38px]">
+                                                       <input
+                                                         type="checkbox"
+                                                         id={`refire-${video.id}`}
+                                                         checked={getAddQuestionState(video.id).refireOnRewatch}
+                                                         onChange={(e) => updateAddQuestionState(video.id, { refireOnRewatch: e.target.checked })}
+                                                         className="w-4 h-4 text-sky-500 rounded border-[var(--border)] focus:ring-sky-500"
+                                                       />
+                                                       <label htmlFor={`refire-${video.id}`} className="text-xs text-[var(--ink)] select-none">تكرار السؤال عند إعادة التشغيل</label>
+                                                     </div>
+                                                   </div>
+                                                 </div>
+                                               </>
+                                             )}
+
+                                             <div>
+                                               <label className={label}>الشرح / التفسير (اختياري)</label>
                                               <input
                                                 type="text"
                                                 placeholder="شرح مبسط يظهر للمتعلم بعد الإجابة..."

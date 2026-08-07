@@ -1131,7 +1131,6 @@ export default function CourseLearningPage() {
             )}
           </main>
         </div>
-      )}
 
       {/* ════════════════════════════════════════════
           WATCH CONFIRM MODAL
