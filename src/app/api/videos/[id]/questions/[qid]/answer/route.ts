@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getStudentSession } from "@/lib/auth";
+import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 /**
- * POST — Student answers a video question.
+ * POST — Student or Teacher answers a video question.
  *
  * Body: { selectedOption, answeredAtSecond, watchSessionId }
  *
  * Validates:
- * - watchSessionId belongs to this student and is active
+ * - watchSessionId belongs to this user (or preview session)
  * - answeredAtSecond is within ±15s of triggerSecond (anti-bypass)
  * - selectedOption is A/B/C/D
  * - Not already answered in this watch session (unique constraint)
@@ -20,7 +20,7 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string; qid: string }> }
 ) {
-  const session = await getStudentSession();
+  const session = await getSession();
   if (!session) return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
 
   const { id: videoId, qid: questionId } = await params;

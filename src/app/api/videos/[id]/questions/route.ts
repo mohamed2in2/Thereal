@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getStudentSession } from "@/lib/auth";
+import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 /**
- * Student-facing questions for a video.
+ * Student and Teacher-facing questions for a video.
  *
- * GET — Returns questions without correctOption/explanation (until answered).
- *       Includes which questions this student has already answered.
+ * GET — Returns questions.
+ *       In teacher/admin preview mode, questions are fully accessible for testing.
  */
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getStudentSession();
+  const session = await getSession();
   if (!session) return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
 
   const { id: videoId } = await params;
@@ -47,9 +47,6 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     },
   });
 
-  // For each question, determine:
-  // - If the student has answered it before (any session) → include correctOption + explanation
-  // - If not answered yet → hide correctOption + explanation
   const result = questions.map((q) => {
     const hasAnswered = q.responses.length > 0;
     const latestResponse = hasAnswered ? q.responses[q.responses.length - 1] : null;
@@ -65,8 +62,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       optionC: q.optionC,
       optionD: q.optionD,
       refireOnRewatch: q.refireOnRewatch,
-      // Only reveal answer/explanation after the student has answered
-      ...(hasAnswered
+      ...(hasAnswered && !isTeacherOrAdmin
         ? {
             correctOption: q.correctOption,
             explanation: q.explanation,
@@ -74,6 +70,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
             lastResponse: latestResponse,
           }
         : {
+            correctOption: isTeacherOrAdmin ? q.correctOption : undefined,
+            explanation: isTeacherOrAdmin ? q.explanation : undefined,
             answered: false,
           }),
     };

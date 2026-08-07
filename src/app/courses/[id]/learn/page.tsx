@@ -501,8 +501,8 @@ export default function CourseLearningPage() {
     questions.forEach((q) => {
       if (answeredQuestionIds.has(q.id) && !q.refireOnRewatch) return;
       if (firedQuestionIds.has(q.id)) return;
-      // Forward pass through the trigger (guard against large seeks).
-      const passed = prevT <= q.triggerSecond && seconds >= q.triggerSecond && seconds - prevT <= 4;
+      // Forward pass through the trigger
+      const passed = seconds >= q.triggerSecond && (prevT <= q.triggerSecond || prevT === 0 || seconds - prevT <= 10);
       if (!passed) return;
 
       setFiredQuestionIds((prev) => {
