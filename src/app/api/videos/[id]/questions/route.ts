@@ -47,6 +47,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     },
   });
 
+  const isTeacherOrAdmin = session.role === "teacher" || session.role === "admin" || session.role === "superadmin";
+
   const result = questions.map((q) => {
     const hasAnswered = q.responses.length > 0;
     const latestResponse = hasAnswered ? q.responses[q.responses.length - 1] : null;
