@@ -27,10 +27,11 @@ interface SearchResult {
 }
 
 const NAV_LINKS = [
-  { href: "/",        label: "الرئيسية" },
-  { href: "/library",  label: "مكتبتي" },
-  { href: "/courses",  label: "الكورسات" },
-  { href: "/plans",    label: "الخطط الدراسية" },
+  { href: "/",            label: "الرئيسية" },
+  { href: "/library",      label: "مكتبتي" },
+  { href: "/courses",      label: "الكورسات" },
+  { href: "/plans",        label: "الخطط الدراسية" },
+  { href: "/environments", label: "بيئات" },
 ];
 
 const NOTIF_ICON: Record<string, string> = {

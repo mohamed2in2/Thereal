@@ -27,6 +27,7 @@ export function Footer() {
             {[
               { href: "/courses",     label: "الكورسات" },
               { href: "/library",     label: "مكتبتي" },
+              { href: "/environments", label: "بيئات التعلم" },
               { href: "/account",     label: "حسابي" },
               { href: "/payment-methods", label: "طرق الدفع" },
               { href: "/leaderboard", label: "لوحة الشرف" },
