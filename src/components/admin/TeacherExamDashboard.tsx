@@ -373,12 +373,12 @@ export function TeacherExamDashboard({
       {/* Delete Confirmation Modal */}
       {deleteExamId && (
         <ConfirmDialog
+          open={Boolean(deleteExamId)}
           title="حذف الاختبار"
-          hint="هل أنت تأكد من حذف هذا الاختبار نهائياً؟ سيتم حذف جميع أسئلة ونتائج الطلاب المرتبطة به ولا يمكن الاستعادة."
+          message="هل أنت تأكد من حذف هذا الاختبار نهائياً؟ سيتم حذف جميع أسئلة ونتائج الطلاب المرتبطة به ولا يمكن الاستعادة."
           confirmLabel="حذف نهائي"
           cancelLabel="إلغاء"
           danger
-          loading={isActionLoading}
           onConfirm={handleDeleteExam}
           onCancel={() => setDeleteExamId(null)}
         />
