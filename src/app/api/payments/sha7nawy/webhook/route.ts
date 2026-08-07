@@ -9,6 +9,19 @@ import {
 
 export async function POST(req: NextRequest) {
   try {
+    const webhookSecret = process.env.SHA7NAWY_WEBHOOK_SECRET;
+    if (webhookSecret) {
+      const incomingSecret =
+        req.headers.get("x-webhook-secret") ||
+        req.headers.get("x-sha7nawy-secret") ||
+        req.nextUrl.searchParams.get("secret");
+      if (!incomingSecret || incomingSecret !== webhookSecret) {
+        const ip = req.headers.get("x-forwarded-for")?.split(",")[0] || req.headers.get("x-real-ip") || "127.0.0.1";
+        console.warn(`[Sha7nawy Webhook] Unauthorized secret attempt from IP: ${ip}`);
+        return NextResponse.json({ error: "Unauthorized webhook caller" }, { status: 401 });
+      }
+    }
+
     const payload = await req.json().catch(() => ({}));
 
     const event = payload.event || req.headers.get("x-webhook-event");
@@ -101,9 +114,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid verified amount" }, { status: 400 });
     }
 
-    if (Math.abs(verifiedAmount - pendingTx.amount) > 0.01) {
+    const totalMatch = pendingTx.note?.match(/\|total:([\d.]+)/);
+    const expectedChargedAmount = totalMatch ? parseFloat(totalMatch[1]) : pendingTx.amount;
+
+    if (Math.abs(verifiedAmount - expectedChargedAmount) > 0.01) {
       console.warn(
-        `[Sha7nawy Webhook] Amount mismatch: verified=${verifiedAmount} pending=${pendingTx.amount} ref=${reference}`
+        `[Sha7nawy Webhook] Amount mismatch: verified=${verifiedAmount} expectedCharged=${expectedChargedAmount} pendingBase=${pendingTx.amount} ref=${reference}`
       );
       return NextResponse.json({ error: "Amount mismatch" }, { status: 400 });
     }

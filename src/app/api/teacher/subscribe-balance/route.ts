@@ -15,6 +15,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "معرف الأستاذ مطلوب" }, { status: 400 });
     }
 
+    // B17: Prevent self-subscription and validate teacher user record
+    if (teacherId === session.id) {
+      return NextResponse.json({ error: "لا يمكنك الاشتراك في حسابك الخاص" }, { status: 400 });
+    }
+
+    const teacherUser = await prisma.user.findUnique({
+      where: { id: teacherId },
+      select: { id: true, role: true, isActive: true, isDeleted: true },
+    });
+
+    if (!teacherUser || teacherUser.role !== "teacher" || !teacherUser.isActive || teacherUser.isDeleted) {
+      return NextResponse.json({ error: "معلم غير متاح أو غير محدد" }, { status: 400 });
+    }
+
     const validPlanTypes = ["monthly", "termly", "yearly"];
     if (!planType || !validPlanTypes.includes(planType)) {
       return NextResponse.json({ error: "نوع الباقة غير صحيح" }, { status: 400 });
@@ -22,36 +36,53 @@ export async function POST(req: NextRequest) {
 
     const profile = await prisma.teacherProfile.findUnique({
       where: { teacherId },
-      select: { priceMonthly: true, priceTermly: true, priceYearly: true, displayName: true, slug: true },
+      select: {
+        priceMonthly: true,
+        priceTermly: true,
+        priceYearly: true,
+        priceLanguagesMonthly: true,
+        displayName: true,
+        slug: true,
+      },
     });
 
     if (!profile) {
       return NextResponse.json({ error: "لم يتم العثور على الأستاذ" }, { status: 400 });
     }
 
-    // Default prices if not set: 1 month = 200, 3 months = 600, 6 months = 1200
-    const basePriceMap: Record<string, number> = {
-      monthly: profile.priceMonthly ?? 200,
-      termly: profile.priceTermly ?? 600,
-      yearly: profile.priceYearly ?? 1200,
+    // B9: No hardcoded price fallbacks (200 / 600 / 1200)
+    const rawPriceMap: Record<string, number | null> = {
+      monthly: profile.priceMonthly,
+      termly: profile.priceTermly,
+      yearly: profile.priceYearly,
     };
 
+    const planPrice = rawPriceMap[planType];
+    if (planPrice === null || planPrice === undefined || planPrice <= 0) {
+      return NextResponse.json(
+        { error: "لسه الأستاذ محددش سعر الباقة دي. كلّم الدعم." },
+        { status: 400 }
+      );
+    }
+
+    // B14: Yearly plan grants 12 months (not 6)
     const monthsMap: Record<string, number> = {
       monthly: 1,
       termly: 3,
-      yearly: 6,
+      yearly: 12,
     };
 
     const months = monthsMap[planType] || 1;
     const isLanguages = languageTrack === "languages" || languageTrack === "english";
-    const languageSurcharge = isLanguages ? 50 * months : 0;
-    const numAmount = basePriceMap[planType] + languageSurcharge;
+    const langRate = profile.priceLanguagesMonthly ?? 50;
+    const languageSurcharge = isLanguages ? langRate * months : 0;
+    const numAmount = planPrice + languageSurcharge;
 
     const teacherName = profile.displayName || profile.slug;
     const planNames: Record<string, string> = {
       monthly: "شهر واحد (1 Month)",
       termly: "3 شهور (3 Months)",
-      yearly: "6 شهور (6 Months)",
+      yearly: "12 شهر (1 Year)",
     };
     const planLabel = `${planNames[planType] || "اشتراك"} ${isLanguages ? "(لغات / إنجليزي)" : "(عربي)"}`;
 
@@ -78,63 +109,102 @@ export async function POST(req: NextRequest) {
       select: { name: true, phone: true, parentPhone: true, educationalStage: true },
     });
 
-    const expiresAt = new Date(Date.now() + months * 30 * 24 * 60 * 60 * 1000);
-
-    const updatedUser = await prisma.$transaction(async (tx) => {
-      const updated = await tx.user.update({
-        where: { id: session.id },
-        data: { balance: { decrement: numAmount } },
-      });
-
-      await tx.balanceTransaction.create({
-        data: {
-          userId: session.id,
-          type: "debit_purchase",
-          amount: -numAmount,
-          note: `حجز اشتراك (${planLabel}) - أستاذ ${teacherName || "المعلم"}`,
-        },
-      });
-
-      await tx.teacherSubscription.upsert({
-        where: {
-          studentId_teacherId_planType: {
-            studentId: session.id,
-            teacherId: teacherId,
-            planType: planType,
-          },
-        },
-        create: {
+    // B8: Extension logic — extend from existing.expiresAt if active and unexpired
+    const existingSub = await prisma.teacherSubscription.findUnique({
+      where: {
+        studentId_teacherId_planType: {
           studentId: session.id,
           teacherId: teacherId,
           planType: planType,
-          planLabel: planLabel,
-          amount: numAmount,
-          educationalStage: userDetails?.educationalStage,
-          studentName: userDetails?.name,
-          studentPhone: userDetails?.phone,
-          parentPhone: userDetails?.parentPhone,
-          status: "active",
-          expiresAt: expiresAt,
         },
-        update: {
-          planLabel: planLabel,
-          amount: numAmount,
-          educationalStage: userDetails?.educationalStage,
-          studentName: userDetails?.name,
-          studentPhone: userDetails?.phone,
-          parentPhone: userDetails?.parentPhone,
-          status: "active",
-          expiresAt: expiresAt,
-        },
-      });
-
-      return updated;
+      },
+      select: { expiresAt: true, status: true },
     });
+
+    const now = new Date();
+    const baseDate =
+      existingSub && existingSub.status === "active" && existingSub.expiresAt && existingSub.expiresAt > now
+        ? existingSub.expiresAt
+        : now;
+
+    const expiresAt = new Date(baseDate.getTime() + months * 30 * 24 * 60 * 60 * 1000);
+
+    let updatedBalance = 0;
+
+    try {
+      updatedBalance = await prisma.$transaction(async (tx) => {
+        const claim = await tx.user.updateMany({
+          where: { id: session.id, balance: { gte: numAmount } },
+          data: { balance: { decrement: numAmount } },
+        });
+
+        if (claim.count === 0) {
+          throw new Error("INSUFFICIENT_BALANCE");
+        }
+
+        const freshUser = await tx.user.findUnique({
+          where: { id: session.id },
+          select: { balance: true },
+        });
+
+        await tx.balanceTransaction.create({
+          data: {
+            userId: session.id,
+            type: "debit_purchase",
+            amount: -numAmount,
+            note: `حجز اشتراك (${planLabel}) - أستاذ ${teacherName || "المعلم"}`,
+          },
+        });
+
+        await tx.teacherSubscription.upsert({
+          where: {
+            studentId_teacherId_planType: {
+              studentId: session.id,
+              teacherId: teacherId,
+              planType: planType,
+            },
+          },
+          create: {
+            studentId: session.id,
+            teacherId: teacherId,
+            planType: planType,
+            planLabel: planLabel,
+            amount: numAmount,
+            educationalStage: userDetails?.educationalStage,
+            studentName: userDetails?.name,
+            studentPhone: userDetails?.phone,
+            parentPhone: userDetails?.parentPhone,
+            status: "active",
+            expiresAt: expiresAt,
+          },
+          update: {
+            planLabel: planLabel,
+            amount: numAmount,
+            educationalStage: userDetails?.educationalStage,
+            studentName: userDetails?.name,
+            studentPhone: userDetails?.phone,
+            parentPhone: userDetails?.parentPhone,
+            status: "active",
+            expiresAt: expiresAt,
+          },
+        });
+
+        return freshUser?.balance ?? 0;
+      });
+    } catch (err: any) {
+      if (err?.message === "INSUFFICIENT_BALANCE") {
+        return NextResponse.json(
+          { error: `رصيدك الحالي لا يكفي لشراء الاشتراك (${numAmount} جنيه). يرجى شحن رصيدك أولاً.` },
+          { status: 400 }
+        );
+      }
+      throw err;
+    }
 
     return NextResponse.json({
       success: true,
-      message: `تم الشراء وحجز الاشتراك بنجاح! خُصم ${numAmount} جنيه من رصيدك. رصيدك الحالي: ${updatedUser.balance} جنيه.`,
-      newBalance: updatedUser.balance,
+      message: `تم الشراء وحجز الاشتراك بنجاح! خُصم ${numAmount} جنيه من رصيدك. رصيدك الحالي: ${updatedBalance} جنيه.`,
+      newBalance: updatedBalance,
     });
   } catch (error: any) {
     console.error("[subscribe-balance] error:", error);

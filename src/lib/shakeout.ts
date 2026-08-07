@@ -49,6 +49,8 @@ export interface ShakeOutCreateResponse {
 export const SHAKEOUT_PENDING_TYPE = "credit_shakeout_pending";
 export const SHAKEOUT_CREDITED_TYPE = "credit_shakeout_wallet";
 
+export const SHAKEOUT_PAID_STATUSES = ["completed", "paid", "settled", "success"];
+
 export function shakeOutRefNote(reference: string): string {
   return `shakeout_ref:${reference}`;
 }

@@ -13,11 +13,20 @@ import {
   shakeOutRefNote,
 } from "@/lib/shakeout";
 import { getPaymentMethod } from "@/lib/payment-methods";
+import { paymentRateLimiter } from "@/lib/paymentRateLimiter";
 
 export async function POST(req: NextRequest) {
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "يجب تسجيل الدخول أولاً" }, { status: 401 });
+  }
+
+  const rateCheck = paymentRateLimiter.checkRateLimit(session.id);
+  if (!rateCheck.allowed) {
+    return NextResponse.json(
+      { error: `تم تجاوز الحد الأقصى لبدء عمليات الدفع (10 عمليات/ساعة). يرجى الانتظار لمدة ${Math.ceil(rateCheck.resetInSeconds / 60)} دقيقة.` },
+      { status: 429 }
+    );
   }
 
   try {
@@ -50,11 +59,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "رقم المحفظة مطلوب" }, { status: 400 });
     }
 
-    const minAmt = methodConfig.minAmount;
-    const maxAmt = methodConfig.maxAmount;
-    if (!amount || amount < minAmt || amount > maxAmt) {
+    // B6: Strict amount validation with explicit defaults
+    const minAmt = methodConfig.minAmount ?? 5;
+    const maxAmt = methodConfig.maxAmount ?? 50000;
+    if (!amount || typeof amount !== "number" || !Number.isFinite(amount) || amount < minAmt || amount > maxAmt) {
       return NextResponse.json(
-        { error: `المبلغ مطلوب (الحد الأدنى ${minAmt} جنيه والحد الأقصى ${maxAmt.toLocaleString()} جنيه)` },
+        { error: `المبلغ غير مسموح به — الحد الأدنى ${minAmt} جنيه والحد الأقصى ${maxAmt.toLocaleString()} جنيه` },
         { status: 400 }
       );
     }
@@ -87,20 +97,29 @@ export async function POST(req: NextRequest) {
       }
 
       const reference = result.data?.reference ? String(result.data.reference) : null;
-      const soCheckoutUrl = result.data?.payment_page_url || result.data?.url || null;
-      if (reference) {
-        const noteText = `${shakeOutRefNote(reference)}${soCheckoutUrl ? `|url:${soCheckoutUrl}` : ""}`;
-        await prisma.balanceTransaction.create({
-          data: {
-            userId: session.id,
-            type: SHAKEOUT_PENDING_TYPE,
-            amount: totalAmount,
-            note: noteText,
-          },
-        });
+      // B10: Treat missing reference as gateway initiation failure
+      if (!reference) {
+        console.error("[Shake-Out Create] Gateway reported success but returned no reference:", result);
+        return NextResponse.json(
+          { error: "لم يتم بدء عملية الدفع بنجاح من مزود الخدمة ولم يتم خصم أي أموال. حاول مرة أخرى." },
+          { status: 502 }
+        );
       }
 
-      const finalCheckoutUrl = soCheckoutUrl || (reference ? `https://dash.shake-out.com/invoice/${reference}` : null);
+      const soCheckoutUrl = result.data?.payment_page_url || result.data?.url || null;
+      // Option A: Pending transaction stores baseAmount as credited amount and totalAmount in note for verification
+      const noteText = `${shakeOutRefNote(reference)}|base:${baseAmount}|total:${totalAmount}${soCheckoutUrl ? `|url:${soCheckoutUrl}` : ""}`;
+      await prisma.balanceTransaction.create({
+        data: {
+          userId: session.id,
+          type: SHAKEOUT_PENDING_TYPE,
+          amount: baseAmount,
+          note: noteText,
+        },
+      });
+
+      // B11: Clean fallback URL format with no stray doubled curly braces
+      const finalCheckoutUrl = soCheckoutUrl || `https://dash.shake-out.com/invoice/${reference}`;
 
       return NextResponse.json({
         success: true,
@@ -133,16 +152,25 @@ export async function POST(req: NextRequest) {
     }
 
     const reference = result.data?.reference ? String(result.data.reference) : null;
-    if (reference) {
-      await prisma.balanceTransaction.create({
-        data: {
-          userId: session.id,
-          type: SHA7NAWY_PENDING_TYPE,
-          amount: totalAmount,
-          note: sha7nawyRefNote(reference),
-        },
-      });
+    // B10: Treat missing reference as gateway initiation failure
+    if (!reference) {
+      console.error("[Sha7nawy Create] Gateway reported success but returned no reference:", result);
+      return NextResponse.json(
+        { error: "لم يتم بدء عملية الدفع بنجاح من مزود الخدمة ولم يتم خصم أي أموال. حاول مرة أخرى." },
+        { status: 502 }
+      );
     }
+
+    // Option A: Pending transaction stores baseAmount as credited amount and totalAmount in note for verification
+    const noteText = `${sha7nawyRefNote(reference)}|base:${baseAmount}|total:${totalAmount}`;
+    await prisma.balanceTransaction.create({
+      data: {
+        userId: session.id,
+        type: SHA7NAWY_PENDING_TYPE,
+        amount: baseAmount,
+        note: noteText,
+      },
+    });
 
     return NextResponse.json({
       success: true,
