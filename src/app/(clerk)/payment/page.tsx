@@ -44,6 +44,8 @@ function PaymentContent() {
   const [selectedMethodId, setSelectedMethodId] = useState<string>("vf_cash");
   const [phone, setPhone] = useState("");
   const [phoneError, setPhoneError] = useState("");
+  const [code, setCode] = useState("");
+  const [codeError, setCodeError] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [intent, setIntent] = useState<PaymentIntent | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
@@ -102,6 +104,15 @@ function PaymentContent() {
     return true;
   }, [selectedMethodId]);
 
+  const validateCode = useCallback((val: string) => {
+    if (!val.trim()) {
+      setCodeError("كود التفعيل مطلوب لإتمام العملية");
+      return false;
+    }
+    setCodeError("");
+    return true;
+  }, []);
+
   const handleCreatePayment = async () => {
     if (!selectedMethod) return;
 
@@ -126,6 +137,10 @@ function PaymentContent() {
       return;
     }
 
+    if (selectedMethod.needsCode && !validateCode(code)) {
+      return;
+    }
+
     setIsCreating(true);
     setErrors([]);
 
@@ -136,9 +151,10 @@ function PaymentContent() {
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          number: normalizedPhone || "01000000000",
+          number: selectedMethod.needsCode ? code.trim() : (normalizedPhone || "01000000000"),
           amount: amt,
           method: selectedMethod.id,
+          code: selectedMethod.needsCode ? code.trim() : undefined,
         }),
       });
 
@@ -333,6 +349,42 @@ function PaymentContent() {
                   </div>
                 )}
 
+                {selectedMethod.needsCode && (
+                  <div>
+                    <label htmlFor="code-input" className="text-[15px] font-normal text-[#101828] dark:text-[#F2F4F7] mb-2 block">
+                      كود التفعيل أو قسيمة الشحن
+                    </label>
+                    <input
+                      id="code-input"
+                      type="text"
+                      value={code}
+                      onChange={(e) => {
+                        setCode(e.target.value);
+                        if (codeError) validateCode(e.target.value);
+                      }}
+                      onBlur={() => validateCode(code)}
+                      placeholder="أدخل كود التفعيل هنا (مثال: CODE123)"
+                      dir="ltr"
+                      aria-describedby={codeError ? "code-error" : undefined}
+                      className={`w-full h-[52px] rounded-lg border px-4 text-left text-[17px] font-normal tabular-nums outline-none transition-colors uppercase ${
+                        codeError
+                          ? "border-[#B42318] dark:border-[#F04438] bg-[#FFFFFF] dark:bg-[#141A21] text-[#101828] dark:text-[#F2F4F7]"
+                          : "border-[#E4E7EC] dark:border-[#232C36] bg-[#FFFFFF] dark:bg-[#141A21] text-[#101828] dark:text-[#F2F4F7] focus-visible:ring-2 focus-visible:ring-[#047857] dark:focus-visible:ring-[#10B981]"
+                      }`}
+                    />
+                    {codeError && (
+                      <p id="code-error" role="alert" className="text-[13px] font-medium text-[#B42318] dark:text-[#F04438] mt-2 flex items-center gap-1.5">
+                        <svg aria-hidden className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <circle cx="12" cy="12" r="10" />
+                          <line x1="12" y1="8" x2="12" y2="12" />
+                          <line x1="12" y1="16" x2="12.01" y2="16" />
+                        </svg>
+                        <span>{codeError}</span>
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 {/* Primary Action Button (Inline on Desktop, Sticky Bar on Mobile) */}
                 <div className="fixed bottom-0 left-0 right-0 z-50 bg-[#FFFFFF] dark:bg-[#141A21] border-t border-[#E4E7EC] dark:border-[#232C36] p-4 pb-[calc(16px+env(safe-area-inset-bottom,0px))] flex items-center justify-between gap-4 sm:static sm:z-auto sm:bg-transparent sm:border-none sm:p-0">
                   <div className="text-[20px] font-semibold text-[#047857] dark:text-[#10B981] tabular-nums sm:hidden">
@@ -353,6 +405,8 @@ function PaymentContent() {
                         </svg>
                         <span>جاري التأكيد</span>
                       </>
+                    ) : selectedMethod.needsCode ? (
+                      `تفعيل كود الشحن (${calcTotal.toFixed(2)} جنيه)`
                     ) : (
                       `ادفع ${calcTotal.toFixed(2)} جنيه بـ ${selectedMethod.label}`
                     )}
@@ -363,9 +417,9 @@ function PaymentContent() {
 
             {/* Section 5: Alternative WhatsApp Footnote */}
             <div className="text-center text-[15px] font-normal text-[#667085] dark:text-[#98A2B3] mt-6">
-              هل تفضل الدفع عبر انستاباي أو كود تفعيل؟{" "}
+              تحتاج إلى مساعدة في عملية السداد؟{" "}
               <a
-                href={`https://wa.me/?text=${encodeURIComponent(`السلام عليكم، أود استكمال الحجز والدفع عن طريق (InstaPay / كود التفعيل) بقيمة ${baseAmount} جنيه`)}`}
+                href={`https://wa.me/?text=${encodeURIComponent(`السلام عليكم، أود استكمال الحجز والدفع بقيمة ${baseAmount} جنيه`)}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-[#047857] dark:text-[#10B981] underline font-medium min-h-[44px] inline-flex items-center me-1"

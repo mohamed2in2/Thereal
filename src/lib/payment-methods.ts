@@ -91,6 +91,8 @@ export interface PaymentMethodConfig {
   monogram: string;
   /** True when this method requires the payer's wallet phone number. */
   needsPhone: boolean;
+  /** True when this method requires entering an activation/voucher code. */
+  needsCode?: boolean;
   /** True when paying requires acting on a reference/PIN (shown on instructions step). */
   requiresReference: boolean;
   /** False = shown greyed-out with unavailableNote, and rejected server-side. */
@@ -164,31 +166,6 @@ export const PAYMENT_METHODS: readonly PaymentMethodConfig[] = [
     ],
   },
   {
-    id: "instapay",
-    label: "إنستاباي (InstaPay)",
-    labelEn: "InstaPay IPN Direct",
-    description: "تحويل لحظي مباشر عبر تطبيق InstaPay مصر (أو التواصل عبر الواتساب).",
-    category: "instant",
-    provider: "internal",
-    brandColor: "#0047BA",
-    brandForeground: "#FFFFFF",
-    monogram: "IPN",
-    needsPhone: false,
-    requiresReference: true,
-    available: true,
-    processingSpeed: "تأكيد فوري عبر الواتساب",
-    feePercentage: 0,
-    minAmount: 10,
-    maxAmount: 50000,
-    shortNote: "تواصل معنا مباشرة عبر الواتساب لإرسال عنوان InstaPay وتأكيد الشحن",
-    instructions: [
-      "اختر التبديل لخدمة العملاء عبر الواتساب لإرسال بيانات InstaPay.",
-      "حول المبلغ المطلوب من تطبيق InstaPay.",
-      "أرسل لقطة الشاشة (سكرين شوت) بالتحويل على الواتساب.",
-      "سيتم إضافة الرصيد وتفعيل طلبك فوراً.",
-    ],
-  },
-  {
     id: "voucher",
     label: "كود / قسيمة تفعيل",
     labelEn: "Prepaid Code / Voucher",
@@ -199,13 +176,14 @@ export const PAYMENT_METHODS: readonly PaymentMethodConfig[] = [
     brandForeground: "#FFFFFF",
     monogram: "CODE",
     needsPhone: false,
+    needsCode: true,
     requiresReference: true,
     available: true,
     processingSpeed: "تأكيد فوري",
     feePercentage: 0,
     minAmount: 1,
     maxAmount: 50000,
-    shortNote: "أدخل كود التفعيل المكون من أرقام أو تواصل معنا بالواتساب",
+    shortNote: "أدخل كود التفعيل المكون من أرقام أو حروف واضغط تأكيد",
     instructions: [
       "احصل على كود التفعيل المطبوع أو المرسل لك من السنتر / المعلم.",
       "أدخل الكود واضغط تفعيل.",
