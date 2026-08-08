@@ -392,36 +392,21 @@ export function TeacherPublicProfile() {
                   <span className="flex items-center gap-2"><span>📅</span> اشتراك شهر واحد</span>
                   {currentP.priceMonthly && (
                     <span className="text-xs font-mono text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
-                      الصافي: {Math.round((currentP.priceMonthly ?? 180) * (1 - (currentP.discountMonthly || 0) / 100))}ج
+                      السعر الحقيقي: {currentP.priceMonthly}ج
                     </span>
                   )}
                 </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className={label}>السعر الأساسي (جنيه - افتراضي 180ج)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="1"
-                      className={input}
-                      value={currentP.priceMonthly ?? ""}
-                      onChange={(e) => updateStageField("priceMonthly", e.target.value ? Number(e.target.value) : null)}
-                      placeholder="180"
-                    />
-                  </div>
-                  <div>
-                    <label className={label}>🏷️ نسبة الخصم (%)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      step="1"
-                      className={input}
-                      value={currentP.discountMonthly ?? ""}
-                      onChange={(e) => updateStageField("discountMonthly", e.target.value ? Number(e.target.value) : null)}
-                      placeholder="مثال: 10"
-                    />
-                  </div>
+                <div>
+                  <label className={label}>السعر المباشر (جنيه - افتراضي 180ج)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    className={input}
+                    value={currentP.priceMonthly ?? ""}
+                    onChange={(e) => updateStageField("priceMonthly", e.target.value ? Number(e.target.value) : null)}
+                    placeholder="180"
+                  />
                 </div>
               </div>
 
@@ -431,36 +416,21 @@ export function TeacherPublicProfile() {
                   <span className="flex items-center gap-2"><span>📚</span> اشتراك الترم</span>
                   {currentP.priceTermly && (
                     <span className="text-xs font-mono text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/20">
-                      الصافي: {Math.round((currentP.priceTermly ?? 750) * (1 - (currentP.discountTermly || 0) / 100))}ج
+                      السعر الحقيقي: {currentP.priceTermly}ج
                     </span>
                   )}
                 </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className={label}>السعر الأساسي (جنيه - افتراضي 750ج)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="1"
-                      className={input}
-                      value={currentP.priceTermly ?? ""}
-                      onChange={(e) => updateStageField("priceTermly", e.target.value ? Number(e.target.value) : null)}
-                      placeholder="750"
-                    />
-                  </div>
-                  <div>
-                    <label className={label}>🏷️ نسبة الخصم (%)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      step="1"
-                      className={input}
-                      value={currentP.discountTermly ?? ""}
-                      onChange={(e) => updateStageField("discountTermly", e.target.value ? Number(e.target.value) : null)}
-                      placeholder="مثال: 20"
-                    />
-                  </div>
+                <div>
+                  <label className={label}>السعر المباشر (جنيه - افتراضي 750ج)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    className={input}
+                    value={currentP.priceTermly ?? ""}
+                    onChange={(e) => updateStageField("priceTermly", e.target.value ? Number(e.target.value) : null)}
+                    placeholder="750"
+                  />
                 </div>
               </div>
 
@@ -470,36 +440,21 @@ export function TeacherPublicProfile() {
                   <span className="flex items-center gap-2"><span>🎓</span> اشتراك سنة كاملة</span>
                   {currentP.priceYearly && (
                     <span className="text-xs font-mono text-purple-400 bg-purple-500/10 px-2.5 py-1 rounded-full border border-purple-500/20">
-                      الصافي: {Math.round((currentP.priceYearly ?? 1200) * (1 - (currentP.discountYearly || 0) / 100))}ج
+                      السعر الحقيقي: {currentP.priceYearly}ج
                     </span>
                   )}
                 </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className={label}>السعر الأساسي (جنيه - افتراضي 1200ج)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="1"
-                      className={input}
-                      value={currentP.priceYearly ?? ""}
-                      onChange={(e) => updateStageField("priceYearly", e.target.value ? Number(e.target.value) : null)}
-                      placeholder="1200"
-                    />
-                  </div>
-                  <div>
-                    <label className={label}>🏷️ نسبة الخصم (%)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      step="1"
-                      className={input}
-                      value={currentP.discountYearly ?? ""}
-                      onChange={(e) => updateStageField("discountYearly", e.target.value ? Number(e.target.value) : null)}
-                      placeholder="مثال: 30"
-                    />
-                  </div>
+                <div>
+                  <label className={label}>السعر المباشر (جنيه - افتراضي 1200ج)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    className={input}
+                    value={currentP.priceYearly ?? ""}
+                    onChange={(e) => updateStageField("priceYearly", e.target.value ? Number(e.target.value) : null)}
+                    placeholder="1200"
+                  />
                 </div>
               </div>
             </div>
