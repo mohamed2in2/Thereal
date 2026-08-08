@@ -86,12 +86,12 @@ export function TeacherPublicProfile() {
 
     const stageConfig = parsedMap[stage] || {};
     return {
-      priceMonthly: stageConfig.priceMonthly ?? p?.priceMonthly ?? 180,
-      priceTermly: stageConfig.priceTermly ?? p?.priceTermly ?? 750,
-      priceYearly: stageConfig.priceYearly ?? p?.priceYearly ?? 1200,
-      discountMonthly: stageConfig.discountMonthly ?? p?.discountMonthly ?? null,
-      discountTermly: stageConfig.discountTermly ?? p?.discountTermly ?? null,
-      discountYearly: stageConfig.discountYearly ?? p?.discountYearly ?? null,
+      priceMonthly: typeof stageConfig.priceMonthly === "number" ? stageConfig.priceMonthly : 180,
+      priceTermly: typeof stageConfig.priceTermly === "number" ? stageConfig.priceTermly : 750,
+      priceYearly: typeof stageConfig.priceYearly === "number" ? stageConfig.priceYearly : 1200,
+      discountMonthly: typeof stageConfig.discountMonthly === "number" ? stageConfig.discountMonthly : null,
+      discountTermly: typeof stageConfig.discountTermly === "number" ? stageConfig.discountTermly : null,
+      discountYearly: typeof stageConfig.discountYearly === "number" ? stageConfig.discountYearly : null,
     };
   };
 
@@ -102,18 +102,17 @@ export function TeacherPublicProfile() {
       if (p.stagePricing) parsedMap = JSON.parse(p.stagePricing);
     } catch {}
 
-    const currentValues = getStagePricing(activeStage);
-    const updatedObj = {
-      ...currentValues,
+    if (!parsedMap.sec_1) parsedMap.sec_1 = getStagePricing("sec_1");
+    if (!parsedMap.sec_2) parsedMap.sec_2 = getStagePricing("sec_2");
+
+    parsedMap[activeStage] = {
+      ...parsedMap[activeStage],
       [field]: val,
     };
-
-    parsedMap[activeStage] = updatedObj;
 
     setP({
       ...p,
       stagePricing: JSON.stringify(parsedMap),
-      [field]: val,
     });
   };
 
@@ -351,7 +350,7 @@ export function TeacherPublicProfile() {
               }`}
             >
               <span className="text-xs font-extrabold text-sky-500 flex items-center gap-1">
-                <span>🎓</span> أولى بكالوريا (1ère Bac)
+                <span>🎓</span> أولى بكالوريا
               </span>
               <p className="text-[11px] text-[var(--ink-muted)]">
                 {activeStage === "sec_1" ? "تعديل أسعار الصف الأول بكالوريا (مفعل)" : "اضغط لتعديل أسعار الأول بكالوريا"}
@@ -368,7 +367,7 @@ export function TeacherPublicProfile() {
               }`}
             >
               <span className="text-xs font-extrabold text-purple-400 flex items-center gap-1">
-                <span>🎓</span> ثانية بكالوريا (2ème Bac)
+                <span>🎓</span> ثانية بكالوريا
               </span>
               <p className="text-[11px] text-[var(--ink-muted)]">
                 {activeStage === "sec_2" ? "تعديل أسعار الصف الثاني بكالوريا (مفعل)" : "اضغط لتعديل أسعار الثاني بكالوريا"}
@@ -390,7 +389,7 @@ export function TeacherPublicProfile() {
               {/* 1 Month Plan */}
               <div className="p-4 rounded-xl border border-[var(--border)] bg-[var(--bg)]">
                 <h4 className="font-bold text-sm text-[var(--ink)] mb-3 flex items-center justify-between">
-                  <span className="flex items-center gap-2"><span>📅</span> اشتراك شهر واحد (1 Month)</span>
+                  <span className="flex items-center gap-2"><span>📅</span> اشتراك شهر واحد (شهر)</span>
                   {currentP.priceMonthly && (
                     <span className="text-xs font-mono text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
                       الصافي: {Math.round((currentP.priceMonthly ?? 180) * (1 - (currentP.discountMonthly || 0) / 100))}ج
@@ -429,7 +428,7 @@ export function TeacherPublicProfile() {
               {/* 3 Months Plan (Term) */}
               <div className="p-4 rounded-xl border border-[var(--border)] bg-[var(--bg)]">
                 <h4 className="font-bold text-sm text-[var(--ink)] mb-3 flex items-center justify-between">
-                  <span className="flex items-center gap-2"><span>📚</span> اشتراك الترم (Term / 3 Months)</span>
+                  <span className="flex items-center gap-2"><span>📚</span> اشتراك الترم (3 شهور)</span>
                   {currentP.priceTermly && (
                     <span className="text-xs font-mono text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/20">
                       الصافي: {Math.round((currentP.priceTermly ?? 750) * (1 - (currentP.discountTermly || 0) / 100))}ج
@@ -468,7 +467,7 @@ export function TeacherPublicProfile() {
               {/* 6 Months Plan (Year) */}
               <div className="p-4 rounded-xl border border-[var(--border)] bg-[var(--bg)]">
                 <h4 className="font-bold text-sm text-[var(--ink)] mb-3 flex items-center justify-between">
-                  <span className="flex items-center gap-2"><span>🎓</span> اشتراك سنة كاملة (Year / 6 Months)</span>
+                  <span className="flex items-center gap-2"><span>🎓</span> اشتراك سنة كاملة (الترمين - 6 شهور)</span>
                   {currentP.priceYearly && (
                     <span className="text-xs font-mono text-purple-400 bg-purple-500/10 px-2.5 py-1 rounded-full border border-purple-500/20">
                       الصافي: {Math.round((currentP.priceYearly ?? 1200) * (1 - (currentP.discountYearly || 0) / 100))}ج
