@@ -196,12 +196,11 @@ export default function TeacherDashboardPage() {
       setNativeStatus("جاري رفع الملف للسيرفر...");
 
       if (isLocal || uploadUrl === "/api/teacher/native-upload") {
-        const formData = new FormData();
-        formData.append("file", file);
-
         const uploadedVideoId = await new Promise<string>((resolve, reject) => {
           const xhr = new XMLHttpRequest();
           xhr.open("POST", "/api/teacher/native-upload", true);
+          xhr.setRequestHeader("Content-Type", "application/octet-stream");
+          xhr.setRequestHeader("X-Filename", encodeURIComponent(file.name));
 
           xhr.upload.onprogress = (e) => {
             if (e.lengthComputable) {
@@ -224,7 +223,7 @@ export default function TeacherDashboardPage() {
           };
 
           xhr.onerror = () => reject(new Error("حدث خطأ في شبكة الاتصال أثناء الرفع"));
-          xhr.send(formData);
+          xhr.send(file);
         });
 
         setNewVideo((prev) => ({
