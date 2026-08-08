@@ -37,8 +37,8 @@ async function main() {
 
   // 3. Upsert Teacher Profile
   await client.execute({
-    sql: `INSERT INTO TeacherProfile (id, teacherId, displayName, slug, bio, subject, educationalStage, isPublished, priceMonthly, priceTermly, priceYearly, accentColor, navColor, createdAt, updatedAt)
-          VALUES ('demo-profile-id', ?, 'المدرس التجريبي (DEMO)', 'demo', 'صفحة أستاذ الشرح التجريبي لعرض واستعراض كافة مزايا وإمكانيات المنصة للإدارة والمشرفين فقط.', 'برمجة وحاسب آلي', 'sec_1', 1, 200, 500, 1200, '#f59e0b', '#1e1b4b', ?, ?)
+    sql: `INSERT INTO TeacherProfile (id, teacherId, displayName, slug, bio, isPublished, priceMonthly, priceTermly, priceYearly, accentColor, navColor, createdAt, updatedAt)
+          VALUES ('demo-profile-id', ?, 'المدرس التجريبي (DEMO)', 'demo', 'صفحة أستاذ الشرح التجريبي لعرض واستعراض كافة مزايا وإمكانيات المنصة للإدارة والمشرفين فقط.', 1, 200, 500, 1200, '#f59e0b', '#1e1b4b', ?, ?)
           ON CONFLICT(teacherId) DO UPDATE SET
             displayName='المدرس التجريبي (DEMO)', slug='demo', isPublished=1`,
     args: [teacherId, now, now],
