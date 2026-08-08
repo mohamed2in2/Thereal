@@ -215,7 +215,15 @@ function PaymentContent() {
           method: "POST",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ code: code.trim() }),
+          body: JSON.stringify({
+            code: code.trim(),
+            teacherId: teacherIdParam || undefined,
+            planType: planTypeParam || undefined,
+            grade: gradeParam || undefined,
+            courseId: courseIdParam || undefined,
+            folderId: folderIdParam || undefined,
+            planId: planIdParam || undefined,
+          }),
         });
         const codeBody = await codeRes.json().catch(() => ({}));
         if (!codeRes.ok || codeBody.error) {

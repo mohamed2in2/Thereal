@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { code } = await req.json();
+    const { code, teacherId, planType, grade, languageTrack, courseId, folderId, planId } = await req.json().catch(() => ({}));
     if (!code) return NextResponse.json({ error: "الكود مطلوب" }, { status: 400 });
 
     const clientIp = req.headers.get("x-forwarded-for")?.split(",")[0] || "127.0.0.1";
@@ -297,6 +297,113 @@ export async function POST(req: NextRequest) {
         });
 
         void ReferralService.qualifyAndRewardReferral(session.id, `code:${normalizedCode}`).catch(() => {});
+
+        // Check if there is an item to purchase with the new balance
+        const hasSpecificItem = Boolean(teacherId || courseId || folderId || planId);
+        if (hasSpecificItem) {
+          const { verifyAuthoritativePrice } = await import("@/lib/price-verifier");
+          const priceCheck = await verifyAuthoritativePrice({
+            amount: 999999,
+            teacherId,
+            planType,
+            grade,
+            languageTrack,
+            courseId,
+            folderId,
+            planId,
+          });
+
+          if (priceCheck.valid && priceCheck.expectedPrice > 0) {
+            const expectedPrice = priceCheck.expectedPrice;
+            const updatedUser = await prisma.user.findUnique({
+              where: { id: session.id },
+              select: { balance: true },
+            });
+            const currentBalance = updatedUser?.balance ?? 0;
+
+            if (currentBalance >= expectedPrice) {
+              const origin = req.nextUrl ? req.nextUrl.origin : "https://code-up.tech";
+              const reqHeaders = {
+                "Content-Type": "application/json",
+                "Cookie": req.headers.get("cookie") || "",
+              };
+
+              let purchaseSuccess = false;
+              let purchaseMessage = "";
+
+              if (teacherId && planType) {
+                const subRes = await fetch(`${origin}/api/teacher/subscribe-balance`, {
+                  method: "POST",
+                  headers: reqHeaders,
+                  body: JSON.stringify({ teacherId, planType, languageTrack, studentGrade: grade }),
+                });
+                const subData = await subRes.json().catch(() => ({}));
+                if (subRes.ok && !subData.error) {
+                  purchaseSuccess = true;
+                  purchaseMessage = subData.message || "تم تفعيل الاشتراك بالرصيد بنجاح!";
+                }
+              } else if (courseId) {
+                const courseRes = await fetch(`${origin}/api/courses/${courseId}/purchase`, {
+                  method: "POST",
+                  headers: reqHeaders,
+                  body: JSON.stringify({}),
+                });
+                const courseData = await courseRes.json().catch(() => ({}));
+                if (courseRes.ok && !courseData.error) {
+                  purchaseSuccess = true;
+                  purchaseMessage = courseData.message || "تم شراء الكورس بنجاح!";
+                }
+              } else if (folderId) {
+                const folderRes = await fetch(`${origin}/api/folders/${folderId}/purchase`, {
+                  method: "POST",
+                  headers: reqHeaders,
+                  body: JSON.stringify({}),
+                });
+                const folderData = await folderRes.json().catch(() => ({}));
+                if (folderRes.ok && !folderData.error) {
+                  purchaseSuccess = true;
+                  purchaseMessage = folderData.message || "تم شراء المحاضرة بنجاح!";
+                }
+              } else if (planId) {
+                const planRes = await fetch(`${origin}/api/plans/${planId}/purchase`, {
+                  method: "POST",
+                  headers: reqHeaders,
+                  body: JSON.stringify({}),
+                });
+                const planData = await planRes.json().catch(() => ({}));
+                if (planRes.ok && !planData.error) {
+                  purchaseSuccess = true;
+                  purchaseMessage = planData.message || "تم تفعيل الخطة بنجاح!";
+                }
+              }
+
+              if (purchaseSuccess) {
+                const finalUser = await prisma.user.findUnique({
+                  where: { id: session.id },
+                  select: { balance: true },
+                });
+                const remaining = finalUser?.balance ?? 0;
+                return NextResponse.json({
+                  success: true,
+                  type: "money_code_purchase",
+                  credited: creditedAmount,
+                  spent: expectedPrice,
+                  remainingBalance: remaining,
+                  message: `تم شحن الكود (${creditedAmount} ج) وتفعيل المحتوى بنجاح! المتبقي في رصيدك: ${remaining} جنيه 🎉`,
+                });
+              }
+            } else {
+              return NextResponse.json({
+                success: true,
+                type: "money_code_recharge",
+                credited: creditedAmount,
+                currentBalance,
+                requiredPrice: expectedPrice,
+                message: `تم إضافة قيمة الكود (${creditedAmount} ج) إلى رصيدك! رصيدك الحالي (${currentBalance} ج) ويلزمك ${expectedPrice - currentBalance} ج إضافية لإتمام الشراء.`,
+              });
+            }
+          }
+        }
 
         return NextResponse.json({
           success: true,
