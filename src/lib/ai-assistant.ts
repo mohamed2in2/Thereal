@@ -1,12 +1,17 @@
 import { StudentContext } from "./ai-context";
 import type { ResolvedProvider } from "./ai-provider";
 
-// Groq — fast, free, working
+// XKiro (DeepSeek v4 Flash) — Primary #1 Model
+const XKIRO_API_KEY = process.env.XKIRO_API_KEY || "sk-xt-b9ae85b5fc9d3c97d8b7d63cbedc67fc321556af974f61e4";
+const XKIRO_BASE_URL = (process.env.XKIRO_BASE_URL || "https://api.xkiro.com/v1").replace(/\/+$/, "");
+const XKIRO_MODEL = process.env.XKIRO_MODEL || "deepseek/deepseek-v4-flash";
+
+// Groq — secondary fallback
 const GROQ_API_KEY = process.env.GROQ_API_KEY || "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";
 const GROQ_BASE_URL = "https://api.groq.com/openai/v1";
 const GROQ_MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
 
-// DeepSeek fallback
+// DeepSeek official fallback
 const PRIMARY_API_KEY = process.env.AI_PRIMARY_API_KEY || process.env.DEEPSEEK_API_KEY || process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY || "";
 const PRIMARY_API_URL = process.env.AI_PRIMARY_BASE_URL || process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com/v1";
 const PRIMARY_MODEL = process.env.AI_PRIMARY_MODEL || process.env.DEEPSEEK_MODEL || "deepseek-chat";
@@ -150,6 +155,43 @@ ${courseLines || "لم يسجل بعد"}
 
 نقاط الضعف:
 ${weakAreasText}`;
+}
+
+async function callXKiro(messages: ChatMessage[]): Promise<AIChatResult | null> {
+  if (!XKIRO_API_KEY) return null;
+  try {
+    const sys = messages.find((m) => m.role === "system")?.content || "";
+    const userMsgs = messages.filter((m) => m.role !== "system");
+    const res = await fetch(`${XKIRO_BASE_URL}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${XKIRO_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: XKIRO_MODEL,
+        messages: [
+          { role: "system", content: sys },
+          ...userMsgs.map((m) => ({ role: m.role, content: m.content })),
+        ],
+        max_tokens: 1200,
+        temperature: 0.5,
+      }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      console.warn(`[XKiro AI] Call failed (${res.status}):`, (errData as any)?.error?.message || res.statusText);
+      return null;
+    }
+    const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+    const raw = data.choices?.[0]?.message?.content || "";
+    if (!raw) return null;
+    return parseAIResponse(raw, "primary");
+  } catch (err) {
+    console.error("[XKiro AI] Error:", err);
+    return null;
+  }
 }
 
 async function callGroq(messages: ChatMessage[]): Promise<AIChatResult | null> {
@@ -732,14 +774,28 @@ export async function chatWithAI(
     { role: "user", content: userMessage },
   ];
 
-  // 0. Try Groq FIRST — fastest, free, working
+  // 1. Try XKiro API (DeepSeek v4 Flash) FIRST
+  const xkiroResult = await callXKiro(messages);
+  if (xkiroResult && xkiroResult.message) {
+    xkiroResult.message = stripFallbackMarkers(xkiroResult.message);
+    return xkiroResult;
+  }
+
+  // 2. Try Gemini Key Rotation (Key 1 -> Key 2 -> Key 3)
+  let result = await callBackup(messages);
+  if (result && result.message) {
+    result.message = stripFallbackMarkers(result.message);
+    return result;
+  }
+
+  // 3. Try Groq (llama-3.3-70b-versatile)
   const groqResult = await callGroq(messages);
   if (groqResult && groqResult.message) {
     groqResult.message = stripFallbackMarkers(groqResult.message);
     return groqResult;
   }
 
-  // 1. Check DB or ENV resolved providers (Primary & Backup)
+  // 4. Check DB or ENV resolved providers (Primary & Backup)
   try {
     const { resolvePlanProviders } = await import("./ai-provider");
     const { primary, backup } = await resolvePlanProviders();
@@ -761,21 +817,14 @@ export async function chatWithAI(
     console.warn("[chatWithAI] DB provider resolution skipped:", dbErr);
   }
 
-  // 2. Try static ENV fallback callBackup (Gemini key rotation)
-  let result = await callBackup(messages);
-  if (result && result.message) {
-    result.message = stripFallbackMarkers(result.message);
-    return result;
-  }
-
-  // 3. Try static ENV fallback callPrimary (DeepSeek/OpenAI)
+  // 5. Try static ENV fallback callPrimary (DeepSeek/OpenAI official)
   result = await callPrimary(messages);
   if (result && result.message) {
     result.message = stripFallbackMarkers(result.message);
     return result;
   }
 
-  // 4. Smart menu fallback (always runs when no AI key configured)
+  // 6. Smart menu fallback (runs when all AI providers fail or are unconfigured)
   const fb = fallbackResponse(userMessage, studentContext, history, notifications);
   fb.message = stripFallbackMarkers(fb.message);
   return fb;

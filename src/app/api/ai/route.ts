@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 
+const XKIRO_API_KEY = process.env.XKIRO_API_KEY || "sk-xt-b9ae85b5fc9d3c97d8b7d63cbedc67fc321556af974f61e4";
+const XKIRO_BASE_URL = (process.env.XKIRO_BASE_URL || "https://api.xkiro.com/v1").replace(/\/+$/, "");
+const XKIRO_MODEL = process.env.XKIRO_MODEL || "deepseek/deepseek-v4-flash";
+
 const GROQ_API_KEY = process.env.GROQ_API_KEY || "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";
 const GROQ_BASE_URL = "https://api.groq.com/openai/v1";
 const GROQ_MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
@@ -14,6 +18,31 @@ const GEMINI_KEYS = [
 const BACKUP_BASE_RAW = process.env.AI_BACKUP_BASE_URL || "https://generativelanguage.googleapis.com/v1beta";
 const BACKUP_BASE_URL = BACKUP_BASE_RAW.replace(/\/+$/, "");
 const BACKUP_MODEL = process.env.AI_BACKUP_MODEL || "gemini-2.0-flash";
+
+async function callXKiro(messages: { role: string; content: string }[]): Promise<string | null> {
+  if (!XKIRO_API_KEY) return null;
+  try {
+    const res = await fetch(`${XKIRO_BASE_URL}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${XKIRO_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: XKIRO_MODEL,
+        messages,
+        max_tokens: 1200,
+        temperature: 0.7,
+      }),
+      signal: AbortSignal.timeout(12000),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content || null;
+  } catch {
+    return null;
+  }
+}
 
 async function callGroq(messages: { role: string; content: string }[]): Promise<string | null> {
   if (!GROQ_API_KEY) return null;
@@ -99,10 +128,11 @@ export async function POST(req: NextRequest) {
     ...(messages || []),
   ];
 
-  // Try Groq first (confirmed working), then Gemini key rotation, then static fallback
+  // Try XKiro (DeepSeek v4 Flash) first, then Gemini key rotation, then Groq, then static fallback
   const reply =
-    (await callGroq(formattedMessages)) ||
+    (await callXKiro(formattedMessages)) ||
     (await callGeminiFallback(formattedMessages)) ||
+    (await callGroq(formattedMessages)) ||
     generateFallbackPlan(courses || []);
 
   return NextResponse.json({ reply });
