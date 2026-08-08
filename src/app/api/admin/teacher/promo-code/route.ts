@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-export const PROMO_EXPIRY_DAYS = 350;
-export const PROMO_EXPIRY_MS = PROMO_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
+const PROMO_EXPIRY_DAYS = 350;
+const PROMO_EXPIRY_MS = PROMO_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
 
 export async function GET() {
   try {
