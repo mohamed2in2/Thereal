@@ -32,13 +32,10 @@ interface Props {
 export function VideoWatermark({ label, onFlash }: Props) {
   const [visible, setVisible] = useState(true);
   const [pos, setPos] = useState(randomPos);
-  const [motionOk, setMotionOk] = useState(true);
   const onFlashRef = useRef(onFlash);
   onFlashRef.current = onFlash;
 
   useEffect(() => {
-    setMotionOk(!window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-
     const flash = () => {
       setPos(randomPos());
       setVisible(true);
@@ -55,14 +52,14 @@ export function VideoWatermark({ label, onFlash }: Props) {
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden select-none z-10" aria-hidden>
       <span
-        className="absolute font-mono text-[11px] sm:text-xs font-bold tracking-widest whitespace-nowrap px-2.5 py-1 rounded-md bg-black/40 backdrop-blur-[1px] border border-white/20 text-white/85 shadow-lg"
+        className="absolute font-mono text-[11px] sm:text-xs font-bold tracking-widest whitespace-nowrap px-2.5 py-1 rounded-md bg-black/60 border border-white/20 text-white/90 shadow-lg"
         dir="ltr"
         style={{
           top: pos.top,
           left: pos.left,
-          textShadow: "0 1px 4px rgba(0,0,0,0.9), 0 0 8px rgba(0,0,0,0.8)",
-          opacity: visible ? 0.85 : 0,
-          transition: motionOk ? "top 0.4s ease-in-out, left 0.4s ease-in-out, opacity 0.3s ease" : "none",
+          textShadow: "0 1px 3px rgba(0,0,0,0.9)",
+          opacity: visible ? 0.9 : 0,
+          transition: "opacity 0.2s ease",
         }}
       >
         {label}

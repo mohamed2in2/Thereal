@@ -52,12 +52,7 @@ export function SecurePlayer({
 }) {
   const { ref: wrapRef, isFs, cssFs, toggle: toggleFs } = useFullscreen<HTMLDivElement>();
 
-  // ── Disruption overlay: fires when watermark flashes ─────────────────────
-  const [disrupted, setDisrupted] = useState(false);
-  const handleFlash = useCallback(() => {
-    setDisrupted(true);
-    setTimeout(() => setDisrupted(false), 500);
-  }, []);
+
 
   // YouTube → hardened API player (no clickable YouTube chrome).
   if (provider === "youtube") {
@@ -228,16 +223,7 @@ export function SecurePlayer({
         />
       )}
 
-      <VideoWatermark label={watermark} onFlash={handleFlash} />
-
-      {/* Anti-screen-recording disruption overlay — 500ms opacity drop on every watermark flash */}
-      {disrupted && (
-        <div
-          className="absolute inset-0 z-[15] pointer-events-none"
-          style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "brightness(0.4)" }}
-          aria-hidden
-        />
-      )}
+      <VideoWatermark label={watermark} />
 
       {/* Interactive overlays & modals */}
       {children}
