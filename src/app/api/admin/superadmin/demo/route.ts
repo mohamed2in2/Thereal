@@ -76,7 +76,6 @@ export async function POST(req: NextRequest) {
         isDemo: true,
         isActive: true,
         isDeleted: false,
-        codeIssuanceLimit: 0,
       },
       create: {
         name: "test",
@@ -87,7 +86,6 @@ export async function POST(req: NextRequest) {
         isDemo: true,
         isActive: true,
         isDeleted: false,
-        codeIssuanceLimit: 0,
       },
     });
 

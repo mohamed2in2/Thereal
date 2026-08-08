@@ -32,7 +32,6 @@ async function main() {
       isDemo: true,
       isActive: true,
       isDeleted: false,
-      codeIssuanceLimit: 0,
     },
     create: {
       name: "test",
@@ -43,7 +42,6 @@ async function main() {
       isDemo: true,
       isActive: true,
       isDeleted: false,
-      codeIssuanceLimit: 0,
     },
   });
 

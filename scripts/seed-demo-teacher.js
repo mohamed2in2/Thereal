@@ -26,10 +26,10 @@ async function main() {
   // 2. Upsert Demo Teacher User (User.name MUST be "test" for login)
   const teacherId = "demo-teacher-id-1001";
   await client.execute({
-    sql: `INSERT INTO User (id, name, email, phone, password, role, isDemo, isActive, isDeleted, codeIssuanceLimit, createdAt, updatedAt)
-          VALUES (?, 'test', 'demo_teacher@test.local', '01000000099', ?, 'teacher', 1, 1, 0, 0, ?, ?)
+    sql: `INSERT INTO User (id, name, email, phone, password, role, isDemo, isActive, isDeleted, createdAt, updatedAt)
+          VALUES (?, 'test', 'demo_teacher@test.local', '01000000099', ?, 'teacher', 1, 1, 0, ?, ?)
           ON CONFLICT(email) DO UPDATE SET
-            name='test', password=excluded.password, role='teacher', isDemo=1, isActive=1, isDeleted=0, codeIssuanceLimit=0`,
+            name='test', password=excluded.password, role='teacher', isDemo=1, isActive=1, isDeleted=0`,
     args: [teacherId, passwordHash, now, now],
   });
 
