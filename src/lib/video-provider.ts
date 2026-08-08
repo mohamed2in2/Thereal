@@ -69,13 +69,13 @@ export function validateProviderId(provider: VideoProvider, id: string): string 
 
   switch (provider) {
     case "alasly":
-      if (!/^[a-z0-9-]+$/i.test(id)) return "معرف درس Native يجب أن يكون UUID صالحاً";
+      if (!/^[a-z0-9_.-]+$/i.test(id)) return "معرف درس Native يحتوي على أحرف وأرقام وشرطات ونقاط فقط";
       break;
     case "vdocipher":
-      if (!/^[a-z0-9-]+$/i.test(id)) return "معرف VdoCipher يحتوي على أحرف وأرقام وشرطات فقط";
+      if (!/^[a-z0-9_.-]+$/i.test(id)) return "معرف VdoCipher يحتوي على أحرف وأرقام وشرطات ونقاط فقط";
       break;
     case "bunny":
-      if (!/^[a-z0-9-]+$/i.test(id)) return "معرف Bunny Stream يحتوي على أحرف وأرقام وشرطات فقط";
+      if (!/^[a-z0-9_.-]+$/i.test(id)) return "معرف Bunny Stream يحتوي على أحرف وأرقام وشرطات ونقاط فقط";
       break;
     case "youtube":
       // YouTube video IDs are exactly 11 chars: letters, digits, -, _
