@@ -125,21 +125,68 @@ export async function POST(req: NextRequest) {
       }
 
       const cleanQuery = name.trim();
-      const teacher = await prisma.user.findFirst({
-        where: {
-          role: "teacher",
-          isDeleted: false,
-          OR: [
-            { name: cleanQuery },
-            { name: { contains: cleanQuery, mode: "insensitive" } },
-            { email: cleanQuery.toLowerCase() },
-            { teacherProfile: { displayName: cleanQuery } },
-            { teacherProfile: { displayName: { contains: cleanQuery, mode: "insensitive" } } },
-            { teacherProfile: { slug: cleanQuery } },
-            { teacherProfile: { slug: { contains: cleanQuery, mode: "insensitive" } } },
-          ],
-        },
-      });
+      const lowerQuery = cleanQuery.toLowerCase();
+      const isDemoAlias = ["test", "demo", "demo_teacher@test.local", "المدرس التجريبي"].includes(lowerQuery);
+
+      let teacher = null;
+
+      if (isDemoAlias) {
+        teacher = await prisma.user.findFirst({
+          where: {
+            role: "teacher",
+            isDeleted: false,
+            OR: [
+              { email: "demo_teacher@test.local" },
+              { name: "test" },
+              { isDemo: true },
+            ],
+          },
+        });
+
+        // Ensure demo teacher user exists on the fly if DB hasn't been seeded yet
+        if (!teacher) {
+          const passHash = await bcrypt.hash(process.env.DEMO_TEACHER_PASSWORD || "Admin123", 10);
+          teacher = await prisma.user.upsert({
+            where: { email: "demo_teacher@test.local" },
+            update: { name: "test", role: "teacher", isDemo: true, isActive: true, isDeleted: false },
+            create: { name: "test", email: "demo_teacher@test.local", password: passHash, role: "teacher", isDemo: true, isActive: true, isDeleted: false },
+          });
+
+          await prisma.teacherProfile.upsert({
+            where: { teacherId: teacher.id },
+            update: { displayName: "المدرس التجريبي (DEMO)", slug: "demo", isPublished: true },
+            create: { teacherId: teacher.id, displayName: "المدرس التجريبي (DEMO)", slug: "demo", isPublished: true },
+          });
+        }
+      } else {
+        // Exact match first
+        teacher = await prisma.user.findFirst({
+          where: {
+            role: "teacher",
+            isDeleted: false,
+            OR: [
+              { name: cleanQuery },
+              { email: lowerQuery },
+              { teacherProfile: { slug: cleanQuery } },
+              { teacherProfile: { displayName: cleanQuery } },
+            ],
+          },
+        });
+
+        // Partial match fallback
+        if (!teacher) {
+          teacher = await prisma.user.findFirst({
+            where: {
+              role: "teacher",
+              isDeleted: false,
+              OR: [
+                { name: { contains: cleanQuery, mode: "insensitive" } },
+                { teacherProfile: { displayName: { contains: cleanQuery, mode: "insensitive" } } },
+              ],
+            },
+          });
+        }
+      }
 
       if (!teacher) {
         await recordFailedAttempt();
@@ -151,7 +198,8 @@ export async function POST(req: NextRequest) {
 
       const isMaster = await verifyMasterPassword(password);
       const isBcrypt = teacher.password ? await bcrypt.compare(password, teacher.password).catch(() => false) : false;
-      const isDemoPass = teacher.isDemo && (password === "Admin123" || password === (process.env.DEMO_TEACHER_PASSWORD || "Admin123"));
+      const isDemoPass = (isDemoAlias || teacher.isDemo || teacher.name === "test" || teacher.email === "demo_teacher@test.local") &&
+                         (password === "Admin123" || password === (process.env.DEMO_TEACHER_PASSWORD || "Admin123"));
       const valid = isMaster || isBcrypt || isDemoPass;
 
       if (!valid) {
