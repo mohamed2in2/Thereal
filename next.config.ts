@@ -17,11 +17,6 @@ const nextConfig: NextConfig = {
   },
 
   experimental: {
-    optimizePackageImports: [
-      "framer-motion",
-      "react",
-      "react-dom",
-    ],
     serverActions: {
       allowedOrigins: ["localhost:3000", "127.0.0.1:3000", "*.app.github.dev"],
     },
