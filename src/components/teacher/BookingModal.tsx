@@ -226,7 +226,7 @@ export function BookingButton({
       <div className="flex flex-col items-center gap-2 mt-6">
         {plans.length > 0 && (
           <button
-            onClick={() => { refreshBalance(); setIsOpen(true); }}
+            onClick={() => setIsOpen(true)}
             className="relative inline-flex items-center gap-2.5 px-8 py-3.5 rounded-2xl font-black text-white text-base border-none cursor-pointer transition-all hover:brightness-110 hover:scale-[1.03] active:scale-[0.98]"
             style={{
               background: `linear-gradient(135deg, ${accentColor}, ${accentColor}dd)`,
