@@ -201,8 +201,8 @@ export function BookingButton({
     };
   };
 
-  const baseMonthly = priceMonthly && priceMonthly > 0 ? priceMonthly : 200;
-  const baseTermly = priceTermly && priceTermly > 0 ? priceTermly : 600;
+  const baseMonthly = priceMonthly && priceMonthly > 0 ? priceMonthly : 180;
+  const baseTermly = priceTermly && priceTermly > 0 ? priceTermly : 750;
   const baseYearly = priceYearly && priceYearly > 0 ? priceYearly : 1200;
 
   const langRate = priceLanguagesMonthly != null && priceLanguagesMonthly >= 0 ? priceLanguagesMonthly : 50;

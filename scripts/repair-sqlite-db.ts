@@ -76,14 +76,15 @@ async function ensureSQLiteSchema(prisma: PrismaClient) {
     operations.push('created VideoWatchSession');
   }
 
-  // Migrate old plan stages to standard codes
+  // Migrate old plan stages to standard codes & update TeacherProfile default pricing
   try {
     await prisma.$executeRawUnsafe(`UPDATE "Plan" SET "educationalStage" = 'sec_1' WHERE "educationalStage" = 'FIRST_SECONDARY'`);
     await prisma.$executeRawUnsafe(`UPDATE "Plan" SET "educationalStage" = 'sec_2' WHERE "educationalStage" = 'SECOND_SECONDARY'`);
     await prisma.$executeRawUnsafe(`UPDATE "Plan" SET "educationalStage" = 'sec_3' WHERE "educationalStage" = 'THIRD_SECONDARY'`);
-    operations.push('migrated Plan.educationalStage to standard codes');
+    await prisma.$executeRawUnsafe(`UPDATE "TeacherProfile" SET "priceMonthly" = 180, "priceTermly" = 750, "priceYearly" = 1200`);
+    operations.push('migrated Plan.educationalStage and updated TeacherProfile default pricing (monthly=180, termly=750, yearly=1200)');
   } catch (e) {
-    // Plan table might not exist in some environments yet
+    // Plan or TeacherProfile table might not exist in some environments yet
   }
 
   return operations;

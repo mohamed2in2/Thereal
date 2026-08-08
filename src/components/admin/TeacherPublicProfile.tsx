@@ -366,13 +366,13 @@ export function TeacherPublicProfile() {
               <span className="flex items-center gap-2"><span>📅</span> اشتراك شهر واحد (1 Month)</span>
               {p.priceMonthly && (
                 <span className="text-xs font-mono text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
-                  صافي العربي: {Math.round((p.priceMonthly ?? 200) * (1 - (p.discountMonthly || 0) / 100))}ج | لغات: {Math.round((p.priceMonthly ?? 200) * (1 - (p.discountMonthly || 0) / 100)) + (p.priceLanguagesMonthly ?? 50)}ج
+                  صافي العربي: {Math.round((p.priceMonthly ?? 180) * (1 - (p.discountMonthly || 0) / 100))}ج | لغات: {Math.round((p.priceMonthly ?? 180) * (1 - (p.discountMonthly || 0) / 100)) + (p.priceLanguagesMonthly ?? 50)}ج
                 </span>
               )}
             </h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className={label}>السعر الأساسي (جنيه - افتراضي 200ج)</label>
+                <label className={label}>السعر الأساسي (جنيه - افتراضي 180ج)</label>
                 <input
                   type="number"
                   min="0"
@@ -380,7 +380,7 @@ export function TeacherPublicProfile() {
                   className={input}
                   value={p.priceMonthly ?? ""}
                   onChange={(e) => set("priceMonthly", e.target.value ? Number(e.target.value) : null)}
-                  placeholder="200"
+                  placeholder="180"
                 />
               </div>
               <div>
@@ -402,16 +402,16 @@ export function TeacherPublicProfile() {
           {/* 3 Months Plan */}
           <div className="p-4 rounded-xl border border-[var(--border)] bg-[var(--bg)]">
             <h4 className="font-bold text-sm text-[var(--ink)] mb-3 flex items-center justify-between">
-              <span className="flex items-center gap-2"><span>📚</span> اشتراك 3 شهور (3 Months)</span>
+              <span className="flex items-center gap-2"><span>📚</span> اشتراك الترم (3 Months)</span>
               {p.priceTermly && (
                 <span className="text-xs font-mono text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/20">
-                  صافي العربي: {Math.round((p.priceTermly ?? 600) * (1 - (p.discountTermly || 0) / 100))}ج | لغات: {Math.round((p.priceTermly ?? 600) * (1 - (p.discountTermly || 0) / 100)) + (p.priceLanguagesMonthly ?? 50) * 3}ج
+                  صافي العربي: {Math.round((p.priceTermly ?? 750) * (1 - (p.discountTermly || 0) / 100))}ج | لغات: {Math.round((p.priceTermly ?? 750) * (1 - (p.discountTermly || 0) / 100)) + (p.priceLanguagesMonthly ?? 50) * 3}ج
                 </span>
               )}
             </h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className={label}>السعر الأساسي (جنيه - افتراضي 600ج)</label>
+                <label className={label}>السعر الأساسي (جنيه - افتراضي 750ج)</label>
                 <input
                   type="number"
                   min="0"
@@ -419,7 +419,7 @@ export function TeacherPublicProfile() {
                   className={input}
                   value={p.priceTermly ?? ""}
                   onChange={(e) => set("priceTermly", e.target.value ? Number(e.target.value) : null)}
-                  placeholder="600"
+                  placeholder="750"
                 />
               </div>
               <div>

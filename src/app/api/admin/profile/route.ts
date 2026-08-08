@@ -36,8 +36,8 @@ export async function GET() {
           teacherId: session.id,
           slug: await uniqueSlug(session.name, session.id),
           displayName: session.name,
-          priceMonthly: 200,
-          priceTermly: 600,
+          priceMonthly: 180,
+          priceTermly: 750,
           priceYearly: 1200,
           enableLanguagesTrack: true,
           priceLanguagesMonthly: 50,
@@ -46,8 +46,8 @@ export async function GET() {
     } else {
       // Ensure defaults for missing base prices
       const updates: Record<string, any> = {};
-      if (profile.priceMonthly == null) updates.priceMonthly = 200;
-      if (profile.priceTermly == null) updates.priceTermly = 600;
+      if (profile.priceMonthly == null) updates.priceMonthly = 180;
+      if (profile.priceTermly == null) updates.priceTermly = 750;
       if (profile.priceYearly == null) updates.priceYearly = 1200;
       if (profile.enableLanguagesTrack == null) updates.enableLanguagesTrack = true;
       if (profile.priceLanguagesMonthly == null) updates.priceLanguagesMonthly = 50;

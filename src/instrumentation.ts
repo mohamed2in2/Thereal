@@ -25,6 +25,21 @@ export async function register() {
         } else {
           console.log(`⏰ Leaderboard cache already populated. Last updated at: ${cache.updatedAt.toISOString()}`);
         }
+
+        // Auto-update teacher profiles to 180/750/1200 pricing
+        await prisma.teacherProfile.updateMany({
+          where: {
+            OR: [
+              { priceMonthly: 200 },
+              { priceTermly: 600 },
+            ],
+          },
+          data: {
+            priceMonthly: 180,
+            priceTermly: 750,
+            priceYearly: 1200,
+          },
+        }).catch(() => {});
       } catch (err) {
         console.error("❌ Failed to perform initial leaderboard cache check/refresh:", err);
       }
