@@ -4,16 +4,13 @@ import { useState, useEffect, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Navbar } from "@/components/ui/Navbar";
 import { Footer } from "@/components/ui/Footer";
-import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
 import {
   listPaymentMethods,
   getPaymentMethod,
-  type PaymentMethodConfig,
 } from "@/lib/payment-methods";
-import { validateEgyptianPhone, validateVodafoneCashPhone, normalizeEgyptianPhone, calculateAmountWithTax } from "@/lib/sha7nawy";
+import { validateVodafoneCashPhone, normalizeEgyptianPhone, calculateAmountWithTax } from "@/lib/sha7nawy";
 import { PaymentMethodGrid } from "@/components/payment/PaymentMethodGrid";
-import { PaymentProviderIcon } from "@/components/payment/PaymentProviderIcon";
 import { LoadingState } from "@/components/payment/LoadingState";
 import { ErrorState } from "@/components/payment/ErrorState";
 import { PaymentStatus } from "@/components/payment/PaymentStatus";
@@ -34,27 +31,24 @@ const PRESET_AMOUNTS = [50, 100, 200, 500, 1000];
 function PaymentContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { error: toastError, success: toastSuccess } = useToast();
+  const { error: toastError } = useToast();
 
   const amountParam = searchParams.get("amount");
   const methodParam = searchParams.get("method");
   const returnHref = searchParams.get("return");
-  const contextLabel = searchParams.get("context") ?? "";
-  const teacherIdParam = searchParams.get("teacherId");
   const teacherNameParam = searchParams.get("teacherName");
-  const planTypeParam = searchParams.get("planType");
   const planLabelParam = searchParams.get("planLabel");
-  const gradeParam = searchParams.get("grade");
 
   const [step, setStep] = useState<Step>("checkout");
   const [baseAmount, setBaseAmount] = useState<string>("100");
   const [selectedMethodId, setSelectedMethodId] = useState<string>("vf_cash");
   const [phone, setPhone] = useState("");
   const [phoneError, setPhoneError] = useState("");
-  const [unsupportedNotice, setUnsupportedNotice] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [intent, setIntent] = useState<PaymentIntent | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
+
+  const [copied, setCopied] = useState(false);
 
   const [user, setUser] = useState<{ id: string; name: string } | null>(null);
   const [userLoading, setUserLoading] = useState(true);
@@ -87,11 +81,7 @@ function PaymentContent() {
       const found = getPaymentMethod(methodParam);
       if (found && found.available) {
         setSelectedMethodId(found.id);
-        setUnsupportedNotice(null);
       } else if (found && !found.available) {
-        setUnsupportedNotice(
-          `طريقة الدفع المحددة (${found.label}) غير متاحة حالياً عبر البوابة المباشرة. تم توجيهك لاختيار إحدى الوسائل المفعلة أدناه (فودافون كاش، فوري كشك، أو التواصل بالواتساب).`
-        );
         setSelectedMethodId("vf_cash");
       }
     }
@@ -99,12 +89,12 @@ function PaymentContent() {
 
   const validatePhone = useCallback((val: string, methodId: string = selectedMethodId) => {
     if (!val.trim()) {
-      setPhoneError("رقم المحفظة / الهاتف مطلوب لإتمام العملية");
+      setPhoneError("رقم المحفظة مطلوب لإتمام العملية");
       return false;
     }
     if (methodId === "vf_cash") {
       if (!validateVodafoneCashPhone(val)) {
-        setPhoneError("عفواً، رقم محفظة فودافون كاش يجب أن يبدأ بـ 010 ويتكون من 11 رقماً (مثال: 010xxxxxxxx)");
+        setPhoneError("رقم محفظة فودافون كاش يجب أن يبدأ بـ 010 ويتكون من 11 رقماً");
         return false;
       }
     }
@@ -116,7 +106,7 @@ function PaymentContent() {
     if (!selectedMethod) return;
 
     if (!user) {
-      toastError("يجب تسجيل الدخول أو إنشاء حساب أولاً قبل إتمام عملية الدفع");
+      toastError("يرجى تسجيل الدخول أو إنشاء حساب جديد لإتمام عملية الدفع");
       const redirectTarget = window.location.pathname + window.location.search;
       router.push(`/login?redirect_url=${encodeURIComponent(redirectTarget)}`);
       return;
@@ -124,11 +114,11 @@ function PaymentContent() {
 
     const amt = Number(baseAmount);
     if (!amt || amt < selectedMethod.minAmount) {
-      toastError(`الحد الأدنى للشحن عبر ${selectedMethod.label} هو ${selectedMethod.minAmount} جنيه`);
+      toastError(`الحد الأدنى للشحن هو ${selectedMethod.minAmount} جنيه`);
       return;
     }
     if (amt > selectedMethod.maxAmount) {
-      toastError(`الحد الأقصى للشحن عبر ${selectedMethod.label} هو ${selectedMethod.maxAmount.toLocaleString()} جنيه`);
+      toastError(`الحد الأقصى للشحن هو ${selectedMethod.maxAmount} جنيه`);
       return;
     }
 
@@ -155,7 +145,7 @@ function PaymentContent() {
       const body = await res.json().catch(() => ({}));
 
       if (!res.ok || !body.success) {
-        setErrors([body.error || "تعذر بدء عملية الدفع عبر بوابة الدفع الإلكتروني"]);
+        setErrors([body.error || "تعذر بدء عملية الدفع الإلكتروني حالياً"]);
         setStep("error");
         setIsCreating(false);
         return;
@@ -172,7 +162,7 @@ function PaymentContent() {
 
       setStep("instructions");
     } catch {
-      setErrors(["حدث خطأ أثناء الاتصال ببوابة الدفع — يرجى المحاولة مرة أخرى"]);
+      setErrors(["حدث خطأ أثناء الاتصال ببوابة الدفع. يرجى المحاولة مرة أخرى."]);
       setStep("error");
     } finally {
       setIsCreating(false);
@@ -199,220 +189,97 @@ function PaymentContent() {
     }
   }, [returnHref, router]);
 
-  const { baseAmount: calcBase, taxAmount: calcTax, totalAmount: calcTotal, feePercentage: calcFee } =
+  const { baseAmount: calcBase, taxAmount: calcTax, totalAmount: calcTotal } =
     calculateAmountWithTax(Number(baseAmount) || 0, selectedMethod?.id || "vf_cash");
 
+  const orderTitle = teacherNameParam || planLabelParam
+    ? `${teacherNameParam ? `أستاذ ${teacherNameParam}` : ""}${teacherNameParam && planLabelParam ? " • " : ""}${planLabelParam || ""}`
+    : "شحن رصيد المحفظة";
+
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50 dark:bg-[#090e17] text-slate-900 dark:text-slate-100 font-sans">
+    <div dir="rtl" className="flex min-h-screen flex-col bg-[#F7F8FA] dark:bg-[#0B0F14] text-[#101828] dark:text-[#F2F4F7] font-sans">
       <Navbar />
 
-      <main className="mx-auto w-full max-w-4xl flex-1 px-4 pb-20 pt-8 sm:px-6">
-        {!userLoading && !user && (
-          <div className="mb-6 rounded-3xl bg-amber-500/10 border-2 border-amber-500/30 p-6 text-center dir-rtl backdrop-blur-md">
-            <div className="text-4xl mb-2">🔒</div>
-            <h3 className="text-base sm:text-lg font-black text-amber-800 dark:text-amber-300 mb-1">
-              تسجيل الدخول مطلوب لإتمام عملية الدفع
-            </h3>
-            <p className="text-xs sm:text-sm text-amber-700 dark:text-amber-400 mb-4 max-w-md mx-auto leading-relaxed">
-              يرجى تسجيل الدخول أو إنشاء حساب جديد لربط الاشتراكات والرصيد بحسابك الشخصي بصفة دائمة.
-            </p>
-            <div className="flex items-center justify-center gap-3">
-              <Button
-                onClick={() => {
-                  const target = window.location.pathname + window.location.search;
-                  router.push(`/login?redirect_url=${encodeURIComponent(target)}`);
-                }}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-black px-6 py-2.5 text-xs sm:text-sm rounded-2xl shadow-lg"
-              >
-                تسجيل الدخول 🔑
-              </Button>
-              <Button
-                onClick={() => {
-                  const target = window.location.pathname + window.location.search;
-                  router.push(`/signup?redirect_url=${encodeURIComponent(target)}`);
-                }}
-                variant="outline"
-                className="font-black px-6 py-2.5 text-xs sm:text-sm rounded-2xl border-amber-500/40 text-amber-800 dark:text-amber-300 hover:bg-amber-500/10"
-              >
-                إنشاء حساب جديد ✨
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {teacherIdParam && (
-          <div className="mb-8 rounded-3xl border-2 border-emerald-500/30 bg-gradient-to-br from-white via-emerald-50/50 to-teal-50/50 dark:from-emerald-950/80 dark:via-slate-900/90 dark:to-teal-950/70 p-6 sm:p-8 shadow-xl dark:shadow-[0_0_35px_rgba(16,185,129,0.15)] space-y-4 text-right dir-rtl backdrop-blur-xl">
-            <div className="flex items-center justify-between">
-              <span className="px-4 py-1.5 rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-xs font-black border border-emerald-500/30">
-                🎓 تفاصيل طلب الاشتراك في المنصة
-              </span>
-              <span className="text-xs text-slate-400 font-mono">كود المعلم: #{teacherIdParam.slice(0, 8)}</span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-              <div className="p-4 rounded-2xl bg-white/80 dark:bg-slate-800/60 border border-slate-200/80 dark:border-emerald-500/20 shadow-sm">
-                <span className="text-xs text-slate-500 dark:text-slate-400 font-bold block mb-1">المعلم المعني</span>
-                <p className="text-base font-black text-slate-900 dark:text-white">أستاذ {teacherNameParam || "المعلم"}</p>
-              </div>
-
-              <div className="p-4 rounded-2xl bg-white/80 dark:bg-slate-800/60 border border-slate-200/80 dark:border-emerald-500/20 shadow-sm">
-                <span className="text-xs text-slate-500 dark:text-slate-400 font-bold block mb-1">الصف الدراسي</span>
-                <p className="text-base font-black text-teal-600 dark:text-teal-300">
-                  {gradeParam === "sec_2" ? "ثانية بكالوريا" : "أولى بكالوريا"}
-                </p>
-              </div>
-
-              <div className="p-4 rounded-2xl bg-white/80 dark:bg-slate-800/60 border border-slate-200/80 dark:border-emerald-500/20 shadow-sm">
-                <span className="text-xs text-slate-500 dark:text-slate-400 font-bold block mb-1">نوع الاشتراك</span>
-                <p className="text-base font-black text-emerald-600 dark:text-emerald-400">{planLabelParam || "اشتراك"}</p>
-              </div>
-            </div>
-
-            <div className="pt-4 border-t border-emerald-500/20 flex items-center justify-between">
-              <span className="text-sm font-bold text-slate-700 dark:text-slate-300">إجمالي المبلغ المطلوب للدفع:</span>
-              <span className="text-2xl sm:text-3xl font-black text-emerald-600 dark:text-emerald-400">{baseAmount} جنيه</span>
-            </div>
-          </div>
-        )}
-
-        {contextLabel && !teacherIdParam && (
-          <div className="mb-6 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 p-4 text-center">
-            <p className="text-sm font-extrabold text-emerald-700 dark:text-emerald-400">
-              📌 {contextLabel}
-            </p>
-          </div>
-        )}
-
-        {unsupportedNotice && (
-          <div className="mb-6 rounded-2xl bg-amber-500/10 border border-amber-500/30 p-4 dir-rtl text-right">
-            <div className="flex items-start gap-3">
-              <span className="text-xl">⚠️</span>
-              <p className="text-xs sm:text-sm font-bold text-amber-800 dark:text-amber-300 leading-relaxed">
-                {unsupportedNotice}
-              </p>
-            </div>
-          </div>
-        )}
+      <main className="mx-auto w-full max-w-[560px] flex-1 px-4 py-8 pb-28 sm:pb-12">
 
         {step === "checkout" && (
-          <div dir="rtl" className="space-y-8">
-            {/* Header Title */}
-            <div className="text-center space-y-2">
-              <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">
-                إتمام عملية الدفع وشحن الرصيد
+          <div className="space-y-6">
+
+            {/* Page Title */}
+            <div>
+              <h1 className="text-[20px] font-semibold text-[#101828] dark:text-[#F2F4F7]">
+                الدفع وشحن الرصيد
               </h1>
-              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 font-medium">
-                اختر طريقة الدفع المناسبة وأدخل بيانات الشحن بأمان تام عبر بوابات الدفع الرسمية.
-              </p>
             </div>
 
-            {/* Step 1: Amount Selection & Calculator */}
-            <div className="rounded-3xl border-2 border-emerald-100 dark:border-emerald-500/20 bg-white dark:bg-slate-900/90 p-6 sm:p-8 shadow-lg dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)] space-y-6 backdrop-blur-xl">
-              <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
-                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-xs font-black text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-                  1
-                </span>
-                <h2 className="text-base font-extrabold text-slate-900 dark:text-white">
-                  المبلغ والرسوم الشفافة
+            {/* Section 1: Order Summary */}
+            <div className="rounded-xl border border-[#E4E7EC] dark:border-[#232C36] bg-[#FFFFFF] dark:bg-[#141A21] p-4 shadow-sm">
+              <div className="flex items-center justify-between gap-4">
+                <div className="min-w-0 flex-1">
+                  <div className="text-[15px] font-normal text-[#101828] dark:text-[#F2F4F7] truncate">
+                    {orderTitle}
+                  </div>
+                  <div className="text-[13px] font-medium text-[#667085] dark:text-[#98A2B3] tabular-nums mt-1">
+                    {calcBase.toFixed(2)} جنيه + {calcTax.toFixed(2)} رسوم = {calcTotal.toFixed(2)} جنيه
+                  </div>
+                </div>
+
+                <div className="text-[32px] font-bold text-[#047857] dark:text-[#10B981] tabular-nums shrink-0">
+                  {calcTotal.toFixed(2)} <span className="text-[15px] font-normal">جنيه</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Section 2: Amount Selector (only when no fixed amount param) */}
+            {!amountParam && (
+              <div>
+                <h2 className="text-[17px] font-semibold text-[#101828] dark:text-[#F2F4F7] mb-4">
+                  المبلغ
                 </h2>
-              </div>
 
-              {/* Amount Presets */}
-              <div className="space-y-3">
-                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400">
-                  اختر مبلغ الشحن الأساسي (ج.م):
-                </label>
-                <div className="flex flex-wrap items-center gap-2.5">
-                  {PRESET_AMOUNTS.map((p) => (
-                    <button
-                      key={p}
-                      type="button"
-                      onClick={() => setBaseAmount(String(p))}
-                      className={`rounded-2xl border-2 px-5 py-2.5 text-sm font-black transition-all ${
-                        baseAmount === String(p)
-                          ? "border-emerald-500 bg-emerald-50 text-emerald-800 dark:border-emerald-400 dark:bg-emerald-950/60 dark:text-emerald-300 shadow-md"
-                          : "border-slate-200 bg-white text-slate-700 hover:border-emerald-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
-                      }`}
-                    >
-                      {p} <span className="text-xs opacity-70">جنيه</span>
-                    </button>
-                  ))}
-                </div>
-
-                <div className="pt-2 max-w-xs">
-                  <input
-                    type="number"
-                    value={baseAmount}
-                    onChange={(e) => setBaseAmount(e.target.value)}
-                    placeholder="100"
-                    min={5}
-                    max={50000}
-                    dir="ltr"
-                    className="w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-center text-xl font-black text-slate-900 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                  />
-                </div>
-              </div>
-
-              {/* Realtime Fee Breakdown */}
-              {selectedMethod && (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 rounded-2xl bg-gradient-to-r from-emerald-50 via-teal-50 to-sky-50 dark:from-emerald-950/40 dark:via-teal-950/30 dark:to-slate-900/60 p-4 text-center border border-teal-100 dark:border-emerald-500/20">
-                  <div>
-                    <span className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold">المبلغ المطلوب</span>
-                    <p className="text-base font-black text-slate-900 dark:text-white">{calcBase.toFixed(2)} ج.م</p>
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {PRESET_AMOUNTS.map((p) => (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => setBaseAmount(String(p))}
+                        className={`h-10 rounded-lg border px-4 text-[15px] font-normal tabular-nums transition-colors ${
+                          baseAmount === String(p)
+                            ? "border-[#047857] dark:border-[#10B981] bg-[#047857]/5 dark:bg-[#10B981]/10 text-[#101828] dark:text-[#F2F4F7]"
+                            : "border-[#E4E7EC] dark:border-[#232C36] bg-[#FFFFFF] dark:bg-[#141A21] text-[#101828] dark:text-[#F2F4F7] hover:border-[#667085] dark:hover:border-[#98A2B3]"
+                        }`}
+                      >
+                        {p} جنيه
+                      </button>
+                    ))}
                   </div>
-                  <div>
-                    <span className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold">
-                      رسوم المعاملة ({calcFee}%)
+
+                  <div className="relative">
+                    <input
+                      type="number"
+                      value={baseAmount}
+                      onChange={(e) => setBaseAmount(e.target.value)}
+                      placeholder="100"
+                      min={5}
+                      max={50000}
+                      dir="ltr"
+                      className="w-full h-12 rounded-lg border border-[#E4E7EC] dark:border-[#232C36] bg-[#FFFFFF] dark:bg-[#141A21] pe-12 ps-4 text-right text-[15px] font-normal tabular-nums text-[#101828] dark:text-[#F2F4F7] outline-none focus-visible:ring-2 focus-visible:ring-[#047857] dark:focus-visible:ring-[#10B981]"
+                    />
+                    <span aria-hidden className="absolute right-4 top-3 text-[15px] font-normal text-[#667085] dark:text-[#98A2B3] pointer-events-none">
+                      جنيه
                     </span>
-                    <p className="text-base font-black text-amber-600 dark:text-amber-400">+{calcTax.toFixed(2)} ج.م</p>
-                  </div>
-                  <div>
-                    <span className="text-[11px] text-emerald-800 dark:text-emerald-300 font-bold">الإجمالي النهائي</span>
-                    <p className="text-lg font-black text-emerald-600 dark:text-emerald-400">{calcTotal.toFixed(2)} ج.م</p>
                   </div>
                 </div>
-              )}
-            </div>
-
-            {/* Step 2: Payment Method Selection */}
-            <div className="rounded-3xl border-2 border-emerald-100 dark:border-emerald-500/20 bg-white dark:bg-slate-900/90 p-6 sm:p-8 shadow-lg dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)] space-y-6 backdrop-blur-xl">
-              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-                <div className="flex items-center gap-2">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-xs font-black text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-                    2
-                  </span>
-                  <h2 className="text-base font-extrabold text-slate-900 dark:text-white">
-                    اختر طريقة الدفع المناسبة
-                  </h2>
-                </div>
-                <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                  🔒 مشفرة ومأمنة
-                </span>
               </div>
+            )}
 
-              {/* Trust Badges Bar */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="rounded-2xl border border-emerald-200/80 bg-emerald-50/50 p-3 text-center dark:border-emerald-500/20 dark:bg-emerald-950/30">
-                  <p className="text-xs font-bold text-emerald-900 dark:text-emerald-200">
-                    ⚡ فودافون كاش (*9*1#)
-                  </p>
-                  <p className="text-[11px] text-emerald-700 dark:text-emerald-400 mt-0.5">تأكيد تلقائي فور الخصم</p>
-                </div>
-                <div className="rounded-2xl border border-teal-200/80 bg-teal-50/50 p-3 text-center dark:border-teal-500/20 dark:bg-teal-950/30">
-                  <p className="text-xs font-bold text-teal-900 dark:text-teal-200">
-                    🏪 كود فوري كاش
-                  </p>
-                  <p className="text-[11px] text-teal-700 dark:text-teal-400 mt-0.5">سدد من أي كشك أو فرع</p>
-                </div>
-                <div className="rounded-2xl border border-sky-200/80 bg-sky-50/50 p-3 text-center dark:border-sky-500/20 dark:bg-sky-950/30">
-                  <p className="text-xs font-bold text-sky-900 dark:text-sky-200">
-                    💬 واتساب الخدمة Direct
-                  </p>
-                  <p className="text-[11px] text-sky-700 dark:text-sky-400 mt-0.5">InstaPay وأكواد التفعيل</p>
-                </div>
-              </div>
+            {/* Section 3: Payment Method Selector */}
+            <div>
+              <h2 className="text-[17px] font-semibold text-[#101828] dark:text-[#F2F4F7] mb-4">
+                طريقة الدفع
+              </h2>
 
-              {/* Methods Grid */}
               <PaymentMethodGrid
                 methods={allMethods}
                 selectedId={selectedMethodId}
@@ -427,37 +294,16 @@ function PaymentContent() {
               />
             </div>
 
-            {/* Step 3: Phone Entry & Action */}
+            {/* Section 4: Phone Entry & Confirm Action */}
             {selectedMethod && (
-              <div className="rounded-3xl border-2 border-emerald-100 dark:border-emerald-500/20 bg-white dark:bg-slate-900/90 p-6 sm:p-8 shadow-lg dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)] space-y-6 backdrop-blur-xl">
-                <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-xs font-black text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-                    3
-                  </span>
-                  <h2 className="text-base font-extrabold text-slate-900 dark:text-white">
-                    تأكيد وإرسال طلب الدفع
-                  </h2>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <PaymentProviderIcon method={selectedMethod} size={44} />
-                  <div>
-                    <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">
-                      {selectedMethod.label}
-                    </h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      {selectedMethod.labelEn} • {selectedMethod.processingSpeed}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Phone Input if required */}
+              <div className="space-y-4">
                 {selectedMethod.needsPhone && (
-                  <div className="space-y-2">
-                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
-                      أدخل رقم هاتف المحفظة أو العميل:
+                  <div>
+                    <label htmlFor="phone-input" className="text-[15px] font-normal text-[#101828] dark:text-[#F2F4F7] mb-2 block">
+                      رقم المحفظة أو الهاتف
                     </label>
                     <input
+                      id="phone-input"
                       type="tel"
                       value={phone}
                       onChange={(e) => {
@@ -465,192 +311,172 @@ function PaymentContent() {
                         if (phoneError) validatePhone(e.target.value);
                       }}
                       onBlur={() => validatePhone(phone)}
-                      placeholder="أدخل رقمك هنا..."
+                      placeholder="01xxxxxxxxx"
                       dir="ltr"
-                      className={`w-full rounded-2xl border-2 px-4 py-3.5 text-center text-lg font-mono outline-none transition-colors ${
+                      aria-describedby={phoneError ? "phone-error" : undefined}
+                      className={`w-full h-[52px] rounded-lg border px-4 text-left text-[17px] font-normal tabular-nums outline-none transition-colors ${
                         phoneError
-                          ? "border-rose-400 bg-rose-50 dark:border-rose-700 dark:bg-rose-950/20"
-                          : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800"
-                      } dark:text-white`}
+                          ? "border-[#B42318] dark:border-[#F04438] bg-[#FFFFFF] dark:bg-[#141A21] text-[#101828] dark:text-[#F2F4F7]"
+                          : "border-[#E4E7EC] dark:border-[#232C36] bg-[#FFFFFF] dark:bg-[#141A21] text-[#101828] dark:text-[#F2F4F7] focus-visible:ring-2 focus-visible:ring-[#047857] dark:focus-visible:ring-[#10B981]"
+                      }`}
                     />
                     {phoneError && (
-                      <p className="text-xs font-bold text-rose-600 dark:text-rose-400 text-center">
-                        {phoneError}
+                      <p id="phone-error" role="alert" className="text-[13px] font-medium text-[#B42318] dark:text-[#F04438] mt-2 flex items-center gap-1.5">
+                        <svg aria-hidden className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <circle cx="12" cy="12" r="10" />
+                          <line x1="12" y1="8" x2="12" y2="12" />
+                          <line x1="12" y1="16" x2="12.01" y2="16" />
+                        </svg>
+                        <span>{phoneError}</span>
                       </p>
                     )}
                   </div>
                 )}
 
-                <div className="pt-2 flex justify-center">
-                  <Button
+                {/* Primary Action Button (Inline on Desktop, Sticky Bar on Mobile) */}
+                <div className="fixed bottom-0 left-0 right-0 z-50 bg-[#FFFFFF] dark:bg-[#141A21] border-t border-[#E4E7EC] dark:border-[#232C36] p-4 pb-[calc(16px+env(safe-area-inset-bottom,0px))] flex items-center justify-between gap-4 sm:static sm:z-auto sm:bg-transparent sm:border-none sm:p-0">
+                  <div className="text-[20px] font-semibold text-[#047857] dark:text-[#10B981] tabular-nums sm:hidden">
+                    {calcTotal.toFixed(2)} جنيه
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={isCreating}
                     onClick={handleCreatePayment}
-                    isLoading={isCreating}
-                    size="lg"
-                    className="w-full sm:w-auto min-w-[280px] rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 text-white shadow-xl shadow-emerald-500/25 text-sm font-black py-4 transition-all"
+                    className="h-[52px] w-full sm:w-full rounded-xl bg-[#047857] hover:bg-[#036B4A] dark:bg-[#10B981] dark:hover:bg-[#34D399] text-white text-[17px] font-semibold transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 outline-none focus-visible:ring-2 focus-visible:ring-[#047857] dark:focus-visible:ring-[#10B981] focus-visible:ring-offset-2"
                   >
-                    تأكيد ودفع {calcTotal.toFixed(2)} ج.م بواسطة {selectedMethod.label} ←
-                  </Button>
+                    {isCreating ? (
+                      <>
+                        <svg aria-hidden className="w-5 h-5 animate-spin text-white" viewBox="0 0 24 24" fill="none">
+                          <circle cx="12" cy="12" r="10" stroke="currentColor" strokeOpacity={0.25} strokeWidth={3} />
+                          <path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth={3} strokeLinecap="round" />
+                        </svg>
+                        <span>جاري التأكيد</span>
+                      </>
+                    ) : (
+                      `ادفع ${calcTotal.toFixed(2)} جنيه بـ ${selectedMethod.label}`
+                    )}
+                  </button>
                 </div>
               </div>
             )}
 
-            {/* WhatsApp Support & Alternative Methods Card */}
-            <div className="rounded-3xl border-2 border-emerald-500/20 bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-cyan-500/10 p-6 sm:p-8 space-y-4 text-right dir-rtl shadow-md">
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <span className="px-3.5 py-1 rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-xs font-black flex items-center gap-1.5 border border-emerald-500/30">
-                  💬 وسائل دفع إضافية والدعم الفوري
-                </span>
-                <span className="text-xs text-slate-500 dark:text-slate-400 font-bold">
-                  InstaPay (انستاباي) • أكواد التفعيل • تحويلات
-                </span>
-              </div>
-              <p className="text-xs sm:text-sm font-medium text-slate-700 dark:text-slate-300 leading-relaxed">
-                هل تريد الدفع عبر تطبيق <strong>InstaPay (انستاباي)</strong>، أو تفعيل حسابك باستخدام <strong>كود تفعيل 🔑</strong>، أو الحصول على مساعدة فورية؟ فريق الدفع متاح عبر الواتساب:
-              </p>
+            {/* Section 5: Alternative WhatsApp Footnote */}
+            <div className="text-center text-[15px] font-normal text-[#667085] dark:text-[#98A2B3] mt-6">
+              هل تفضل الدفع عبر انستاباي أو كود تفعيل؟{" "}
               <a
                 href={`https://wa.me/?text=${encodeURIComponent(`السلام عليكم، أود استكمال الحجز والدفع عن طريق (InstaPay / كود التفعيل) بقيمة ${baseAmount} جنيه`)}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex w-full sm:w-auto items-center justify-center gap-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white px-7 py-3.5 text-sm font-black shadow-lg shadow-emerald-600/25 transition-all cursor-pointer"
+                className="text-[#047857] dark:text-[#10B981] underline font-medium min-h-[44px] inline-flex items-center me-1"
               >
-                <span>💬 تواصل معنا عبر الواتساب لإتمام الدفع</span>
+                تواصل معنا عبر الواتساب
               </a>
             </div>
+
           </div>
         )}
 
-        {/* ════ STEP: INSTRUCTIONS ════ */}
+        {/* Instructions / Reference Step */}
         {step === "instructions" && intent && selectedMethod && (
-          <div dir="rtl" className="space-y-6 max-w-xl mx-auto">
-            <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-xl dark:border-gray-800 dark:bg-gray-900 space-y-5">
-              <div className="flex items-center gap-3">
-                <PaymentProviderIcon method={selectedMethod} size={44} />
+          <div className="space-y-6">
+            <h1 className="text-[17px] font-semibold text-[#101828] dark:text-[#F2F4F7]">
+              تعليمات الدفع
+            </h1>
+
+            <div className="rounded-xl border border-[#E4E7EC] dark:border-[#232C36] bg-[#FFFFFF] dark:bg-[#141A21] p-4 shadow-sm space-y-4">
+              <div className="border border-dashed border-[#E4E7EC] dark:border-[#232C36] rounded-lg p-4 flex items-center justify-between gap-4">
                 <div>
-                  <h3 className="font-extrabold text-base text-gray-900 dark:text-white">
-                    {selectedMethod.label}
-                  </h3>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {selectedMethod.labelEn}
-                  </p>
-                </div>
-              </div>
-
-              {/* Reference box */}
-              <div className="rounded-2xl bg-emerald-50 p-4 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800">
-                <p className="text-xs font-bold text-emerald-800 dark:text-emerald-200">
-                  رقم المرجع (Reference Code):
-                </p>
-                <div className="mt-2 flex items-center gap-2">
-                  <code className="flex-1 rounded-xl bg-white px-3.5 py-2.5 text-center text-xl font-mono font-black tracking-wider text-emerald-900 shadow-inner dark:bg-gray-950 dark:text-emerald-100">
+                  <div className="text-[13px] font-medium text-[#667085] dark:text-[#98A2B3]">
+                    الرقم المرجعي
+                  </div>
+                  <div className="text-[32px] font-bold tabular-nums tracking-[0.08em] text-[#101828] dark:text-[#F2F4F7] mt-1">
                     {intent.reference}
-                  </code>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      try {
-                        await navigator.clipboard.writeText(intent.reference);
-                        toastSuccess("تم نسخ رقم المرجع");
-                      } catch {
-                        /* noop */
-                      }
-                    }}
-                    className="shrink-0 rounded-xl border-2 border-emerald-500 px-4 py-2.5 text-xs font-bold text-emerald-700 transition-colors hover:bg-emerald-100 dark:border-emerald-400 dark:text-emerald-300 dark:hover:bg-emerald-950/60"
-                  >
-                    نسخ
-                  </button>
+                  </div>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(intent.reference);
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 2000);
+                    } catch {
+                      /* noop */
+                    }
+                  }}
+                  className="h-10 px-4 rounded-lg border border-[#E4E7EC] dark:border-[#232C36] text-[15px] font-medium text-[#101828] dark:text-[#F2F4F7] hover:bg-[#E4E7EC]/30 dark:hover:bg-[#232C36]/30 transition-colors shrink-0"
+                >
+                  {copied ? "تم النسخ" : "نسخ"}
+                </button>
               </div>
 
-              {/* Instructions steps */}
               {selectedMethod.instructions.length > 0 && (
-                <div className="space-y-2.5">
-                  <h4 className="text-xs font-extrabold text-gray-900 dark:text-white">
-                    خطوات إتمام الدفع:
-                  </h4>
-                  <ol className="space-y-2">
+                <div className="space-y-3 pt-2">
+                  <h2 className="text-[15px] font-medium text-[#101828] dark:text-[#F2F4F7]">
+                    خطوات السداد:
+                  </h2>
+                  <ol className="space-y-3">
                     {selectedMethod.instructions.map((s, i) => (
-                      <li key={i} className="flex gap-3 text-xs text-gray-700 dark:text-gray-300">
-                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-[11px] font-bold text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300">
+                      <li key={i} className="flex items-start gap-3 text-[15px] text-[#101828] dark:text-[#F2F4F7] leading-[1.6]">
+                        <span aria-hidden className="w-6 h-6 rounded-full bg-[#E4E7EC] dark:bg-[#232C36] text-[#667085] dark:text-[#98A2B3] text-[13px] font-semibold flex items-center justify-center shrink-0 mt-0.5">
                           {i + 1}
                         </span>
-                        <span className="pt-0.5 leading-relaxed">{s}</span>
+                        <span>{s}</span>
                       </li>
                     ))}
                   </ol>
                 </div>
               )}
-
-              {intent.paymentPageUrl && (
-                <a
-                  href={intent.paymentPageUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-blue-700"
-                >
-                  فتح صفحة السداد الرسمية ←
-                </a>
-              )}
             </div>
-
-            <p className="text-center text-xs font-semibold text-gray-400 dark:text-gray-500">
-              جاري التحقق التلقائي من التأكيد والاستعلام …
-            </p>
           </div>
         )}
 
-        {/* ════ STEP: STATUS ════ */}
+        {/* Live Status Step */}
         {step === "status" && intent?.transactionId && (
-          <div className="max-w-md mx-auto">
+          <div>
             <PaymentStatus
               transactionId={String(intent.transactionId)}
               onSuccess={handlePaymentSuccess}
             />
-            <div className="mt-4 flex justify-center" dir="rtl">
-              <Button variant="secondary" size="sm" onClick={() => setStep("instructions")}>
-                ← عرض التعليمات والرقم المرجعي
-              </Button>
-            </div>
           </div>
         )}
 
-        {/* ════ STEP: SUCCESS ════ */}
+        {/* Success Step */}
         {step === "success" && (
-          <div
-            dir="rtl"
-            className="flex flex-col items-center gap-5 max-w-md mx-auto rounded-3xl border border-emerald-200 bg-emerald-50/80 p-8 text-center dark:border-emerald-800 dark:bg-emerald-950/40 shadow-xl"
-          >
-            <span className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/50">
-              <svg className="h-8 w-8 text-emerald-600 dark:text-emerald-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
+          <div className="rounded-xl border border-[#E4E7EC] dark:border-[#232C36] bg-[#FFFFFF] dark:bg-[#141A21] p-6 shadow-sm text-center">
+            <div className="w-12 h-12 rounded-full bg-[#047857] dark:bg-[#10B981] text-white flex items-center justify-center mx-auto">
+              <svg aria-hidden className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="20 6 9 17 4 12" />
               </svg>
-            </span>
-            <div>
-              <h3 className="text-xl font-black text-emerald-900 dark:text-emerald-100">
-                تمت عملية الشحن والسداد بنجاح!
-              </h3>
-              <p className="mt-1 text-sm font-bold text-emerald-700 dark:text-emerald-300">
-                تمت إضافة {intent?.totalAmount?.toFixed(2) ?? Number(baseAmount).toFixed(2)} جنيه إلى محفظتك بالمنصة.
-              </p>
             </div>
-            <Button onClick={handleRedirectAfterSuccess} size="lg" className="w-full rounded-xl bg-emerald-600 text-white font-extrabold">
-              العودة واستكمال التصفح ←
-            </Button>
+            <h1 className="text-[20px] font-semibold text-[#101828] dark:text-[#F2F4F7] mt-4">
+              تمت عملية الشحن والسداد بنجاح
+            </h1>
+            <p className="text-[15px] font-normal text-[#667085] dark:text-[#98A2B3] mt-2">
+              تمت إضافة {intent?.totalAmount?.toFixed(2) ?? Number(baseAmount).toFixed(2)} جنيه إلى حسابك بالمنصة.
+            </p>
+
+            <button
+              type="button"
+              onClick={handleRedirectAfterSuccess}
+              className="h-[52px] w-full rounded-xl bg-[#047857] hover:bg-[#036B4A] dark:bg-[#10B981] dark:hover:bg-[#34D399] text-white text-[17px] font-semibold mt-6 transition-colors duration-150"
+            >
+              العودة إلى الحساب
+            </button>
           </div>
         )}
 
-        {/* ════ STEP: ERROR ════ */}
+        {/* Error Step */}
         {step === "error" && (
-          <div dir="rtl" className="max-w-md mx-auto space-y-4">
+          <div className="space-y-4">
             {errors.map((msg) => (
               <ErrorState key={msg} message={msg} onRetry={() => setStep("checkout")} />
             ))}
-            <div className="flex justify-center gap-3">
-              <Button variant="secondary" onClick={() => setStep("checkout")}>
-                اختيار وسيلة دفع أخرى
-              </Button>
-            </div>
           </div>
         )}
+
       </main>
       <Footer />
     </div>
@@ -659,8 +485,9 @@ function PaymentContent() {
 
 export default function PaymentPage() {
   return (
-    <Suspense fallback={<LoadingState label="جاري تحميل صفحة الدفع والوسائل المتاحة …" />}>
+    <Suspense fallback={<LoadingState label="جاري التحميل..." />}>
       <PaymentContent />
     </Suspense>
   );
 }
+

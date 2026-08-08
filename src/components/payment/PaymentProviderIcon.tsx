@@ -3,30 +3,52 @@
 import type { PaymentMethodConfig } from "@/lib/payment-methods";
 
 /**
- * Renders a provider brand badge: a styled container with custom monograms & iconography.
- * Fully dynamic and self-contained — no broken external images required.
+ * Provider brand tile: 40x40 (rounded-8px) holding brand mark.
+ * Solid background, no gradients, no shadows, no emoji.
  */
 export function PaymentProviderIcon({
   method,
-  size = 48,
 }: {
   method: PaymentMethodConfig;
   size?: number;
 }) {
+  let bgColor = method.brandColor || "#E4E7EC";
+  let textColor = method.brandForeground || "#101828";
+  let mark = method.monogram || "PAY";
+
+  if (method.id === "vf_cash") {
+    bgColor = "#E60000";
+    textColor = "#FFFFFF";
+    mark = "VF";
+  } else if (method.id === "fawry" || method.id === "fawry_pay") {
+    bgColor = "#FFC20E";
+    textColor = "#000000";
+    mark = "فوري";
+  } else if (method.id === "wallet_balance" || method.category === "balance") {
+    bgColor = "#047857";
+    textColor = "#FFFFFF";
+    mark = "رصيد";
+  } else if (method.id === "instapay") {
+    bgColor = "#0047BA";
+    textColor = "#FFFFFF";
+    mark = "IPN";
+  } else if (method.id === "voucher") {
+    bgColor = "#8B5CF6";
+    textColor = "#FFFFFF";
+    mark = "كود";
+  }
+
   return (
     <span
       aria-hidden
-      className="flex shrink-0 items-center justify-center rounded-2xl font-black leading-none shadow-sm transition-transform group-hover:scale-105"
+      className="w-10 h-10 rounded-lg flex shrink-0 items-center justify-center font-semibold text-[13px] leading-none tabular-nums"
       style={{
-        width: size,
-        height: size,
-        background: method.brandColor,
-        color: method.brandForeground,
-        fontSize: Math.max(12, Math.round(size * 0.32)),
-        boxShadow: `0 4px 12px ${method.brandColor}33`,
+        backgroundColor: bgColor,
+        color: textColor,
       }}
     >
-      {method.monogram}
+      {mark}
     </span>
   );
 }
+

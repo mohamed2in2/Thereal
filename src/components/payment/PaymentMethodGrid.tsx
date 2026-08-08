@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, KeyboardEvent } from "react";
 import {
   PAYMENT_CATEGORIES,
   PaymentMethodCategory,
@@ -17,19 +17,19 @@ interface PaymentMethodGridProps {
 }
 
 /**
- * Responsive, filterable grid of payment-method cards.
- * Provides category tabs (All, Wallets, InstaPay, Fawry, Cards, Balance) and live search,
- * making it effortless to navigate through many payment options.
+ * Vertical radio list of payment methods.
+ * Full keyboard arrow navigation, single column layout, no decorative pills or multi-col grid.
  */
 export function PaymentMethodGrid({
   methods,
   selectedId,
   onSelect,
   onOpenDetails,
-  showFilters = true,
+  showFilters = false,
 }: PaymentMethodGridProps) {
   const [activeCategory, setActiveCategory] = useState<PaymentMethodCategory | "all">("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const filteredMethods = useMemo(() => {
     let list = [...methods];
@@ -52,53 +52,48 @@ export function PaymentMethodGrid({
     return list;
   }, [methods, activeCategory, searchQuery]);
 
+  const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (!onSelect || filteredMethods.length === 0) return;
+
+    const available = filteredMethods.filter((m) => m.available);
+    if (available.length === 0) return;
+
+    const currentIndex = available.findIndex((m) => m.id === selectedId);
+
+    if (e.key === "ArrowDown" || e.key === "ArrowLeft") {
+      e.preventDefault();
+      const nextIndex = currentIndex < available.length - 1 ? currentIndex + 1 : 0;
+      onSelect(available[nextIndex]);
+    } else if (e.key === "ArrowUp" || e.key === "ArrowRight") {
+      e.preventDefault();
+      const prevIndex = currentIndex > 0 ? currentIndex - 1 : available.length - 1;
+      onSelect(available[prevIndex]);
+    }
+  };
+
   return (
-    <div dir="rtl" className="space-y-6">
-      {/* Category Tabs & Search Header */}
+    <div dir="rtl" className="space-y-4">
+      {/* Category Tabs & Search Header (only when showFilters is explicitly true) */}
       {showFilters && (
         <div className="space-y-3">
-          {/* Search bar */}
           <div className="relative">
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="ابحث عن وسيلة الدفع (فودافون كاش، إنستاباي، فوري، فيزا...)"
-              className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pr-10 pl-4 text-sm font-medium text-gray-900 outline-none transition-colors focus:border-emerald-500 dark:border-gray-800 dark:bg-gray-900 dark:text-white dark:focus:border-emerald-400"
+              placeholder="ابحث عن وسيلة الدفع..."
+              className="w-full h-10 rounded-lg border border-[#E4E7EC] dark:border-[#232C36] bg-[#FFFFFF] dark:bg-[#141A21] px-4 text-[15px] font-normal text-[#101828] dark:text-[#F2F4F7] outline-none focus-visible:ring-2 focus-visible:ring-[#047857] dark:focus-visible:ring-[#10B981]"
             />
-            <svg
-              className="absolute right-3.5 top-3 h-4 w-4 text-gray-400 dark:text-gray-500"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-              />
-            </svg>
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery("")}
-                className="absolute left-3 top-2.5 text-xs text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
-              >
-                مسح
-              </button>
-            )}
           </div>
 
-          {/* Category Filter Pills */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
             <button
               type="button"
               onClick={() => setActiveCategory("all")}
-              className={`shrink-0 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
+              className={`shrink-0 h-8 rounded-lg px-3 text-[13px] font-medium transition-colors ${
                 activeCategory === "all"
-                  ? "bg-emerald-600 text-white shadow-md dark:bg-emerald-500"
-                  : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-50 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-400 dark:hover:bg-gray-800"
+                  ? "border border-[#047857] dark:border-[#10B981] bg-[#047857]/5 dark:bg-[#10B981]/10 text-[#101828] dark:text-[#F2F4F7]"
+                  : "border border-[#E4E7EC] dark:border-[#232C36] bg-[#FFFFFF] dark:bg-[#141A21] text-[#667085] dark:text-[#98A2B3]"
               }`}
             >
               الكل ({methods.length})
@@ -111,10 +106,10 @@ export function PaymentMethodGrid({
                   key={cat.id}
                   type="button"
                   onClick={() => setActiveCategory(cat.id)}
-                  className={`shrink-0 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
+                  className={`shrink-0 h-8 rounded-lg px-3 text-[13px] font-medium transition-colors ${
                     activeCategory === cat.id
-                      ? "bg-emerald-600 text-white shadow-md dark:bg-emerald-500"
-                      : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-50 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-400 dark:hover:bg-gray-800"
+                      ? "border border-[#047857] dark:border-[#10B981] bg-[#047857]/5 dark:bg-[#10B981]/10 text-[#101828] dark:text-[#F2F4F7]"
+                      : "border border-[#E4E7EC] dark:border-[#232C36] bg-[#FFFFFF] dark:bg-[#141A21] text-[#667085] dark:text-[#98A2B3]"
                   }`}
                 >
                   {cat.label} ({count})
@@ -125,9 +120,15 @@ export function PaymentMethodGrid({
         </div>
       )}
 
-      {/* Grid of Payment Methods */}
+      {/* Vertical Radio List */}
       {filteredMethods.length > 0 ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-2">
+        <div
+          ref={containerRef}
+          role="radiogroup"
+          aria-label="طريقة الدفع"
+          onKeyDown={handleKeyDown}
+          className="flex flex-col gap-3"
+        >
           {filteredMethods.map((m) => (
             <PaymentMethodCard
               key={m.id}
@@ -139,8 +140,8 @@ export function PaymentMethodGrid({
           ))}
         </div>
       ) : (
-        <div className="rounded-2xl border-2 border-dashed border-gray-200 p-8 text-center dark:border-gray-800">
-          <p className="text-sm font-semibold text-gray-500 dark:text-gray-400">
+        <div className="rounded-xl border border-[#E4E7EC] dark:border-[#232C36] bg-[#FFFFFF] dark:bg-[#141A21] p-6 text-center">
+          <p className="text-[15px] font-normal text-[#667085] dark:text-[#98A2B3]">
             لم يتم العثور على طريقة دفع تطابق بحثك.
           </p>
           <button
@@ -149,7 +150,7 @@ export function PaymentMethodGrid({
               setActiveCategory("all");
               setSearchQuery("");
             }}
-            className="mt-3 text-xs font-bold text-emerald-600 hover:underline dark:text-emerald-400"
+            className="mt-3 text-[15px] font-medium text-[#047857] dark:text-[#10B981] underline"
           >
             عرض كافة طرق الدفع
           </button>
@@ -158,3 +159,4 @@ export function PaymentMethodGrid({
     </div>
   );
 }
+
