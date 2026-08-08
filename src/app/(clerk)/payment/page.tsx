@@ -210,6 +210,26 @@ function PaymentContent() {
     setErrors([]);
 
     try {
+      if (selectedMethod.id === "voucher") {
+        const codeRes = await fetch("/api/codes", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code: code.trim() }),
+        });
+        const codeBody = await codeRes.json().catch(() => ({}));
+        if (!codeRes.ok || codeBody.error) {
+          setErrors([codeBody.error || "كود التفعيل غير صحيح أو منتهي الصلاحية"]);
+          setStep("error");
+          setIsCreating(false);
+          return;
+        }
+        toastSuccess(codeBody.message || "تم تفعيل كود القسيمة بنجاح! 🎉");
+        setStep("success");
+        setIsCreating(false);
+        return;
+      }
+
       const normalizedPhone = selectedMethod.needsPhone ? normalizeEgyptianPhone(phone) : "";
       const res = await fetch("/api/payments/sha7nawy/create", {
         method: "POST",
@@ -236,6 +256,20 @@ function PaymentContent() {
         setErrors([body.error || "تعذر بدء عملية الدفع الإلكتروني حالياً"]);
         setStep("error");
         setIsCreating(false);
+        return;
+      }
+
+      if (body.isPaidWithBalance) {
+        toastSuccess(body.message || "تمت عملية الشراء من الرصيد بنجاح! 🎉");
+        setStep("success");
+        setIsCreating(false);
+        return;
+      }
+
+      const redirectUrl = body.checkoutUrl || body.data?.payment_page_url || body.data?.url;
+      if (redirectUrl) {
+        toastSuccess("جاري تحويلك لبوابة دفع فوري (Shake-Out)... 🚀");
+        window.location.href = redirectUrl;
         return;
       }
 

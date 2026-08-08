@@ -119,6 +119,102 @@ export async function POST(req: NextRequest) {
       ? `شراء: ${courseTitle || priceCheck.itemName} (${baseAmount} جنيه + ${methodConfig.feePercentage}% رسوم) = ${totalAmount} جنيه`
       : `شحن رصيد: ${baseAmount} جنيه (+ ${methodConfig.feePercentage}% رسوم = ${totalAmount} جنيه)`;
 
+    // Route internal payments (Platform Balance / Vouchers)
+    if (methodConfig.id === "wallet_balance" || methodConfig.provider === "internal") {
+      if (teacherId && planType) {
+        const subRes = await fetch(`${appUrl}/api/teacher/subscribe-balance`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Cookie": req.headers.get("cookie") || "",
+          },
+          body: JSON.stringify({ teacherId, planType, languageTrack, studentGrade: grade }),
+        });
+        const subData = await subRes.json().catch(() => ({}));
+        if (!subRes.ok || subData.error) {
+          return NextResponse.json({ error: subData.error || "تعذر إتمام الاشتراك بالرصيد" }, { status: subRes.status || 400 });
+        }
+        return NextResponse.json({
+          success: true,
+          isPaidWithBalance: true,
+          provider: "internal",
+          method: "wallet_balance",
+          message: subData.message || "تم تفعيل الاشتراك بالرصيد بنجاح! 🎉",
+        });
+      }
+
+      if (courseId) {
+        const courseRes = await fetch(`${appUrl}/api/courses/${courseId}/purchase`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Cookie": req.headers.get("cookie") || "",
+          },
+          body: JSON.stringify({}),
+        });
+        const courseData = await courseRes.json().catch(() => ({}));
+        if (!courseRes.ok || courseData.error) {
+          return NextResponse.json({ error: courseData.error || "تعذر شراء الكورس بالرصيد" }, { status: courseRes.status || 400 });
+        }
+        return NextResponse.json({
+          success: true,
+          isPaidWithBalance: true,
+          provider: "internal",
+          method: "wallet_balance",
+          message: courseData.message || "تم شراء الكورس بالرصيد بنجاح! 🎉",
+        });
+      }
+
+      if (folderId) {
+        const folderRes = await fetch(`${appUrl}/api/folders/${folderId}/purchase`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Cookie": req.headers.get("cookie") || "",
+          },
+          body: JSON.stringify({}),
+        });
+        const folderData = await folderRes.json().catch(() => ({}));
+        if (!folderRes.ok || folderData.error) {
+          return NextResponse.json({ error: folderData.error || "تعذر شراء المحاضرة بالرصيد" }, { status: folderRes.status || 400 });
+        }
+        return NextResponse.json({
+          success: true,
+          isPaidWithBalance: true,
+          provider: "internal",
+          method: "wallet_balance",
+          message: folderData.message || "تم شراء المحاضرة بالرصيد بنجاح! 🎉",
+        });
+      }
+
+      if (planId) {
+        const planRes = await fetch(`${appUrl}/api/plans/${planId}/purchase`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Cookie": req.headers.get("cookie") || "",
+          },
+          body: JSON.stringify({}),
+        });
+        const planData = await planRes.json().catch(() => ({}));
+        if (!planRes.ok || planData.error) {
+          return NextResponse.json({ error: planData.error || "تعذر تفعيل الخطة بالرصيد" }, { status: planRes.status || 400 });
+        }
+        return NextResponse.json({
+          success: true,
+          isPaidWithBalance: true,
+          provider: "internal",
+          method: "wallet_balance",
+          message: planData.message || "تم تفعيل الخطة بالرصيد بنجاح! 🎉",
+        });
+      }
+
+      return NextResponse.json(
+        { error: "رصيد الحساب مخصص لشراء الكورسات والاشتراكات مباشرة. لشحن رصيد جديد لحسابك اختر فودافون كاش أو فوري." },
+        { status: 400 }
+      );
+    }
+
     // Route dynamically based on provider: sha7nawy vs shakeout
     if (methodConfig.provider === "shakeout") {
       const webhookUrl = `${appUrl}/api/payments/shakeout/webhook`;
