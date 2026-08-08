@@ -99,10 +99,18 @@ export function calculateAmountWithTax(
 }
 
 /**
- * Validates a mobile wallet phone number (allows any valid input format)
+ * Validates a Vodafone Cash phone number (must be 11 digits starting with 010)
+ */
+export function validateVodafoneCashPhone(phone: string): boolean {
+  const clean = normalizeEgyptianPhone(phone);
+  return /^010\d{8}$/.test(clean);
+}
+
+/**
+ * Validates a mobile wallet phone number
  */
 export function validateEgyptianPhone(phone: string): boolean {
-  const clean = phone.trim().replace(/\D/g, "");
+  const clean = normalizeEgyptianPhone(phone);
   return clean.length >= 4;
 }
 
@@ -146,7 +154,15 @@ export async function createSha7nawyPayment(
 
   // Validate phone number if method requires it
   let cleanPhone = params.number ? normalizeEgyptianPhone(params.number) : "01000000000";
-  if (methodConfig?.needsPhone) {
+  if (params.method === "vf_cash") {
+    if (!validateVodafoneCashPhone(cleanPhone)) {
+      return {
+        status: false,
+        code: 400,
+        message: "رقم محفظة فودافون كاش غير صحيح — يجب أن يبدأ بـ 010 ويتكون من 11 رقماً (مثال: 010xxxxxxx)",
+      };
+    }
+  } else if (methodConfig?.needsPhone) {
     if (!validateEgyptianPhone(cleanPhone)) {
       return {
         status: false,

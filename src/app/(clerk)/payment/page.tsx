@@ -11,7 +11,7 @@ import {
   getPaymentMethod,
   type PaymentMethodConfig,
 } from "@/lib/payment-methods";
-import { validateEgyptianPhone, normalizeEgyptianPhone, calculateAmountWithTax } from "@/lib/sha7nawy";
+import { validateEgyptianPhone, validateVodafoneCashPhone, normalizeEgyptianPhone, calculateAmountWithTax } from "@/lib/sha7nawy";
 import { PaymentMethodGrid } from "@/components/payment/PaymentMethodGrid";
 import { PaymentProviderIcon } from "@/components/payment/PaymentProviderIcon";
 import { LoadingState } from "@/components/payment/LoadingState";
@@ -97,14 +97,20 @@ function PaymentContent() {
     }
   }, [amountParam, methodParam]);
 
-  const validatePhone = useCallback((val: string) => {
+  const validatePhone = useCallback((val: string, methodId: string = selectedMethodId) => {
     if (!val.trim()) {
-      setPhoneError("رقم المحفظة / الهاتف مطلوب لإتمام الخصم");
+      setPhoneError("رقم المحفظة / الهاتف مطلوب لإتمام العملية");
       return false;
+    }
+    if (methodId === "vf_cash") {
+      if (!validateVodafoneCashPhone(val)) {
+        setPhoneError("عفواً، رقم محفظة فودافون كاش يجب أن يبدأ بـ 010 ويتكون من 11 رقماً (مثال: 010xxxxxxxx)");
+        return false;
+      }
     }
     setPhoneError("");
     return true;
-  }, []);
+  }, [selectedMethodId]);
 
   const handleCreatePayment = async () => {
     if (!selectedMethod) return;
