@@ -301,7 +301,13 @@ export async function rejectParentToken(rawToken: string, ip: string = "127.0.0.
 /**
  * Student re-issues parent link with a new phone number
  */
-export async function reissueParentToken(studentId: string, newParentPhone: string, ip: string = "127.0.0.1", userAgent?: string) {
+export async function reissueParentToken(
+  studentId: string,
+  newParentPhone: string,
+  ip: string = "127.0.0.1",
+  userAgent?: string,
+  options?: { allowSamePhone?: boolean; bypassRateLimit?: boolean }
+) {
   if (!isValidEgyptianMobile(newParentPhone)) {
     throw new Error("رقم الهاتف غير صحيح. يجب أن يكون رقم موبايل مصري يبدأ بـ 010 أو 011 أو 012 أو 015.");
   }
@@ -321,23 +327,25 @@ export async function reissueParentToken(studentId: string, newParentPhone: stri
     where: { studentId },
   });
 
-  if (existingToken?.parentPhoneSnapshot && existingToken.parentPhoneSnapshot === cleanPhone) {
+  if (!options?.allowSamePhone && existingToken?.parentPhoneSnapshot && existingToken.parentPhoneSnapshot === cleanPhone) {
     throw new Error("الرقم ده نفس الرقم القديم. من فضلك اكتب رقم ولي أمرك الحقيقي.");
   }
 
-  const sevenDaysAgo = new Date();
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  if (!options?.bypassRateLimit) {
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-  const recentReissues = await prisma.parentVerificationEvent.count({
-    where: {
-      studentId,
-      action: "REISSUED",
-      createdAt: { gte: sevenDaysAgo },
-    },
-  });
+    const recentReissues = await prisma.parentVerificationEvent.count({
+      where: {
+        studentId,
+        action: "REISSUED",
+        createdAt: { gte: sevenDaysAgo },
+      },
+    });
 
-  if (recentReissues >= 3) {
-    throw new Error("وصلت للحد الأقصى لتغيير رقم ولي الأمر خلال هذا الأسبوع (3 مرات). يرجى التواصل مع الدعم.");
+    if (recentReissues >= 3) {
+      throw new Error("وصلت للحد الأقصى لتغيير رقم ولي الأمر خلال هذا الأسبوع (3 مرات). يرجى التواصل مع الدعم.");
+    }
   }
 
   const rawToken = generateSecureToken();

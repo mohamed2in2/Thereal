@@ -162,7 +162,7 @@ export function StudentsSection({ userRole = "superadmin" }: { userRole?: string
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ parentPhone: phone }),
+        body: JSON.stringify({ parentPhone: phone, studentId: student.id, allowSamePhone: true }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "تعذر إعادة إرسال الرابط");
@@ -185,7 +185,7 @@ export function StudentsSection({ userRole = "superadmin" }: { userRole?: string
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ parentPhone: newParentPhone.trim() }),
+        body: JSON.stringify({ parentPhone: newParentPhone.trim(), studentId: editPhoneStudent.id }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "تعذر تحديث الرقم وإرسال الرابط");
