@@ -79,7 +79,8 @@ interface Folder {
   videos?: Array<{ id: string; title: string; vdoCipherId?: string; videoProvider?: string; providerVideoId?: string; maxWatchesPerUser?: number; durationMinutes?: number; isFree?: boolean }>;
   quizzes?: Array<{ id: string; title?: string }>;
   materials?: Array<{ id: string; title: string; type: string; url: string }>;
-  _count?: { videos?: number; quizzes?: number; materials?: number };
+  homeworks?: Array<{ id: string; title: string; type: string; _count?: { questions?: number; submissions?: number } }>;
+  _count?: { videos?: number; quizzes?: number; materials?: number; homeworks?: number };
 }
 
 interface AccessCode {

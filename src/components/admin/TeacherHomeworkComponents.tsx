@@ -206,7 +206,7 @@ export function LiveReviewPanel({ notify }: { notify: (t: "success" | "error", m
 // ─── HomeworkManagerSection ───────────────────────────────────────────────────
 
 interface Course { id: string; title: string }
-interface Folder { id: string; name: string; videos?: Array<{ id: string; title: string }> }
+interface Folder { id: string; name: string; videos?: Array<{ id: string; title: string }>; homeworks?: Array<{ id: string; title: string; type: string }> }
 
 export function HomeworkManagerSection({
   courses,
