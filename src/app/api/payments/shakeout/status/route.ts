@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getShakeOutPaymentInfo } from "@/lib/shakeout";
+import { getShakeOutPaymentInfo, SHAKEOUT_PENDING_TYPE, SHAKEOUT_CREDITED_TYPE, SHAKEOUT_PAID_STATUSES, shakeOutRefNote } from "@/lib/shakeout";
 import { getPaymentMethod } from "@/lib/payment-methods";
 
 /**
@@ -30,38 +30,50 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "الرد من بوابة Shake-Out لا يحتوي على مرجع" }, { status: 502 });
   }
 
+  // B21: Use strict boundary matching (startsWith + delimiter check) instead of contains
   const searchId = (transactionId || "").split("/")[0];
-  const existingTx = await prisma.balanceTransaction.findFirst({
+  const refPrefix = shakeOutRefNote(searchId);
+
+  const candidates = await prisma.balanceTransaction.findMany({
     where: {
       userId: session.id,
-      note: { contains: searchId },
+      note: { startsWith: refPrefix },
     },
     select: { id: true, type: true, amount: true, note: true },
   });
+
+  const existingTx = candidates.find(
+    (c) => c.note === refPrefix || c.note?.startsWith(`${refPrefix}|`) || c.note?.startsWith(`${refPrefix} `)
+  ) ?? null;
 
   if (!existingTx) {
     return NextResponse.json({ error: "المعاملة غير صالحة للمستخدم الحالي" }, { status: 403 });
   }
 
   const normalizedStatus = (data.status || "unknown").toString().toLowerCase();
-  const isPaid = ["paid", "completed", "success", "approved"].includes(normalizedStatus);
-  const amountToCredit = typeof data.amount === "number" ? data.amount : parseFloat(data.amount ?? "0") || existingTx.amount;
+  const isPaid = SHAKEOUT_PAID_STATUSES.includes(normalizedStatus);
 
-  if (isPaid && existingTx.type.toLowerCase().includes("pending")) {
-    await prisma.$transaction(async (tx) => {
-      await tx.user.update({
-        where: { id: session.id },
-        data: { balance: { increment: amountToCredit } },
-      });
-
-      await tx.balanceTransaction.update({
-        where: { id: existingTx.id },
+  // B21: Credit the stored base amount, NOT the gateway-reported amount
+  if (isPaid && existingTx.type === SHAKEOUT_PENDING_TYPE) {
+    const processed = await prisma.$transaction(async (tx) => {
+      const claim = await tx.balanceTransaction.updateMany({
+        where: { id: existingTx.id, type: SHAKEOUT_PENDING_TYPE },
         data: {
-          type: "credit_shakeout_wallet",
-          amount: amountToCredit,
-          note: `${existingTx.note || ""} (تم التأكيد السريع)`,
+          type: SHAKEOUT_CREDITED_TYPE,
+          note: `${existingTx.note || ""} — شحن محفظة عبر Shake-Out (تأكيد سريع)`,
         },
       });
+
+      if (claim.count === 0) {
+        return false; // already credited by webhook or another status check
+      }
+
+      await tx.user.update({
+        where: { id: session.id },
+        data: { balance: { increment: existingTx.amount } },
+      });
+
+      return true;
     });
 
     return NextResponse.json({
@@ -70,8 +82,10 @@ export async function GET(req: NextRequest) {
       transactionId,
       reference: data.reference,
       status: "paid",
-      amount: amountToCredit,
-      message: "تم تأكيد السداد وإضافة الرصيد إلى حسابك بنجاح! 🎉",
+      amount: existingTx.amount,
+      message: processed
+        ? "تم تأكيد السداد وإضافة الرصيد إلى حسابك بنجاح! 🎉"
+        : "تم تأكيد السداد مسبقاً.",
     });
   }
 
@@ -81,8 +95,9 @@ export async function GET(req: NextRequest) {
     transactionId,
     reference: data.reference,
     status: normalizedStatus,
-    amount: amountToCredit,
+    amount: existingTx.amount,
     method: data.method,
     methodLabel: getPaymentMethod(data.method as string)?.label ?? data.method,
   });
 }
+

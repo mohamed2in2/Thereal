@@ -50,12 +50,12 @@ export async function verifyAuthoritativePrice(params: {
 
     const profile = teacher.teacherProfile;
     const rawPriceMap: Record<string, number | null> = {
-      monthly: profile.priceMonthly ?? 180,
-      termly: profile.priceTermly ?? 750,
-      yearly: profile.priceYearly ?? 1200,
+      monthly: profile.priceMonthly,
+      termly: profile.priceTermly,
+      yearly: profile.priceYearly,
     };
 
-    let planPrice = rawPriceMap[planType] ?? 180;
+    let planPrice = rawPriceMap[planType];
 
     // Check stage-specific pricing override
     if (profile.stagePricing && grade) {
@@ -75,10 +75,29 @@ export async function verifyAuthoritativePrice(params: {
       } catch {}
     }
 
+    if (planPrice === null || planPrice === undefined || planPrice <= 0) {
+      return {
+        valid: false,
+        expectedPrice: 0,
+        itemName: "اشتراك معلم",
+        error: "لسه الأستاذ محددش سعر الباقة دي. كلّم الدعم.",
+      };
+    }
+
     const isLanguages = languageTrack === "languages" || languageTrack === "english";
     const monthsMap: Record<string, number> = { monthly: 1, termly: 3, yearly: 6 };
     const months = monthsMap[planType] || 1;
-    const langRate = isLanguages ? (profile.priceLanguagesMonthly ?? 50) : 0;
+
+    if (isLanguages && (profile.priceLanguagesMonthly === null || profile.priceLanguagesMonthly === undefined || profile.priceLanguagesMonthly < 0)) {
+      return {
+        valid: false,
+        expectedPrice: 0,
+        itemName: "اشتراك معلم",
+        error: "لسه الأستاذ محددش سعر مسار اللغات (Language Track). كلّم الدعم.",
+      };
+    }
+
+    const langRate = isLanguages ? (profile.priceLanguagesMonthly ?? 0) : 0;
     const languageSurcharge = langRate * months;
 
     const expectedPrice = Math.max(planPrice + languageSurcharge, 5);

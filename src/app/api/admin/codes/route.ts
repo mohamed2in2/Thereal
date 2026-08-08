@@ -16,6 +16,16 @@ export async function GET(req: NextRequest) {
     const planId = searchParams.get("planId");
 
     if (planId) {
+      if (session.role === "teacher") {
+        const plan = await prisma.plan.findUnique({
+          where: { id: planId },
+          select: { createdById: true },
+        });
+        if (!plan || plan.createdById !== session.id) {
+          return NextResponse.json({ error: "غير مصرح لك بإدارة هذه الخطة" }, { status: 403 });
+        }
+      }
+
       const codes = await prisma.planAccessCode.findMany({
         where: { planId },
         orderBy: { createdAt: "desc" },
@@ -25,9 +35,18 @@ export async function GET(req: NextRequest) {
 
     if (!courseId) return NextResponse.json({ error: "courseId أو planId مطلوب" }, { status: 400 });
 
-    const courseWhere = session.role === "superadmin" ? { id: courseId } : { id: courseId, course: { teacherId: session.id } };
+    if (session.role === "teacher") {
+      const course = await prisma.course.findFirst({
+        where: { id: courseId, teacherId: session.id },
+        select: { id: true },
+      });
+      if (!course) {
+        return NextResponse.json({ error: "الكورس غير موجود أو غير مصرح لك بإدارته" }, { status: 403 });
+      }
+    }
+
     const codes = await prisma.accessCode.findMany({
-      where: courseWhere,
+      where: { courseId },
       include: { student: { select: { id: true, name: true, email: true } } },
       orderBy: { createdAt: "desc" },
     });
@@ -65,10 +84,14 @@ export async function POST(req: NextRequest) {
 
     const cleanPrefix = prefix ? String(prefix).trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 10) : "";
 
-    // Handle Plan Codes
+    // Handle Plan Codes (B31: check teacher ownership)
     if (planId) {
       const plan = await prisma.plan.findUnique({ where: { id: planId } });
       if (!plan) return NextResponse.json({ error: "الخطة غير موجودة" }, { status: 404 });
+
+      if (session.role === "teacher" && plan.createdById !== session.id) {
+        return NextResponse.json({ error: "غير مصرح لك بإنشاء أكواد لهذه الخطة" }, { status: 403 });
+      }
 
       const createdCodes: any[] = [];
       for (let i = 0; i < count; i++) {
@@ -95,12 +118,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ codes: createdCodes }, { status: 201 });
     }
 
-    // Handle Course Codes
+    // Handle Course Codes (B26: check teacher ownership)
     if (!courseId) return NextResponse.json({ error: "courseId أو planId مطلوب" }, { status: 400 });
 
     const courseWhere = session.role === "superadmin" ? { id: courseId } : { id: courseId, teacherId: session.id };
     const course = await prisma.course.findFirst({ where: courseWhere });
-    if (!course) return NextResponse.json({ error: "الكورس غير موجود" }, { status: 404 });
+    if (!course) return NextResponse.json({ error: "الكورس غير موجود أو غير مصرح لك بإدارته" }, { status: 404 });
 
     const accessType: "TERM" | "FOLDER" | "VIDEO" = ["TERM", "FOLDER", "VIDEO"].includes(body.accessType) ? body.accessType : "TERM";
     const folderId: string | null = body.folderId || null;
@@ -151,8 +174,14 @@ export async function PATCH(req: NextRequest) {
     const { codeId, isActive, isPlanCode } = await req.json();
 
     if (isPlanCode) {
-      const code = await prisma.planAccessCode.findFirst({ where: { id: codeId } });
+      const code = await prisma.planAccessCode.findFirst({
+        where: { id: codeId },
+        include: { plan: { select: { createdById: true } } },
+      });
       if (!code) return NextResponse.json({ error: "الكود غير موجود" }, { status: 404 });
+      if (session.role === "teacher" && code.plan?.createdById !== session.id) {
+        return NextResponse.json({ error: "غير مصرح لك بتعديل هذا الكود" }, { status: 403 });
+      }
       if (isActive === true && !!code.usedAt) {
         return NextResponse.json({ error: "لا يمكن إعادة تفعيل كود تم استخدامه من قبل" }, { status: 400 });
       }
@@ -163,9 +192,15 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ code: updated });
     }
 
-    const codeWhere = session.role === "superadmin" ? { id: codeId } : { id: codeId, course: { teacherId: session.id } };
-    const code = await prisma.accessCode.findFirst({ where: codeWhere });
+    const code = await prisma.accessCode.findFirst({
+      where: { id: codeId },
+      include: { course: { select: { teacherId: true } } },
+    });
     if (!code) return NextResponse.json({ error: "الكود غير موجود" }, { status: 404 });
+
+    if (session.role === "teacher" && code.course?.teacherId !== session.id) {
+      return NextResponse.json({ error: "غير مصرح لك بتعديل هذا الكود" }, { status: 403 });
+    }
 
     if (isActive === true && !!code.usedAt) {
       return NextResponse.json({ error: "لا يمكن إعادة تفعيل كود تم استخدامه من قبل" }, { status: 400 });

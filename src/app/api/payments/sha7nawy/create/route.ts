@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "يجب تسجيل الدخول أولاً" }, { status: 401 });
   }
 
-  const rateCheck = paymentRateLimiter.checkRateLimit(session.id);
+  const rateCheck = await paymentRateLimiter.checkRateLimit(session.id);
   if (!rateCheck.allowed) {
     return NextResponse.json(
       { error: `تم تجاوز الحد الأقصى لبدء عمليات الدفع (10 عمليات/ساعة). يرجى الانتظار لمدة ${Math.ceil(rateCheck.resetInSeconds / 60)} دقيقة.` },

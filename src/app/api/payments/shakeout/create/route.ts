@@ -8,6 +8,7 @@ import {
 } from "@/lib/shakeout";
 import { calculateAmountWithTax } from "@/lib/sha7nawy";
 import { getPaymentMethod } from "@/lib/payment-methods";
+import { paymentRateLimiter } from "@/lib/paymentRateLimiter";
 
 import { verifyAuthoritativePrice } from "@/lib/price-verifier";
 
@@ -15,6 +16,14 @@ export async function POST(req: NextRequest) {
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "يجب تسجيل الدخول أولاً" }, { status: 401 });
+  }
+
+  const rateCheck = await paymentRateLimiter.checkRateLimit(session.id);
+  if (!rateCheck.allowed) {
+    return NextResponse.json(
+      { error: `تم تجاوز الحد الأقصى لبدء عمليات الدفع (10 عمليات/ساعة). يرجى الانتظار لمدة ${Math.ceil(rateCheck.resetInSeconds / 60)} دقيقة.` },
+      { status: 429 }
+    );
   }
 
   try {
@@ -97,12 +106,14 @@ export async function POST(req: NextRequest) {
     const reference = result.data?.reference ? String(result.data.reference) : null;
     const checkoutUrl = result.data?.payment_page_url || result.data?.url || null;
     if (reference) {
-      const noteText = `${shakeOutRefNote(reference)}${checkoutUrl ? `|url:${checkoutUrl}` : ""}`;
+      // B22: Store baseAmount (not totalAmount) matching sha7nawy pattern.
+      // Include base/total in note so webhook can verify charged amount.
+      const noteText = `${shakeOutRefNote(reference)}|base:${baseAmount}|total:${totalAmount}${checkoutUrl ? `|url:${checkoutUrl}` : ""}`;
       await prisma.balanceTransaction.create({
         data: {
           userId: session.id,
           type: SHAKEOUT_PENDING_TYPE,
-          amount: totalAmount,
+          amount: baseAmount,
           note: noteText,
         },
       });

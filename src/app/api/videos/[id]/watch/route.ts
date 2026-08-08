@@ -55,9 +55,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       video: {
         id: video.id,
         title: video.title,
-        vdoCipherId: video.vdoCipherId,
-        videoProvider: video.videoProvider,
-        providerVideoId: video.providerVideoId,
         courseId: video.folder.course.id,
         courseTitle: video.folder.course.title,
       },
@@ -168,9 +165,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     video: {
       id: video.id,
       title: video.title,
-      vdoCipherId: video.vdoCipherId,
-      videoProvider: video.videoProvider,
-      providerVideoId: video.providerVideoId,
       courseId: course.id,
       courseTitle: course.title,
     },
