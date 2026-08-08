@@ -492,44 +492,6 @@ export function BookingButton({
                     ))}
                   </select>
                 </div>
-
-                {/* Language Track Selection */}
-                {enableLanguagesTrack ? (
-                  <div>
-                    <label className="block text-xs font-bold mb-1.5" style={{ color: "var(--ink-muted, #aaa)" }}>
-                      🌐 المسار التعليمي / اللغة
-                    </label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setLanguageTrack("arabic")}
-                        className={`py-2.5 px-3 rounded-xl font-bold text-xs border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                          languageTrack === "arabic"
-                            ? "border-emerald-500 bg-emerald-500/15 text-emerald-400 shadow-sm"
-                            : "border-white/10 bg-white/5 text-slate-300 hover:border-white/20"
-                        }`}
-                      >
-                        <span>🇪🇬</span> عربي (الأساسي)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setLanguageTrack("languages")}
-                        className={`py-2.5 px-3 rounded-xl font-bold text-xs border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                          languageTrack === "languages"
-                            ? "border-emerald-500 bg-emerald-500/15 text-emerald-400 shadow-sm"
-                            : "border-white/10 bg-white/5 text-slate-300 hover:border-white/20"
-                        }`}
-                      >
-                        <span>🇬🇧</span> لغات / إنجليزي (+{langRate}ج/شهر)
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="p-2.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 text-xs font-bold flex items-center justify-between">
-                    <span>🌐 المسار التعليمي:</span>
-                    <span>🇪🇬 عربي (الأساسي)</span>
-                  </div>
-                )}
               </div>
 
               {/* Plans Selection */}
