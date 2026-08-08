@@ -357,6 +357,88 @@ export function HomeworkManagerSection({
     else notify("error", "تعذر تحديث حالة الواجب");
   };
 
+  const downloadSampleHwJson = () => {
+    const sample = {
+      title: "واجب المراجعة الأسبوعية",
+      timeLimitMinutes: 30,
+      questions: [
+        {
+          question: "ما الفرق بين السرعة المتجهة والسرعة القياسية؟",
+          optionA: "السرعة المتجهة تتضمن الاتجاه والقياسية لا تتضمنه",
+          optionB: "السرعة القياسية أسرع دائماً",
+          optionC: "لا يوجد فرق بينهما",
+          optionD: "السرعة المتجهة تُقاس بالفولت",
+          correctAnswer: "A"
+        },
+        {
+          question: "احسب القوة الناتجة عن كتلة 5 كجم بتسارع 2 م/ث²",
+          optionA: "10 نيوتن",
+          optionB: "2.5 نيوتن",
+          optionC: "7 نيوتن",
+          optionD: "3 نيوتن",
+          correctAnswer: "A"
+        }
+      ]
+    };
+    const blob = new Blob([JSON.stringify(sample, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "homework_sample.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleHwJsonImport = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const text = e.target?.result as string;
+        const parsed = JSON.parse(text);
+        let importedTitle = "";
+        let importedTime = 30;
+        let rawQuestions: any[] = [];
+
+        if (Array.isArray(parsed)) {
+          rawQuestions = parsed;
+        } else if (parsed && typeof parsed === "object") {
+          if (typeof parsed.title === "string") importedTitle = parsed.title;
+          if (typeof parsed.timeLimitMinutes === "number") importedTime = parsed.timeLimitMinutes;
+          if (Array.isArray(parsed.questions)) rawQuestions = parsed.questions;
+        }
+
+        if (!rawQuestions || rawQuestions.length === 0) {
+          notify("error", "ملف الـ JSON لا يحتوي على أي أسئلة صحيحة");
+          return;
+        }
+
+        const validQuestions = rawQuestions.map((q, idx) => {
+          if (!q || typeof q !== "object") throw new Error(`السؤال ${idx + 1} بتنسيق غير صحيح`);
+          return {
+            question: String(q.question || q.title || "").trim(),
+            imageUrl: typeof q.imageUrl === "string" ? q.imageUrl.trim() : "",
+            optionA: String(q.optionA || q.a || "").trim(),
+            optionB: String(q.optionB || q.b || "").trim(),
+            optionC: String(q.optionC || q.c || "").trim(),
+            optionD: String(q.optionD || q.d || "").trim(),
+            correctAnswer: (["A", "B", "C", "D"].includes(String(q.correctAnswer).toUpperCase()) ? String(q.correctAnswer).toUpperCase() : "A"),
+          };
+        });
+
+        setForm((prev) => ({
+          ...prev,
+          title: importedTitle || prev.title,
+          timeLimitMinutes: importedTime || prev.timeLimitMinutes,
+          questions: validQuestions,
+        }));
+        notify("success", `تم استيراد ${validQuestions.length} سؤال من ملف الـ JSON بنجاح ✅`);
+      } catch (err: any) {
+        notify("error", err?.message || "فشل قراءة ملف الـ JSON، تأكد من صحة التنسيق");
+      }
+    };
+    reader.readAsText(file);
+  };
+
   const TYPE_LABELS: Record<string, string> = {
     link: "🔗 رابط خارجي",
     exam: "📝 اختبار MCQ",
@@ -509,7 +591,31 @@ export function HomeworkManagerSection({
 
           {form.type === "exam" && (
             <div className="space-y-3">
-              <label className={label}>الأسئلة</label>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <label className={label}>الأسئلة</label>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-sky-500/10 hover:bg-sky-500/20 text-sky-500 text-xs font-bold transition-all cursor-pointer">
+                    <span>📥 استيراد أسئلة من JSON</span>
+                    <input
+                      type="file"
+                      accept=".json,application/json"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleHwJsonImport(file);
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={downloadSampleHwJson}
+                    className="px-3 py-1.5 rounded-xl border border-[var(--border)] hover:bg-[var(--bg)] text-[var(--ink-muted)] hover:text-[var(--ink)] text-xs font-bold transition-all"
+                  >
+                    📄 تحميل قالب JSON
+                  </button>
+                </div>
+              </div>
               {form.questions.map((q, qi) => (
                 <div key={qi} className="border border-[var(--border)] rounded-xl p-4 space-y-2">
                   <div className="flex items-center justify-between">

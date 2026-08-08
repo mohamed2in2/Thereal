@@ -504,6 +504,88 @@ export default function TeacherDashboardPage() {
   };
   const updateVideoWatches = (videoId: string, val: number) => patchVideo(videoId, { maxWatchesPerUser: val });
 
+  const downloadSampleQuizJson = () => {
+    const sample = {
+      title: "اختبار مراجعة شاملة (نموذج)",
+      timeLimitMinutes: 30,
+      questions: [
+        {
+          question: "ما هي وحدة قياس القوة في النظام الدولي؟",
+          questionType: "mcq",
+          imageUrl: "",
+          optionA: "النيوتن",
+          optionB: "الجول",
+          optionC: "الفولت",
+          optionD: "الواط",
+          correctAnswer: "A"
+        },
+        {
+          question: "اشرح قانون نيوتن الأول وتطبيقاته باختصار",
+          questionType": "essay"
+        }
+      ]
+    };
+    const blob = new Blob([JSON.stringify(sample, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "quiz_sample.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleQuizJsonImport = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const text = e.target?.result as string;
+        const parsed = JSON.parse(text);
+        let importedTitle = "";
+        let importedTime = 30;
+        let rawQuestions: any[] = [];
+
+        if (Array.isArray(parsed)) {
+          rawQuestions = parsed;
+        } else if (parsed && typeof parsed === "object") {
+          if (typeof parsed.title === "string") importedTitle = parsed.title;
+          if (typeof parsed.timeLimitMinutes === "number") importedTime = parsed.timeLimitMinutes;
+          if (Array.isArray(parsed.questions)) rawQuestions = parsed.questions;
+        }
+
+        if (!rawQuestions || rawQuestions.length === 0) {
+          notify("error", "ملف الـ JSON لا يحتوي على أي أسئلة صحيحة");
+          return;
+        }
+
+        const validQuestions = rawQuestions.map((q, idx) => {
+          if (!q || typeof q !== "object") throw new Error(`السؤال ${idx + 1} بتنسيق غير صحيح`);
+          const isEssay = q.questionType === "essay";
+          return {
+            question: String(q.question || q.title || "").trim(),
+            questionType: isEssay ? "essay" : "mcq",
+            imageUrl: typeof q.imageUrl === "string" ? q.imageUrl.trim() : "",
+            optionA: isEssay ? "" : String(q.optionA || q.a || "").trim(),
+            optionB: isEssay ? "" : String(q.optionB || q.b || "").trim(),
+            optionC: isEssay ? "" : String(q.optionC || q.c || "").trim(),
+            optionD: isEssay ? "" : String(q.optionD || q.d || "").trim(),
+            correctAnswer: isEssay ? "A" : (["A", "B", "C", "D"].includes(String(q.correctAnswer).toUpperCase()) ? String(q.correctAnswer).toUpperCase() : "A"),
+          };
+        });
+
+        setNewQuiz((prev) => ({
+          ...prev,
+          title: importedTitle || prev.title,
+          timeLimitMinutes: importedTime || prev.timeLimitMinutes,
+          questions: validQuestions,
+        }));
+        notify("success", `تم استيراد ${validQuestions.length} سؤال من ملف الـ JSON بنجاح ✅`);
+      } catch (err: any) {
+        notify("error", err?.message || "فشل قراءة ملف الـ JSON، تأكد من صحة التنسيق");
+      }
+    };
+    reader.readAsText(file);
+  };
+
   const addQuiz = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newQuiz.folderId) return;
@@ -1516,7 +1598,31 @@ export default function TeacherDashboardPage() {
 
                     {/* Add quiz */}
                     <div className={cardPad}>
-                      <h3 className="font-bold text-[var(--ink)] mb-4 flex items-center gap-2"><IconClipboard className="w-4 h-4 text-sky-500" /> إضافة اختبار</h3>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                        <h3 className="font-bold text-[var(--ink)] flex items-center gap-2"><IconClipboard className="w-4 h-4 text-sky-500" /> إضافة اختبار</h3>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-sky-500/10 hover:bg-sky-500/20 text-sky-500 text-xs font-bold transition-all cursor-pointer">
+                            <span>📥 استيراد أسئلة من JSON</span>
+                            <input
+                              type="file"
+                              accept=".json,application/json"
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) handleQuizJsonImport(file);
+                                e.target.value = "";
+                              }}
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            onClick={downloadSampleQuizJson}
+                            className="px-3 py-1.5 rounded-xl border border-[var(--border)] hover:bg-[var(--bg)] text-[var(--ink-muted)] hover:text-[var(--ink)] text-xs font-bold transition-all"
+                          >
+                            📄 تحميل قالب JSON
+                          </button>
+                        </div>
+                      </div>
                       <form onSubmit={addQuiz} className="space-y-4">
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                           <select value={newQuiz.folderId} onChange={(e) => setNewQuiz({ ...newQuiz, folderId: e.target.value })} className={input}>
