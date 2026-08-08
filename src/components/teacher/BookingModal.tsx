@@ -236,8 +236,8 @@ export function BookingButton({
 
   const plans: BookingPlan[] = [
     createPlan("monthly", "اشتراك شهر واحد", "شهر واحد فقط", baseMonthly, stageConfig.discountMonthly, "📅", "#3B82F6", "rgba(59,130,246,0.1)"),
-    createPlan("termly", "اشتراك الترم", "ترم دراسي كامل (3 شهور)", baseTermly, stageConfig.discountTermly, "📚", "#F59E0B", "rgba(245,158,11,0.1)"),
-    createPlan("yearly", "اشتراك سنة كاملة", "سنة دراسية كاملة (الترمين)", baseYearly, stageConfig.discountYearly, "🎓", "#10B981", "rgba(16,185,129,0.1)"),
+    createPlan("termly", "اشتراك الترم", "ترم دراسي كامل", baseTermly, stageConfig.discountTermly, "📚", "#F59E0B", "rgba(245,158,11,0.1)"),
+    createPlan("yearly", "اشتراك سنة كاملة", "سنة دراسية كاملة", baseYearly, stageConfig.discountYearly, "🎓", "#10B981", "rgba(16,185,129,0.1)"),
   ];
 
   const maxDiscount = plans.reduce((max, p) => (p.discountPercent && p.discountPercent > max ? p.discountPercent : max), 0);

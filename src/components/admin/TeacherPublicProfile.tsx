@@ -389,7 +389,7 @@ export function TeacherPublicProfile() {
               {/* 1 Month Plan */}
               <div className="p-4 rounded-xl border border-[var(--border)] bg-[var(--bg)]">
                 <h4 className="font-bold text-sm text-[var(--ink)] mb-3 flex items-center justify-between">
-                  <span className="flex items-center gap-2"><span>📅</span> اشتراك شهر واحد (شهر)</span>
+                  <span className="flex items-center gap-2"><span>📅</span> اشتراك شهر واحد</span>
                   {currentP.priceMonthly && (
                     <span className="text-xs font-mono text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
                       الصافي: {Math.round((currentP.priceMonthly ?? 180) * (1 - (currentP.discountMonthly || 0) / 100))}ج
@@ -428,7 +428,7 @@ export function TeacherPublicProfile() {
               {/* 3 Months Plan (Term) */}
               <div className="p-4 rounded-xl border border-[var(--border)] bg-[var(--bg)]">
                 <h4 className="font-bold text-sm text-[var(--ink)] mb-3 flex items-center justify-between">
-                  <span className="flex items-center gap-2"><span>📚</span> اشتراك الترم (3 شهور)</span>
+                  <span className="flex items-center gap-2"><span>📚</span> اشتراك الترم</span>
                   {currentP.priceTermly && (
                     <span className="text-xs font-mono text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/20">
                       الصافي: {Math.round((currentP.priceTermly ?? 750) * (1 - (currentP.discountTermly || 0) / 100))}ج
@@ -467,7 +467,7 @@ export function TeacherPublicProfile() {
               {/* 6 Months Plan (Year) */}
               <div className="p-4 rounded-xl border border-[var(--border)] bg-[var(--bg)]">
                 <h4 className="font-bold text-sm text-[var(--ink)] mb-3 flex items-center justify-between">
-                  <span className="flex items-center gap-2"><span>🎓</span> اشتراك سنة كاملة (الترمين - 6 شهور)</span>
+                  <span className="flex items-center gap-2"><span>🎓</span> اشتراك سنة كاملة</span>
                   {currentP.priceYearly && (
                     <span className="text-xs font-mono text-purple-400 bg-purple-500/10 px-2.5 py-1 rounded-full border border-purple-500/20">
                       الصافي: {Math.round((currentP.priceYearly ?? 1200) * (1 - (currentP.discountYearly || 0) / 100))}ج
