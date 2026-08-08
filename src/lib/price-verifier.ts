@@ -160,7 +160,7 @@ export async function verifyAuthoritativePrice(params: {
   if (planId) {
     const plan = await prisma.plan.findUnique({
       where: { id: planId },
-      select: { title: true, price: true, discountPrice: true, isPaid: true },
+      select: { title: true, price: true, discountPrice: true, discountExpiresAt: true, status: true },
     });
 
     if (!plan) {
@@ -168,7 +168,10 @@ export async function verifyAuthoritativePrice(params: {
     }
 
     const rawPlanPrice = plan.price ?? 0;
-    const effectivePrice = plan.isPaid ? (plan.discountPrice && plan.discountPrice > 0 ? plan.discountPrice : rawPlanPrice) : 0;
+    const now = new Date();
+    const hasActiveDiscount = plan.discountPrice && plan.discountPrice > 0 && (!plan.discountExpiresAt || plan.discountExpiresAt > now);
+    const effectivePrice = hasActiveDiscount ? (plan.discountPrice ?? rawPlanPrice) : rawPlanPrice;
+
     if (amount < effectivePrice - 0.01) {
       return {
         valid: false,
