@@ -461,10 +461,12 @@ async function main() {
   });
 
   // 9. Parent Token for Student 1
+  const parentTokenExpiry = new Date();
+  parentTokenExpiry.setDate(parentTokenExpiry.getDate() + 365);
   await prisma.parentToken.upsert({
     where: { studentId: studentUsers[0].id },
-    update: { token: "demo-parent-token-12345" },
-    create: { studentId: studentUsers[0].id, token: "demo-parent-token-12345" },
+    update: { tokenHash: "demo-parent-token-hash-12345", expiresAt: parentTokenExpiry, status: "CONFIRMED" },
+    create: { studentId: studentUsers[0].id, tokenHash: "demo-parent-token-hash-12345", expiresAt: parentTokenExpiry, status: "CONFIRMED" },
   });
 
   console.log("✨ Demo Teacher Seeding Successfully Completed!");

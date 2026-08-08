@@ -193,11 +193,13 @@ async function main() {
   });
 
   // 11. Parent Token
+  const parentExpiry = new Date();
+  parentExpiry.setDate(parentExpiry.getDate() + 365);
   await client.execute({
-    sql: `INSERT INTO ParentToken (id, studentId, token, createdAt)
-          VALUES ('demo-pt-1', ?, 'demo-parent-token-12345', ?)
-          ON CONFLICT(studentId) DO UPDATE SET token='demo-parent-token-12345'`,
-    args: [studentIds[0], now],
+    sql: `INSERT INTO ParentToken (id, studentId, tokenHash, status, expiresAt, createdAt, updatedAt)
+          VALUES ('demo-pt-1', ?, 'demo-parent-token-hash-12345', 'CONFIRMED', ?, ?, ?)
+          ON CONFLICT(studentId) DO UPDATE SET tokenHash='demo-parent-token-hash-12345', status='CONFIRMED'`,
+    args: [studentIds[0], parentExpiry.toISOString(), now, now],
   });
 
   console.log("✨ Demo Teacher Seeding Successfully Completed!");
