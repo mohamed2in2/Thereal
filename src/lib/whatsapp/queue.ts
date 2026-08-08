@@ -3,6 +3,7 @@ import { sendRawWhatsAppMessage } from "./sender";
 import { rateLimiter } from "./rateLimiter";
 import { normalizePhoneToJid, validateMessageContent, formatOTPMessage } from "./formatter";
 import { logger } from "./logger";
+import { officialMetaProvider } from "./officialMetaProvider";
 
 export interface QueueItem {
   id: string;
@@ -32,6 +33,31 @@ class WhatsAppQueueManager {
     return this.queue.length;
   }
 
+  /**
+   * Calculates the estimated wait time in milliseconds for a message entering the queue.
+   */
+  public getEstimatedWaitTimeMs(isOtp: boolean = false): number {
+    const now = Date.now();
+
+    const timeSinceGlobal = now - this.lastGlobalSendTime;
+    const globalWait = Math.max(0, this.GLOBAL_COOLDOWN_MS - timeSinceGlobal);
+
+    let otpWait = 0;
+    if (isOtp) {
+      const timeSinceOTP = now - this.lastOTPSendTime;
+      otpWait = Math.max(0, this.OTP_COOLDOWN_MS - timeSinceOTP);
+    }
+
+    const initialWait = Math.max(globalWait, otpWait);
+
+    const queuedItemsWait = this.queue.reduce((acc, item) => {
+      const itemCost = item.type === "OTP" ? this.OTP_COOLDOWN_MS : this.GLOBAL_COOLDOWN_MS;
+      return acc + itemCost;
+    }, 0);
+
+    return initialWait + queuedItemsWait;
+  }
+
   public enqueue(rawPhone: string, text: string, isOtp: boolean = false): Promise<{ success: boolean; messageId?: string; error?: string }> {
     if (isOtp) {
       return this.enqueueOTP(rawPhone, text);
@@ -45,6 +71,19 @@ class WhatsAppQueueManager {
   public enqueueMessage(rawPhone: string, text: string): Promise<{ success: boolean; messageId?: string; error?: string }> {
     const { phoneE164, jid } = normalizePhoneToJid(rawPhone);
     validateMessageContent(text);
+
+    const estimatedWaitMs = this.getEstimatedWaitTimeMs(false);
+    if (estimatedWaitMs > 10000) {
+      const waitSec = Math.round(estimatedWaitMs / 1000);
+      logger.warn("Baileys queue wait time exceeds 10s threshold. Routing to Meta API.", {
+        phone: phoneE164,
+        estimatedWaitMs,
+        waitSec,
+      });
+      return Promise.reject(
+        new Error(`Baileys queue wait time exceeds 10s threshold (${waitSec}s queued). Routing to Meta API.`)
+      );
+    }
 
     return new Promise((resolve, reject) => {
       const item: QueueItem = {
@@ -82,6 +121,19 @@ class WhatsAppQueueManager {
     if (!limitCheck.allowed) {
       logger.warn("OTP request blocked by rate limiter", { phone: phoneE164, reason: limitCheck.reason });
       return Promise.reject(new Error(limitCheck.reason || "OTP rate limit exceeded."));
+    }
+
+    const estimatedWaitMs = this.getEstimatedWaitTimeMs(true);
+    if (estimatedWaitMs > 10000) {
+      const waitSec = Math.round(estimatedWaitMs / 1000);
+      logger.warn("Baileys OTP queue wait time exceeds 10s threshold. Routing to Meta API.", {
+        phone: phoneE164,
+        estimatedWaitMs,
+        waitSec,
+      });
+      return Promise.reject(
+        new Error(`Baileys queue wait time exceeds 10s threshold (${waitSec}s queued). Routing to Meta API.`)
+      );
     }
 
     const content = formatOTPMessage(otpCode, customTemplate);
@@ -140,6 +192,40 @@ class WhatsAppQueueManager {
         type: item.type,
       });
       await new Promise((r) => setTimeout(r, requiredWait));
+    }
+
+    // Check if item has been sitting in queue for more than 10 seconds (10,000 ms)
+    const timeSpentInQueue = Date.now() - item.enqueuedAt;
+    if (timeSpentInQueue > 10000) {
+      logger.warn("Item exceeded 10s in Baileys queue. Attempting Meta Cloud API dispatch.", {
+        queueId: item.id,
+        phone: item.phoneE164,
+        waitedMs: timeSpentInQueue,
+      });
+
+      try {
+        const metaRes = await officialMetaProvider.sendMessage({
+          recipient: item.phoneE164,
+          content: item.content,
+          messageType: item.type === "OTP" ? "OTP" : "TEXT",
+        });
+
+        if (metaRes.success) {
+          logger.info("Successfully dispatched queued message via Meta Cloud API after 10s queue wait", {
+            queueId: item.id,
+            phone: item.phoneE164,
+            messageId: metaRes.messageId,
+          });
+          this.queue.shift();
+          item.resolve({ success: true, messageId: metaRes.messageId });
+          return;
+        }
+      } catch (metaErr: any) {
+        logger.warn("Meta Cloud API failover for queued message failed, proceeding with Baileys attempt", {
+          queueId: item.id,
+          error: metaErr.message,
+        });
+      }
     }
 
     // Attempt to dispatch

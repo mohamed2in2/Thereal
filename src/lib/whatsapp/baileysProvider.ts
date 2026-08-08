@@ -23,6 +23,20 @@ class BaileysProvider implements WhatsAppProvider {
         };
       }
 
+      // Check if Baileys queue wait time exceeds 10 seconds (10,000 ms)
+      const estimatedWaitMs = messageQueue.getEstimatedWaitTimeMs(params.messageType === "OTP");
+      if (estimatedWaitMs > 10000) {
+        const waitSec = Math.round(estimatedWaitMs / 1000);
+        const err = `Baileys queue wait time is ${waitSec}s (> 10s threshold). Failing over to Official Meta API.`;
+        this.lastFailedSend = new Date().toISOString();
+        return {
+          success: false,
+          provider: this.id,
+          deliveryTimeMs: Date.now() - startTime,
+          error: err,
+        };
+      }
+
       await messageQueue.enqueue(
         params.recipient,
         params.content,
@@ -77,12 +91,16 @@ class BaileysProvider implements WhatsAppProvider {
     const state = whatsappClient.getState();
     const user = whatsappClient.getConnectedUser();
 
+    const estWaitMs = messageQueue.getEstimatedWaitTimeMs();
+    const waitSec = Math.round(estWaitMs / 1000);
+    const queueWarn = estWaitMs > 10000 ? ` ⚠️ High Queue Delay (${waitSec}s > 10s -> Meta API)` : "";
+
     return {
       id: this.id,
       name: this.name,
       connected: isConn,
       statusText: isConn
-        ? `🟢 Connected (${user || "Paired"})`
+        ? `🟢 Connected (${user || "Paired"})${queueWarn}`
         : `🔴 Disconnected (${state})`,
       health: {
         online: isConn,
