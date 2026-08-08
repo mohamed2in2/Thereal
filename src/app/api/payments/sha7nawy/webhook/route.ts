@@ -11,15 +11,17 @@ import {
 export async function POST(req: NextRequest) {
   try {
     const webhookSecret = process.env.SHA7NAWY_WEBHOOK_SECRET;
-    if (webhookSecret) {
-      const incomingSecret =
-        req.headers.get("x-webhook-secret") ||
-        req.headers.get("x-sha7nawy-secret");
-      if (!incomingSecret || incomingSecret !== webhookSecret) {
-        const ip = req.headers.get("x-forwarded-for")?.split(",")[0] || req.headers.get("x-real-ip") || "127.0.0.1";
-        console.warn(`[Sha7nawy Webhook] Unauthorized secret attempt from IP: ${ip}`);
-        return NextResponse.json({ error: "Unauthorized webhook caller" }, { status: 401 });
-      }
+    if (!webhookSecret) {
+      console.error("[Sha7nawy Webhook] SHA7NAWY_WEBHOOK_SECRET is not configured");
+      return NextResponse.json({ error: "Webhook configuration missing" }, { status: 500 });
+    }
+    const incomingSecret =
+      req.headers.get("x-webhook-secret") ||
+      req.headers.get("x-sha7nawy-secret");
+    if (!incomingSecret || incomingSecret !== webhookSecret) {
+      const ip = req.headers.get("x-forwarded-for")?.split(",")[0] || req.headers.get("x-real-ip") || "127.0.0.1";
+      console.warn(`[Sha7nawy Webhook] Unauthorized secret attempt from IP: ${ip}`);
+      return NextResponse.json({ error: "Unauthorized webhook caller" }, { status: 401 });
     }
 
     const payload = await req.json().catch(() => ({}));
@@ -88,9 +90,33 @@ export async function POST(req: NextRequest) {
       select: { id: true, userId: true, amount: true, note: true },
     });
 
-    const pendingTx = candidates.find(
+    let pendingTx = candidates.find(
       (c) => c.note === refPrefix || c.note?.startsWith(`${refPrefix}|`) || c.note?.startsWith(`${refPrefix} `)
     ) ?? null;
+
+    let targetType = SHA7NAWY_PENDING_TYPE;
+    let isLatePayment = false;
+
+    // B23b: Also search expired rows if no active pending row found
+    if (!pendingTx) {
+      const expiredCandidates = await prisma.balanceTransaction.findMany({
+        where: {
+          type: "credit_sha7nawy_expired",
+          note: { startsWith: refPrefix },
+        },
+        select: { id: true, userId: true, amount: true, note: true },
+      });
+      const expiredTx = expiredCandidates.find(
+        (c) => c.note === refPrefix || c.note?.startsWith(`${refPrefix}|`) || c.note?.startsWith(`${refPrefix} `)
+      ) ?? null;
+
+      if (expiredTx) {
+        pendingTx = expiredTx;
+        targetType = "credit_sha7nawy_expired";
+        isLatePayment = true;
+        console.log(`LATE_PAYMENT_CREDITED: Sha7nawy ref ${reference} matched expired row ${expiredTx.id}`);
+      }
+    }
 
     if (!pendingTx) {
       const creditedCandidates = await prisma.balanceTransaction.findMany({
@@ -106,7 +132,7 @@ export async function POST(req: NextRequest) {
       if (alreadyCredited) {
         return NextResponse.json({ success: true, processed: false, reason: "Already credited" }, { status: 200 });
       }
-      console.warn(`[Sha7nawy Webhook] No pending transaction found for ref ${reference}`);
+      console.warn(`[Sha7nawy Webhook] No pending or expired transaction found for ref ${reference}`);
       return NextResponse.json({ error: "Unknown transaction reference" }, { status: 400 });
     }
 
@@ -134,13 +160,13 @@ export async function POST(req: NextRequest) {
     }
 
     // Atomically claim the pending entry and credit the balance. updateMany on
-    // type=SHA7NAWY_PENDING_TYPE guarantees only one concurrent webhook wins.
+    // targetType guarantees only one concurrent webhook wins.
     const processed = await prisma.$transaction(async (tx) => {
       const claim = await tx.balanceTransaction.updateMany({
-        where: { id: pendingTx.id, type: SHA7NAWY_PENDING_TYPE },
+        where: { id: pendingTx!.id, type: targetType },
         data: {
           type: SHA7NAWY_CREDITED_TYPE,
-          note: `${pendingTx.note} — شحن محفظة عبر Sha7nawy`,
+          note: `${pendingTx!.note} — شحن محفظة عبر Sha7nawy${isLatePayment ? " (دفع متأخر)" : ""}`,
         },
       });
 
@@ -149,8 +175,8 @@ export async function POST(req: NextRequest) {
       }
 
       await tx.user.update({
-        where: { id: pendingTx.userId },
-        data: { balance: { increment: pendingTx.amount } },
+        where: { id: pendingTx!.userId },
+        data: { balance: { increment: pendingTx!.amount } },
       });
 
       return true;
@@ -160,7 +186,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, processed: false, reason: "Already credited" }, { status: 200 });
     }
 
-    console.log(`[Sha7nawy Webhook] Credited ${pendingTx.amount} EGP to user ${pendingTx.userId} (ref ${reference})`);
+    console.log(`[Sha7nawy Webhook] Credited ${pendingTx.amount} EGP to user ${pendingTx.userId} (ref ${reference})${isLatePayment ? " [LATE_PAYMENT_CREDITED]" : ""}`);
     return NextResponse.json({ success: true, credited: pendingTx.amount, reference }, { status: 200 });
   } catch (error: any) {
     console.error("[Sha7nawy Webhook] Error:", error);

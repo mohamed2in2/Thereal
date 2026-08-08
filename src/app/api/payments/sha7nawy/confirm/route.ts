@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { confirmSha7nawyPayment, SHA7NAWY_PENDING_TYPE, SHA7NAWY_CREDITED_TYPE, sha7nawyRefNote } from "@/lib/sha7nawy";
+import {
+  getSha7nawyPaymentInfo,
+  SHA7NAWY_PENDING_TYPE,
+  SHA7NAWY_CREDITED_TYPE,
+  SHA7NAWY_PAID_STATUSES,
+  sha7nawyRefNote,
+} from "@/lib/sha7nawy";
 import { prisma } from "@/lib/prisma";
 
 export async function POST(req: NextRequest) {
@@ -11,83 +17,103 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json().catch(() => ({}));
-    const { ref_code } = body as { ref_code?: string };
+    const { ref_code, transaction_id } = body as { ref_code?: string; transaction_id?: string | number };
 
-    if (!ref_code?.trim()) {
-      return NextResponse.json({ error: "رمز المرجع (ref_code) مطلوب" }, { status: 400 });
+    const queryId = transaction_id || ref_code;
+    if (!queryId || !String(queryId).trim()) {
+      return NextResponse.json({ error: "رمز المرجع أو المعاملة مطلوب" }, { status: 400 });
     }
 
-    const result = await confirmSha7nawyPayment(ref_code.trim());
+    const result = await getSha7nawyPaymentInfo(String(queryId).trim());
 
-    if (!result.status) {
+    if (!result.status || !result.data) {
       return NextResponse.json(
-        { error: result.message || "العملية معلقة أو لم يتم التأكيد بعد" },
+        { error: result.message || "العملية معلقة أو لم يتم التأكيد بعد من مزود الخدمة" },
         { status: 400 }
       );
     }
 
-    const txData = result.data;
-    const status = txData?.status;
-    const isCompleted = status === "completed" || result.status === true;
+    const verifiedData = result.data;
+    const status = String(verifiedData.status || "").toLowerCase();
+    const isCompleted = SHA7NAWY_PAID_STATUSES.includes(status);
 
-    if (isCompleted) {
-      const reference = txData?.reference || ref_code;
+    if (!isCompleted) {
+      return NextResponse.json({
+        success: true,
+        paid: false,
+        status,
+        message: "العملية ما زالت قيد المراجعة أو معلقة",
+      });
+    }
 
-      // B20: Look up the pending transaction by reference using strict boundary
-      // matching (same pattern as webhook). Never trust gateway-reported amount.
-      const refPrefix = sha7nawyRefNote(String(reference));
+    // Guard: Client match (if provided by gateway)
+    if (verifiedData.client && verifiedData.client !== session.id) {
+      console.warn(`[Sha7nawy Confirm] Client mismatch: server=${verifiedData.client} session=${session.id}`);
+      return NextResponse.json({ error: "المعاملة غير صالحة للمستخدم الحالي" }, { status: 403 });
+    }
 
-      const candidates = await prisma.balanceTransaction.findMany({
-        where: {
-          type: SHA7NAWY_PENDING_TYPE,
-          userId: session.id,
-          note: { startsWith: refPrefix },
+    const reference = verifiedData.reference || String(queryId).trim();
+    const refPrefix = sha7nawyRefNote(reference);
+
+    const candidates = await prisma.balanceTransaction.findMany({
+      where: {
+        type: SHA7NAWY_PENDING_TYPE,
+        userId: session.id,
+        note: { startsWith: refPrefix },
+      },
+      select: { id: true, userId: true, amount: true, note: true },
+    });
+
+    const pendingTx = candidates.find(
+      (c) => c.note === refPrefix || c.note?.startsWith(`${refPrefix}|`) || c.note?.startsWith(`${refPrefix} `)
+    ) ?? null;
+
+    if (!pendingTx) {
+      // If no pending row, return status only — NEVER credit
+      return NextResponse.json({
+        success: true,
+        paid: true,
+        status,
+        message: "تم التحقق من حالة الفاتورة (لا توجد عملية شحن معلقة للتأكيد).",
+      });
+    }
+
+    // Atomic claim: only one confirm or webhook delivery wins
+    const processed = await prisma.$transaction(async (tx) => {
+      const claim = await tx.balanceTransaction.updateMany({
+        where: { id: pendingTx.id, type: SHA7NAWY_PENDING_TYPE },
+        data: {
+          type: SHA7NAWY_CREDITED_TYPE,
+          note: `${pendingTx.note} — شحن محفظة عبر Sha7nawy (تأكيد)`,
         },
-        select: { id: true, userId: true, amount: true, note: true },
       });
 
-      const pendingTx = candidates.find(
-        (c) => c.note === refPrefix || c.note?.startsWith(`${refPrefix}|`) || c.note?.startsWith(`${refPrefix} `)
-      ) ?? null;
-
-      if (pendingTx) {
-        // Atomic claim: only one confirm/webhook can credit
-        const processed = await prisma.$transaction(async (tx) => {
-          const claim = await tx.balanceTransaction.updateMany({
-            where: { id: pendingTx.id, type: SHA7NAWY_PENDING_TYPE },
-            data: {
-              type: SHA7NAWY_CREDITED_TYPE,
-              note: `${pendingTx.note} — شحن محفظة عبر Sha7nawy (تأكيد)`,
-            },
-          });
-
-          if (claim.count === 0) {
-            return false; // already credited by webhook or another confirm
-          }
-
-          // Credit the stored base amount, NOT the gateway-reported amount
-          await tx.user.update({
-            where: { id: session.id },
-            data: { balance: { increment: pendingTx.amount } },
-          });
-
-          return true;
-        });
-
-        if (processed) {
-          console.log(`[Sha7nawy Confirm] Credited ${pendingTx.amount} EGP to user ${session.id} (ref ${reference})`);
-        }
+      if (claim.count === 0) {
+        return false; // already credited
       }
-      // If no pendingTx found, it was either already credited or doesn't belong to this user — safe to return success
+
+      await tx.user.update({
+        where: { id: session.id },
+        data: { balance: { increment: pendingTx.amount } },
+      });
+
+      return true;
+    });
+
+    if (processed) {
+      console.log(`[Sha7nawy Confirm] Credited ${pendingTx.amount} EGP to user ${session.id} (ref ${reference})`);
     }
 
     return NextResponse.json({
       success: true,
-      status: txData?.status || "completed",
-      message: result.message || "تم التأكيد وشحن الرصيد بنجاح!",
+      paid: true,
+      status: "completed",
+      message: processed ? "تم التأكيد وشحن الرصيد بنجاح!" : "تم التأكيد مسبقاً.",
+      data: verifiedData,
     });
   } catch (error: any) {
     console.error("[Sha7nawy Confirm API] Error:", error);
     return NextResponse.json({ error: "حدث خطأ أثناء التأكيد والاستعلام" }, { status: 500 });
   }
 }
+

@@ -11,15 +11,17 @@ import {
 export async function POST(req: NextRequest) {
   try {
     const webhookSecret = process.env.SHAKEOUT_WEBHOOK_SECRET;
-    if (webhookSecret) {
-      const incomingSecret =
-        req.headers.get("x-webhook-secret") ||
-        req.headers.get("x-shakeout-secret");
-      if (!incomingSecret || incomingSecret !== webhookSecret) {
-        const ip = req.headers.get("x-forwarded-for")?.split(",")[0] || req.headers.get("x-real-ip") || "127.0.0.1";
-        console.warn(`[Shake-Out Webhook] Unauthorized secret attempt from IP: ${ip}`);
-        return NextResponse.json({ error: "Unauthorized webhook caller" }, { status: 401 });
-      }
+    if (!webhookSecret) {
+      console.error("[Shake-Out Webhook] SHAKEOUT_WEBHOOK_SECRET is not configured");
+      return NextResponse.json({ error: "Webhook configuration missing" }, { status: 500 });
+    }
+    const incomingSecret =
+      req.headers.get("x-webhook-secret") ||
+      req.headers.get("x-shakeout-secret");
+    if (!incomingSecret || incomingSecret !== webhookSecret) {
+      const ip = req.headers.get("x-forwarded-for")?.split(",")[0] || req.headers.get("x-real-ip") || "127.0.0.1";
+      console.warn(`[Shake-Out Webhook] Unauthorized secret attempt from IP: ${ip}`);
+      return NextResponse.json({ error: "Unauthorized webhook caller" }, { status: 401 });
     }
 
     const payload = await req.json().catch(() => ({}));
@@ -83,9 +85,33 @@ export async function POST(req: NextRequest) {
       select: { id: true, userId: true, amount: true, note: true },
     });
 
-    const pendingTx = candidates.find(
+    let pendingTx = candidates.find(
       (c) => c.note === refPrefix || c.note?.startsWith(`${refPrefix}|`) || c.note?.startsWith(`${refPrefix} `)
     ) ?? null;
+
+    let targetType = SHAKEOUT_PENDING_TYPE;
+    let isLatePayment = false;
+
+    // B23b: Also search expired rows if no active pending row found
+    if (!pendingTx) {
+      const expiredCandidates = await prisma.balanceTransaction.findMany({
+        where: {
+          type: "credit_shakeout_expired",
+          note: { startsWith: refPrefix },
+        },
+        select: { id: true, userId: true, amount: true, note: true },
+      });
+      const expiredTx = expiredCandidates.find(
+        (c) => c.note === refPrefix || c.note?.startsWith(`${refPrefix}|`) || c.note?.startsWith(`${refPrefix} `)
+      ) ?? null;
+
+      if (expiredTx) {
+        pendingTx = expiredTx;
+        targetType = "credit_shakeout_expired";
+        isLatePayment = true;
+        console.log(`LATE_PAYMENT_CREDITED: Shake-Out ref ${reference} matched expired row ${expiredTx.id}`);
+      }
+    }
 
     if (!pendingTx) {
       const creditedCandidates = await prisma.balanceTransaction.findMany({
@@ -101,7 +127,7 @@ export async function POST(req: NextRequest) {
       if (alreadyCredited) {
         return NextResponse.json({ success: true, processed: false, reason: "Already credited" }, { status: 200 });
       }
-      console.warn(`[Shake-Out Webhook] No pending transaction found for ref ${reference}`);
+      console.warn(`[Shake-Out Webhook] No pending or expired transaction found for ref ${reference}`);
       return NextResponse.json({ error: "Unknown transaction reference" }, { status: 400 });
     }
 
@@ -132,10 +158,10 @@ export async function POST(req: NextRequest) {
 
     const processed = await prisma.$transaction(async (tx) => {
       const claim = await tx.balanceTransaction.updateMany({
-        where: { id: pendingTx.id, type: SHAKEOUT_PENDING_TYPE },
+        where: { id: pendingTx!.id, type: targetType },
         data: {
           type: SHAKEOUT_CREDITED_TYPE,
-          note: `${pendingTx.note} — شحن محفظة عبر Shake-Out`,
+          note: `${pendingTx!.note} — شحن محفظة عبر Shake-Out${isLatePayment ? " (دفع متأخر)" : ""}`,
         },
       });
 
@@ -144,8 +170,8 @@ export async function POST(req: NextRequest) {
       }
 
       await tx.user.update({
-        where: { id: pendingTx.userId },
-        data: { balance: { increment: pendingTx.amount } },
+        where: { id: pendingTx!.userId },
+        data: { balance: { increment: pendingTx!.amount } },
       });
 
       return true;
@@ -155,7 +181,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, processed: false, reason: "Already credited" }, { status: 200 });
     }
 
-    console.log(`[Shake-Out Webhook] Credited ${pendingTx.amount} EGP to user ${pendingTx.userId} (ref ${reference})`);
+    console.log(`[Shake-Out Webhook] Credited ${pendingTx.amount} EGP to user ${pendingTx.userId} (ref ${reference})${isLatePayment ? " [LATE_PAYMENT_CREDITED]" : ""}`);
     return NextResponse.json({ success: true, credited: pendingTx.amount, reference }, { status: 200 });
   } catch (error: any) {
     console.error("[Shake-Out Webhook] Error:", error);

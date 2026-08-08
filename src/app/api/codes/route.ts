@@ -43,8 +43,25 @@ export async function POST(req: NextRequest) {
     const normalizedCode = String(code).trim().toUpperCase();
     
     // Check Course Access Code
-    const accessCode = await prisma.accessCode.findUnique({ where: { code: normalizedCode } });
+    const accessCode = await prisma.accessCode.findUnique({
+      where: { code: normalizedCode },
+      include: {
+        course: {
+          select: {
+            id: true,
+            title: true,
+            teacher: { select: { isDemo: true } },
+          },
+        },
+      },
+    });
+
     if (accessCode) {
+      if (accessCode.course?.teacher?.isDemo && session.role !== "superadmin") {
+        await AccessCodeGuard.logAttempt({ ip: clientIp, userId: session.id, codeAttempted: normalizedCode, success: false });
+        return NextResponse.json({ error: "محتوى تجريبي — الأكواد التجريبية مخصصة للمعاينة الإدارية فقط" }, { status: 403 });
+      }
+
       if (accessCode.studentId) {
         await AccessCodeGuard.logAttempt({ ip: clientIp, userId: session.id, codeAttempted: normalizedCode, success: false });
         return NextResponse.json({ error: "هذا الكود مستخدم بالفعل" }, { status: 400 });
@@ -98,9 +115,6 @@ export async function POST(req: NextRequest) {
 
         // Log successful redemption
         await AccessCodeGuard.logAttempt({ ip: clientIp, userId: session.id, codeAttempted: normalizedCode, success: true });
-
-        // Qualify student referral upon redeeming valid paid course code
-        void ReferralService.qualifyAndRewardReferral(session.id, accessCode.id).catch(() => {});
 
         return NextResponse.json({
           success: true,

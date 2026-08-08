@@ -162,6 +162,15 @@ export async function verifyAuthoritativePrice(params: {
       return { valid: false, expectedPrice: 0, itemName: "محاضرة", error: "المحاضرة المطلوبة غير موجودة" };
     }
 
+    if (!folder.isPurchasable) {
+      return {
+        valid: false,
+        expectedPrice: 0,
+        itemName: folder.name,
+        error: "هذا المجلد غير متاح للشراء منفرداً — يمكنك شراء الكورس كاملاً بكود وصول",
+      };
+    }
+
     const folderPrice = folder.price ?? 0;
     if (amount < folderPrice - 0.01) {
       return {

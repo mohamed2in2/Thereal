@@ -6,10 +6,6 @@ const nextConfig: NextConfig = {
   productionBrowserSourceMaps: false,
   allowedDevOrigins: ["localhost", "127.0.0.1", "*.app.github.dev"],
 
-  // Turbopack (default in Next.js 16) — empty object opts in cleanly
-  // and suppresses the "webpack config but no turbopack config" error.
-  turbopack: {},
-
   experimental: {
     optimizePackageImports: [
       "framer-motion",

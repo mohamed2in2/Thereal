@@ -12,6 +12,7 @@ export async function checkCourseEnrollment(userId: string, courseId: string, ro
       courseId,
       studentId: userId,
       isActive: true,
+      OR: [{ accessType: "TERM" }, { accessType: "COURSE" }, { accessType: null }],
     },
     select: { id: true }
   });

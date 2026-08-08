@@ -165,16 +165,16 @@ export default function AdminPanelLoginPage() {
         )}
 
         <form onSubmit={handleLogin}>
-          {/* Teacher: name */}
+          {/* Teacher: name or email */}
           {activeTab === "teacher" && (
             <>
-              <label style={{ display: "block", fontSize: 13.5, fontWeight: 600, color: "var(--ink-2)", marginBottom: 8 }}>الاسم</label>
+              <label style={{ display: "block", fontSize: 13.5, fontWeight: 600, color: "var(--ink-2)", marginBottom: 8 }}>اسم المعلم أو البريد الإلكتروني</label>
               <input
                 type="text"
                 required
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="اسم المعلم"
+                placeholder="test أو demo_teacher@test.local أو اسم المعلم"
                 style={{ width: "100%", padding: "14px 16px", borderRadius: 12, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--ink)", fontFamily: "var(--font-body)", fontSize: 15, marginBottom: 18, outline: "none" }}
               />
             </>

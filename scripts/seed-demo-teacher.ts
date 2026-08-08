@@ -379,7 +379,7 @@ async function main() {
     },
   });
 
-  // Unused Folder Access Code
+  // Unused Folder Access Code (Inactive to prevent unauthorized activation)
   await prisma.accessCode.upsert({
     where: { code: "DEMO-FOLDER-202" },
     update: {
@@ -387,7 +387,7 @@ async function main() {
       folderId: folderPurchasable.id,
       accessType: "FOLDER",
       studentId: null,
-      isActive: true,
+      isActive: false,
     },
     create: {
       code: "DEMO-FOLDER-202",
@@ -395,7 +395,7 @@ async function main() {
       folderId: folderPurchasable.id,
       accessType: "FOLDER",
       studentId: null,
-      isActive: true,
+      isActive: false,
     },
   });
 

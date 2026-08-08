@@ -673,7 +673,7 @@ function PaymentContent() {
             </div>
             <div>
               <h1 className="text-2xl font-black text-[#101828] dark:text-white">
-                تم تأكيد العملية وتفعيل الاشتراك بنجاح! 🎉
+                تم شحن رصيدك بنجاح! 🎉
               </h1>
               <p className="text-sm text-[#667085] dark:text-[#98A2B3] mt-2">
                 تمت إضافة المبلغ وتأكيد العملية بنجاح عبر الرقم المرجعي <code className="font-mono font-bold text-emerald-500">{intent?.reference}</code>.

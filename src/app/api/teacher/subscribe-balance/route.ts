@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { verifyAuthoritativePrice } from "@/lib/price-verifier";
+import { ReferralService } from "@/services/referral/ReferralService";
 
 export async function POST(req: NextRequest) {
   try {
@@ -34,53 +36,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "نوع الباقة غير صحيح" }, { status: 400 });
     }
 
-    const profile = await prisma.teacherProfile.findUnique({
-      where: { teacherId },
-      select: {
-        priceMonthly: true,
-        priceTermly: true,
-        priceYearly: true,
-        priceLanguagesMonthly: true,
-        stagePricing: true,
-        displayName: true,
-        slug: true,
-      },
+    // B27b: Price is strictly computed by verifyAuthoritativePrice
+    const priceResult = await verifyAuthoritativePrice({
+      amount: 999999, // We want the calculated authoritative expected price
+      teacherId,
+      planType,
+      grade: studentGrade,
+      languageTrack,
     });
 
-    if (!profile) {
-      return NextResponse.json({ error: "لم يتم العثور على الأستاذ" }, { status: 400 });
-    }
-
-    const rawPriceMap: Record<string, number | null> = {
-      monthly: profile.priceMonthly,
-      termly: profile.priceTermly,
-      yearly: profile.priceYearly,
-    };
-
-    let planPrice = rawPriceMap[planType];
-    if (profile.stagePricing && studentGrade) {
-      try {
-        const parsedMap = JSON.parse(profile.stagePricing);
-        if (parsedMap && parsedMap[studentGrade]) {
-          const keyMap: Record<string, string> = {
-            monthly: "priceMonthly",
-            termly: "priceTermly",
-            yearly: "priceYearly",
-          };
-          const stageVal = parsedMap[studentGrade][keyMap[planType]];
-          if (typeof stageVal === "number" && stageVal > 0) {
-            planPrice = stageVal;
-          }
-        }
-      } catch {}
-    }
-
-    if (planPrice === null || planPrice === undefined || planPrice <= 0) {
+    if (!priceResult.valid || !priceResult.expectedPrice) {
       return NextResponse.json(
-        { error: "لسه الأستاذ محددش سعر الباقة دي. كلّم الدعم." },
+        { error: priceResult.error || "لسه الأستاذ محددش سعر الباقة دي. كلّم الدعم." },
         { status: 400 }
       );
     }
+
+    const numAmount = priceResult.expectedPrice;
 
     // B14: Yearly plan grants 6 months (full 2-term academic year)
     const monthsMap: Record<string, number> = {
@@ -92,19 +64,12 @@ export async function POST(req: NextRequest) {
     const months = monthsMap[planType] || 1;
     const isLanguages = languageTrack === "languages" || languageTrack === "english";
 
-    // B9: Do not hide misconfiguration with a silent default — require explicit teacher setting
-    if (isLanguages && (profile.priceLanguagesMonthly === null || profile.priceLanguagesMonthly === undefined || profile.priceLanguagesMonthly < 0)) {
-      return NextResponse.json(
-        { error: "لسه الأستاذ محددش سعر مسار اللغات (Language Track). كلّم الدعم." },
-        { status: 400 }
-      );
-    }
+    const profile = await prisma.teacherProfile.findUnique({
+      where: { teacherId },
+      select: { displayName: true, slug: true },
+    });
 
-    const langRate = isLanguages ? (profile.priceLanguagesMonthly ?? 0) : 0;
-    const languageSurcharge = langRate * months;
-    const numAmount = planPrice + languageSurcharge;
-
-    const teacherName = profile.displayName || profile.slug;
+    const teacherName = profile?.displayName || profile?.slug;
     const planNames: Record<string, string> = {
       monthly: "شهر واحد (1 Month)",
       termly: "3 شهور (3 Months)",
@@ -227,6 +192,9 @@ export async function POST(req: NextRequest) {
       }
       throw err;
     }
+
+    // B28: Reward referral on real subscription purchase
+    void ReferralService.qualifyAndRewardReferral(session.id, `sub:${teacherId}:${planType}`).catch(() => {});
 
     return NextResponse.json({
       success: true,

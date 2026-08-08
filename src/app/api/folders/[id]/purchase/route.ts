@@ -24,8 +24,8 @@ export async function POST(
 
   try {
     const purchase = await prisma.$transaction(async (tx) => {
-      // Acquire transaction-scoped advisory lock to serialize purchases for the user
-      await acquireAdvisoryLock(`purchase-folder-${session.id}`, tx);
+      // Acquire unified advisory lock on student wallet
+      await acquireAdvisoryLock(`spend:${session.id}`, tx);
 
       const folder = await tx.folder.findUnique({
         where: { id: folderId },
@@ -45,19 +45,15 @@ export async function POST(
       const price = folder.price ?? 0;
 
       if (price > 0) {
-        const student = await tx.user.findUnique({
-          where: { id: session.id },
-          select: { balance: true },
-        });
-        if (!student || (student.balance ?? 0) < price) {
-          throw new Error("INSUFFICIENT_BALANCE");
-        }
-
-        // Deduct balance atomically
-        await tx.user.update({
-          where: { id: session.id },
+        // Deduct balance atomically with conditional updateMany
+        const claim = await tx.user.updateMany({
+          where: { id: session.id, balance: { gte: price } },
           data: { balance: { decrement: price } },
         });
+
+        if (claim.count === 0) {
+          throw new Error("INSUFFICIENT_BALANCE");
+        }
 
         // Add ledger entry
         await tx.balanceTransaction.create({

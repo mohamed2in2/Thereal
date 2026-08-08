@@ -10,8 +10,8 @@ import { processTeacherAttribution } from "@/lib/referral";
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "يجب تسجيل الدخول أولاً" }, { status: 401 });
-  if (session.role === "teacher" || session.role === "staff") {
-    return NextResponse.json({ error: "هذا الإجراء مخصص للمتعلمين فقط" }, { status: 403 });
+  if (session.role !== "student") {
+    return NextResponse.json({ error: "هذا الإجراء مخصص للطلاب فقط" }, { status: 403 });
   }
 
   const { id: courseId } = await params;
@@ -47,8 +47,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   try {
     const purchaseResult = await prisma.$transaction(async (tx) => {
-      // 1. Acquire advisory lock on student wallet
-      await acquireAdvisoryLock(`purchase-course-${session.id}`, tx);
+      // 1. Acquire unified advisory lock on student wallet
+      await acquireAdvisoryLock(`spend:${session.id}`, tx);
 
       // 2. Check already enrolled inside the transaction
       const existing = await tx.accessCode.findFirst({
@@ -57,28 +57,27 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       });
       if (existing) throw new Error("ALREADY_ENROLLED");
 
-      // 3. Check balance inside the transaction
+      // 3. Update balance atomically using conditional updateMany
+      const claim = await tx.user.updateMany({
+        where: { id: session.id, balance: { gte: effectivePrice } },
+        data: { balance: { decrement: effectivePrice } },
+      });
+
+      if (claim.count === 0) {
+        throw new Error("INSUFFICIENT_FUNDS");
+      }
+
       const student = await tx.user.findUnique({
         where: { id: session.id },
         select: { balance: true },
       });
-      if (!student) throw new Error("USER_NOT_FOUND");
 
-      const currentBalance = student.balance ?? 0;
-      if (currentBalance < effectivePrice) throw new Error("INSUFFICIENT_FUNDS");
-
-      // 4. Update balance atomically using decrement
-      await tx.user.update({
-        where: { id: session.id },
-        data: { balance: { decrement: effectivePrice } },
-      });
-
-      // 5. Create AccessCode
+      // 4. Create AccessCode
       await tx.accessCode.create({
         data: { code, courseId, studentId: session.id, isActive: true, usedAt: now },
       });
 
-      // 6. Create BalanceTransaction
+      // 5. Create BalanceTransaction
       await tx.balanceTransaction.create({
         data: {
           userId: session.id,
@@ -88,7 +87,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         },
       });
 
-      // 7. Process Teacher Referral Attribution
+      // 6. Process Teacher Referral Attribution
       await processTeacherAttribution({
         studentId: session.id,
         teacherIdOfContent: course.teacherId,
@@ -100,7 +99,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       });
 
       return {
-        newBalance: +(currentBalance - effectivePrice).toFixed(2),
+        newBalance: student?.balance ?? 0,
       };
     });
 

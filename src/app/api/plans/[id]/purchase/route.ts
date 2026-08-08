@@ -17,8 +17,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: "الخطة غير متاحة" }, { status: 404 });
     }
 
-    let effectivePrice = plan.price;
-    if (plan.discountPrice !== null && plan.discountExpiresAt && new Date(plan.discountExpiresAt) > new Date()) {
+    let effectivePrice = plan.isPaid ? plan.price : 0;
+    if (plan.isPaid && plan.discountPrice !== null && plan.discountExpiresAt && new Date(plan.discountExpiresAt) > new Date()) {
       effectivePrice = plan.discountPrice;
     }
 
@@ -31,32 +31,30 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: "هذه الخطة مخصصة لمرحلة دراسية مختلفة عن مرحلتك" }, { status: 400 });
     }
 
-    const alreadyEnrolled = await prisma.planEnrollment.findUnique({
-      where: { planId_studentId: { planId: id, studentId: session.id } },
-    });
-    if (alreadyEnrolled) {
-      return NextResponse.json({ error: "أنت مسجل بالفعل في هذه الخطة" }, { status: 400 });
-    }
-
-    // Run transaction: deduct balance, create enrollment
+    // Run transaction: serialize with spend lock, check enrollment, deduct balance, create enrollment
     try {
       await prisma.$transaction(async (tx) => {
-        // Acquire transaction-scoped advisory lock to serialize purchases for the user
-        await acquireAdvisoryLock(`purchase-plan-${session.id}`, tx);
+        // 1. Acquire unified advisory lock on student wallet
+        await acquireAdvisoryLock(`spend:${session.id}`, tx);
+
+        // 2. Check already enrolled inside the transaction
+        const alreadyEnrolled = await tx.planEnrollment.findUnique({
+          where: { planId_studentId: { planId: id, studentId: session.id } },
+        });
+        if (alreadyEnrolled) {
+          throw new Error("ALREADY_ENROLLED");
+        }
+
+        // 3. Deduct balance atomically if plan is paid
         if (effectivePrice > 0) {
-          const student = await tx.user.findUnique({
-            where: { id: session.id },
-            select: { balance: true },
-          });
-
-          if (!student || student.balance < effectivePrice) {
-            throw new Error("INSUFFICIENT_FUNDS");
-          }
-
-          await tx.user.update({
-            where: { id: session.id },
+          const claim = await tx.user.updateMany({
+            where: { id: session.id, balance: { gte: effectivePrice } },
             data: { balance: { decrement: effectivePrice } },
           });
+
+          if (claim.count === 0) {
+            throw new Error("INSUFFICIENT_FUNDS");
+          }
 
           await tx.balanceTransaction.create({
             data: {
@@ -79,8 +77,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         });
       });
 
-      return NextResponse.json({ success: true, message: "تم شراء الخطة بنجاح" });
+      return NextResponse.json({ success: true, message: "تم الاشتراك في الخطة بنجاح" });
     } catch (e: any) {
+      if (e.message === "ALREADY_ENROLLED") {
+        return NextResponse.json({ error: "أنت مسجل بالفعل في هذه الخطة" }, { status: 400 });
+      }
       if (e.message === "INSUFFICIENT_FUNDS") {
         return NextResponse.json(
           { code: "INSUFFICIENT_FUNDS", error: "الرصيد غير كافٍ لإتمام العملية", effectivePrice },

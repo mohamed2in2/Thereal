@@ -53,42 +53,6 @@ export async function GET(req: NextRequest) {
   const normalizedStatus = (data.status || "unknown").toString().toLowerCase();
   const isPaid = SHAKEOUT_PAID_STATUSES.includes(normalizedStatus);
 
-  // B21: Credit the stored base amount, NOT the gateway-reported amount
-  if (isPaid && existingTx.type === SHAKEOUT_PENDING_TYPE) {
-    const processed = await prisma.$transaction(async (tx) => {
-      const claim = await tx.balanceTransaction.updateMany({
-        where: { id: existingTx.id, type: SHAKEOUT_PENDING_TYPE },
-        data: {
-          type: SHAKEOUT_CREDITED_TYPE,
-          note: `${existingTx.note || ""} — شحن محفظة عبر Shake-Out (تأكيد سريع)`,
-        },
-      });
-
-      if (claim.count === 0) {
-        return false; // already credited by webhook or another status check
-      }
-
-      await tx.user.update({
-        where: { id: session.id },
-        data: { balance: { increment: existingTx.amount } },
-      });
-
-      return true;
-    });
-
-    return NextResponse.json({
-      success: true,
-      paid: true,
-      transactionId,
-      reference: data.reference,
-      status: "paid",
-      amount: existingTx.amount,
-      message: processed
-        ? "تم تأكيد السداد وإضافة الرصيد إلى حسابك بنجاح! 🎉"
-        : "تم تأكيد السداد مسبقاً.",
-    });
-  }
-
   return NextResponse.json({
     success: true,
     paid: isPaid,
@@ -100,4 +64,5 @@ export async function GET(req: NextRequest) {
     methodLabel: getPaymentMethod(data.method as string)?.label ?? data.method,
   });
 }
+
 

@@ -102,6 +102,9 @@ export async function POST(req: NextRequest) {
       return moneyCode.amount;
     });
 
+    const { ReferralService } = await import("@/services/referral/ReferralService");
+    void ReferralService.qualifyAndRewardReferral(session.id, `code:${normalized}`).catch(() => {});
+
     return NextResponse.json({
       success: true,
       credited: creditedAmount,
