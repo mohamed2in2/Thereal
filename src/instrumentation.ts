@@ -48,6 +48,24 @@ export async function register() {
             timezone: "Africa/Cairo",
           }
         );
+
+        // 3. Setup the weekly database backup cron (Every Sunday at 02:00 AM Africa/Cairo timezone)
+        console.log("⏰ Scheduling weekly database backup at 02:00 AM (Sunday) Cairo time.");
+        const { performDatabaseBackup } = await import("./lib/db-backup");
+        cron.schedule(
+          "0 2 * * 0",
+          async () => {
+            console.log("⏰ Triggering weekly scheduled database backup...");
+            try {
+              await performDatabaseBackup();
+            } catch (err) {
+              console.error("❌ Scheduled database backup failed:", err);
+            }
+          },
+          {
+            timezone: "Africa/Cairo",
+          }
+        );
       } else {
         console.log(`⏰ Worker instance (NODE_APP_INSTANCE=${process.env.NODE_APP_INSTANCE}) detected. Skipping cron scheduling.`);
       }

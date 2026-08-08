@@ -15,6 +15,7 @@
     "db:generate": "node scripts/prisma-generate.js",
     "db:seed": "tsx prisma/seed.ts",
     "db:clear": "ts-node --project tsconfig.json scripts/clearDb.ts",
+    "db:backup": "node scripts/db-backup.js",
     "validate:env": "node scripts/validate-env.mjs",
     "postinstall": "node scripts/prisma-generate.js"
   },
