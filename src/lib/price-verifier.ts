@@ -109,14 +109,15 @@ export async function verifyAuthoritativePrice(params: {
       return { valid: false, expectedPrice: 0, itemName: "كورس", error: "الكورس المطلوب غير موجود" };
     }
 
-    if (!course.isPaid || course.price === 0) {
+    const coursePrice = course.price ?? 0;
+    if (!course.isPaid || coursePrice === 0) {
       return { valid: true, expectedPrice: 0, itemName: course.title };
     }
 
-    let effectivePrice = course.price;
+    let effectivePrice = coursePrice;
     const now = new Date();
     if (course.discountPercent && course.discountExpiresAt && course.discountExpiresAt > now) {
-      effectivePrice = Math.round(course.price * (1 - course.discountPercent / 100));
+      effectivePrice = Math.round(coursePrice * (1 - course.discountPercent / 100));
     }
 
     if (amount < effectivePrice - 0.01) {
@@ -166,7 +167,8 @@ export async function verifyAuthoritativePrice(params: {
       return { valid: false, expectedPrice: 0, itemName: "خطة دراسية", error: "الخطة المطلوبة غير موجودة" };
     }
 
-    const effectivePrice = plan.isPaid ? (plan.discountPrice && plan.discountPrice > 0 ? plan.discountPrice : plan.price) : 0;
+    const rawPlanPrice = plan.price ?? 0;
+    const effectivePrice = plan.isPaid ? (plan.discountPrice && plan.discountPrice > 0 ? plan.discountPrice : rawPlanPrice) : 0;
     if (amount < effectivePrice - 0.01) {
       return {
         valid: false,
