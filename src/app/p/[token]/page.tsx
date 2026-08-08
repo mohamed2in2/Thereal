@@ -66,29 +66,6 @@ export default function ParentPortalPage({ params }: { params: Promise<{ token: 
   const [error, setError] = useState<string | null>(null);
   const [verifying, setVerifying] = useState(false);
 
-  // Font size scaling state (stored in localStorage)
-  const [fontScale, setFontScale] = useState<number>(1);
-
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem("parent_font_scale");
-      if (saved) {
-        const val = parseFloat(saved);
-        if (!isNaN(val) && val >= 0.8 && val <= 1.5) setFontScale(val);
-      }
-    } catch {}
-  }, []);
-
-  const changeFontScale = (delta: number) => {
-    setFontScale((prev) => {
-      const next = Math.min(Math.max(parseFloat((prev + delta).toFixed(1)), 0.8), 1.4);
-      try {
-        localStorage.setItem("parent_font_scale", String(next));
-      } catch {}
-      return next;
-    });
-  };
-
   useEffect(() => {
     async function loadPortal() {
       try {
@@ -161,15 +138,12 @@ export default function ParentPortalPage({ params }: { params: Promise<{ token: 
     );
   }
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // GATE VIEW (Verification Required)
-  // ══════════════════════════════════════════════════════════════════════════
   if (stage === "GATE" && gateChild) {
     return (
       <div
         className="min-h-screen bg-[#FBF8F1] text-[#1A1A1A] p-4 sm:p-6 flex flex-col items-center justify-center font-serif"
         dir="rtl"
-        style={{ fontSize: `${fontScale * 19}px`, lineHeight: 1.9 }}
+        style={{ fontSize: "19px", lineHeight: 1.9 }}
       >
         <style jsx global>{`
           @import url('https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400;1,700&family=Noto+Naskh+Arabic:wght@400..700&display=swap');
@@ -234,7 +208,7 @@ export default function ParentPortalPage({ params }: { params: Promise<{ token: 
       <div
         className="min-h-screen bg-[#FBF8F1] text-[#1A1A1A] p-4 sm:p-6 flex flex-col items-center justify-center font-serif"
         dir="rtl"
-        style={{ fontSize: `${fontScale * 19}px`, lineHeight: 1.9 }}
+        style={{ fontSize: "19px", lineHeight: 1.9 }}
       >
         <div className="w-full max-w-md bg-white border-2 border-[#1A1A1A] p-8 text-center space-y-5 rounded-2xl shadow-xl">
           <div className="w-16 h-16 bg-red-100 text-[#B3261E] border border-red-300 rounded-full flex items-center justify-center text-3xl mx-auto">
@@ -288,7 +262,7 @@ export default function ParentPortalPage({ params }: { params: Promise<{ token: 
     <div
       className="min-h-screen bg-[#FBF8F1] text-[#1A1A1A] font-serif p-4 sm:p-8 pb-20 selection:bg-[#0F7B4F] selection:text-white"
       dir="rtl"
-      style={{ fontSize: `${fontScale * 19}px`, lineHeight: 1.9 }}
+      style={{ fontSize: "19px", lineHeight: 1.9 }}
     >
       <style jsx global>{`
         @import url('https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400;1,700&family=Noto+Naskh+Arabic:wght@400..700&display=swap');
@@ -311,25 +285,6 @@ export default function ParentPortalPage({ params }: { params: Promise<{ token: 
           }
         }
       `}</style>
-
-      {/* Floating Font Scale Toolbar (Pinned Top Left) */}
-      <div className="no-print fixed top-3 left-3 z-50 bg-white border-2 border-[#1A1A1A] rounded-xl px-3 py-1.5 shadow-md flex items-center gap-2 text-sm font-sans font-bold">
-        <span className="text-gray-700 text-xs">حجم الخط:</span>
-        <button
-          onClick={() => changeFontScale(0.1)}
-          aria-label="تكبير الخط"
-          className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 text-[#1A1A1A] flex items-center justify-center font-bold"
-        >
-          أ+
-        </button>
-        <button
-          onClick={() => changeFontScale(-0.1)}
-          aria-label="تصغير الخط"
-          className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 text-[#1A1A1A] flex items-center justify-center font-bold"
-        >
-          أ-
-        </button>
-      </div>
 
       <div className="max-w-2xl mx-auto space-y-6">
 
