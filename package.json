@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "npx tsx scripts/repair-sqlite-db.ts && next dev --webpack",
-    "build": "node scripts/prisma-generate.js && npx next build",
+    "build": "node scripts/prisma-generate.js && npx next build --webpack",
     "start": "next start",
     "prod:start": "pm2 start ecosystem.config.js",
     "prod:cluster": "npm run build && pm2 start ecosystem.config.js",

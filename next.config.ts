@@ -1,10 +1,15 @@
 import type { NextConfig } from "next";
+import path from "path";
 
 const nextConfig: NextConfig = {
   output: "standalone",
   serverExternalPackages: ["@whiskeysockets/baileys"],
   productionBrowserSourceMaps: false,
   allowedDevOrigins: ["localhost", "127.0.0.1", "*.app.github.dev"],
+
+  turbopack: {
+    root: path.resolve(__dirname),
+  },
 
   experimental: {
     optimizePackageImports: [

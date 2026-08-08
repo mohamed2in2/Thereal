@@ -17,10 +17,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: "الخطة غير متاحة" }, { status: 404 });
     }
 
-    let effectivePrice = plan.isPaid ? plan.price : 0;
-    if (plan.isPaid && plan.discountPrice !== null && plan.discountExpiresAt && new Date(plan.discountExpiresAt) > new Date()) {
+    const planPrice = plan.price ?? 0;
+    let effectivePrice = planPrice;
+    if (plan.discountPrice !== null && plan.discountPrice !== undefined && plan.discountExpiresAt && new Date(plan.discountExpiresAt) > new Date()) {
       effectivePrice = plan.discountPrice;
     }
+    effectivePrice = Math.max(0, effectivePrice);
 
     const student = await prisma.user.findUnique({
       where: { id: session.id },
