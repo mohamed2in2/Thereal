@@ -431,7 +431,7 @@ function PaymentContent() {
             {selectedMethod.needsPhone && (
               <div className="rounded-2xl border border-[#E4E7EC] dark:border-[#232C36] bg-[#FFFFFF] dark:bg-[#141A21] p-5 shadow-sm space-y-2">
                 <label className="text-[14px] font-bold text-[#101828] dark:text-[#F2F4F7]">
-                  {selectedMethod.phoneLabel || "رقم محفظة فودافون كاش / الهاتف المحمول:"}
+                  رقم محفظة فودافون كاش / الهاتف المحمول:
                 </label>
                 <input
                   type="tel"
