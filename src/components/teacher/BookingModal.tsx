@@ -123,6 +123,7 @@ export function BookingButton({
   const [languageTrack, setLanguageTrack] = useState<"arabic" | "languages">("arabic");
   const [userBalance, setUserBalance] = useState<number | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [selectedPlanType, setSelectedPlanType] = useState<"monthly" | "termly" | "yearly" | null>(null);
   useEffect(() => {
     fetch("/api/auth/me")
       .then((r) => r.json())
