@@ -177,18 +177,18 @@ async function main() {
   // 10. Teacher Subscriptions
   await client.execute({ sql: "DELETE FROM TeacherSubscription WHERE teacherId = ?", args: [teacherId] });
   await client.execute({
-    sql: `INSERT INTO TeacherSubscription (id, teacherId, studentId, subscriptionType, status, amountPaid, createdAt, updatedAt)
-          VALUES ('demo-sub-1', ?, ?, 'MONTHLY', 'APPROVED', 200, ?, ?)`,
+    sql: `INSERT INTO TeacherSubscription (id, teacherId, studentId, planType, planLabel, status, amount, educationalStage, createdAt, updatedAt)
+          VALUES ('demo-sub-1', ?, ?, 'monthly', 'اشتراك شهري', 'active', 200, 'sec_1', ?, ?)`,
     args: [teacherId, studentIds[0], now, now],
   });
   await client.execute({
-    sql: `INSERT INTO TeacherSubscription (id, teacherId, studentId, subscriptionType, status, amountPaid, createdAt, updatedAt)
-          VALUES ('demo-sub-2', ?, ?, 'TERMLY', 'APPROVED', 500, ?, ?)`,
+    sql: `INSERT INTO TeacherSubscription (id, teacherId, studentId, planType, planLabel, status, amount, educationalStage, createdAt, updatedAt)
+          VALUES ('demo-sub-2', ?, ?, 'termly', 'اشتراك ترمي', 'active', 500, 'sec_1', ?, ?)`,
     args: [teacherId, studentIds[1], now, now],
   });
   await client.execute({
-    sql: `INSERT INTO TeacherSubscription (id, teacherId, studentId, subscriptionType, status, amountPaid, createdAt, updatedAt)
-          VALUES ('demo-sub-3', ?, ?, 'YEARLY', 'PENDING_VERIFICATION', 1200, ?, ?)`,
+    sql: `INSERT INTO TeacherSubscription (id, teacherId, studentId, planType, planLabel, status, amount, educationalStage, createdAt, updatedAt)
+          VALUES ('demo-sub-3', ?, ?, 'yearly', 'اشتراك سنوي', 'active', 1200, 'sec_1', ?, ?)`,
     args: [teacherId, studentIds[2], now, now],
   });
 

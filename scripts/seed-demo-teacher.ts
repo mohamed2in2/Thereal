@@ -420,23 +420,29 @@ async function main() {
       {
         teacherId: teacherUser.id,
         studentId: studentUsers[0].id,
-        subscriptionType: "MONTHLY",
-        status: "APPROVED",
-        amountPaid: 200,
+        planType: "monthly",
+        planLabel: "اشتراك شهري",
+        status: "active",
+        amount: 200,
+        educationalStage: "sec_1",
       },
       {
         teacherId: teacherUser.id,
         studentId: studentUsers[1].id,
-        subscriptionType: "TERMLY",
-        status: "APPROVED",
-        amountPaid: 500,
+        planType: "termly",
+        planLabel: "اشتراك ترمي",
+        status: "active",
+        amount: 500,
+        educationalStage: "sec_1",
       },
       {
         teacherId: teacherUser.id,
         studentId: studentUsers[2].id,
-        subscriptionType: "YEARLY",
-        status: "PENDING_VERIFICATION",
-        amountPaid: 1200,
+        planType: "yearly",
+        planLabel: "اشتراك سنوي",
+        status: "active",
+        amount: 1200,
+        educationalStage: "sec_1",
       },
     ],
   });
@@ -444,14 +450,14 @@ async function main() {
   // 8. Homework Submissions & Quiz Results
   await prisma.homeworkSubmission.upsert({
     where: { homeworkId_studentId: { homeworkId: homework.id, studentId: studentUsers[0].id } },
-    update: { content: "إجابة الطالب التجريبي الأول النموذجية على السؤال الأول والثاني.", status: "GRADED", grade: 95 },
-    create: { homeworkId: homework.id, studentId: studentUsers[0].id, content: "إجابة الطالب التجريبي الأول النموذجية على السؤال الأول والثاني.", status: "GRADED", grade: 95 },
+    update: { submittedOutput: "إجابة الطالب التجريبي الأول النموذجية على السؤال الأول والثاني.", status: "passed", score: 95, totalQ: 2 },
+    create: { homeworkId: homework.id, studentId: studentUsers[0].id, submittedOutput: "إجابة الطالب التجريبي الأول النموذجية على السؤال الأول والثاني.", status: "passed", score: 95, totalQ: 2 },
   });
 
   await prisma.quizResult.upsert({
-    where: { id: "demo-quiz-result-1" },
-    update: { quizId: quiz.id, studentId: studentUsers[0].id, score: 100, totalQuestions: 2 },
-    create: { id: "demo-quiz-result-1", quizId: quiz.id, studentId: studentUsers[0].id, score: 100, totalQuestions: 2 },
+    where: { studentId_quizId: { studentId: studentUsers[0].id, quizId: quiz.id } },
+    update: { score: 100, totalQ: 2 },
+    create: { quizId: quiz.id, studentId: studentUsers[0].id, score: 100, totalQ: 2 },
   });
 
   // 9. Parent Token for Student 1
