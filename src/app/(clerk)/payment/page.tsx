@@ -62,7 +62,7 @@ function PaymentContent() {
   // 15-Minute Countdown Timer for Payment Instructions
   const [timeLeftSeconds, setTimeLeftSeconds] = useState<number>(15 * 60);
 
-  const [user, setUser] = useState<{ id: string; name: string } | null>(null);
+  const [user, setUser] = useState<{ id: string; name: string; role: string } | null>(null);
   const [userLoading, setUserLoading] = useState(true);
 
   const allMethods = listPaymentMethods();
@@ -74,7 +74,7 @@ function PaymentContent() {
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (d?.user) {
-          setUser(d.user);
+          setUser({ id: d.user.id, name: d.user.name, role: d.user.role });
         } else {
           setUser(null);
         }
