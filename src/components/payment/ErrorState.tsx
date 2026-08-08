@@ -15,13 +15,9 @@ export function ErrorState({
     !message ||
     message.includes("{") ||
     message.includes("}") ||
-    message.includes("Error") ||
-    message.includes("http") ||
-    message.includes("500") ||
-    message.includes("400") ||
     message.includes("ENOTFOUND") ||
-    message.includes("sha7nawy") ||
-    message.includes("shakeout");
+    message.includes("Internal Server Error") ||
+    message.includes("Unhandled Runtime Error");
 
   const friendlyMessage = isRawGatewayError
     ? "تعذر إتمام عملية الدفع الإلكتروني حالياً. يرجى تكرار المحاولة أو التواصل معنا عبر الواتساب."

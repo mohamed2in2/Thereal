@@ -55,7 +55,25 @@ const getServerSnapshot = (): Theme => "light";
 
 import { ParentVerificationBanner } from "@/components/ui/ParentVerificationBanner";
 
-export function Navbar({ user }: NavbarProps) {
+export function Navbar({ user: propUser }: NavbarProps) {
+  const [fetchedUser, setFetchedUser] = useState<{ name: string; role: string } | null>(null);
+
+  useEffect(() => {
+    if (propUser !== undefined) return;
+    fetch("/api/auth/me", { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d?.user) {
+          setFetchedUser({ name: d.user.name, role: d.user.role });
+        } else {
+          setFetchedUser(null);
+        }
+      })
+      .catch(() => setFetchedUser(null));
+  }, [propUser]);
+
+  const user = propUser !== undefined ? propUser : fetchedUser;
+
   const pathname = usePathname();
   const router   = useRouter();
   const [menuOpen,  setMenuOpen]  = useState(false);

@@ -100,7 +100,7 @@ export async function verifyAuthoritativePrice(params: {
     const langRate = isLanguages ? (profile.priceLanguagesMonthly ?? 0) : 0;
     const languageSurcharge = langRate * months;
 
-    const expectedPrice = Math.max(planPrice + languageSurcharge, 5);
+    const expectedPrice = Math.max(planPrice + languageSurcharge, 1);
     const teacherName = profile.displayName || teacher.name;
     const itemName = `اشتراك ${planType === "monthly" ? "شهري" : planType === "termly" ? "ترمي" : "سنوي"} مع ${teacherName}`;
 

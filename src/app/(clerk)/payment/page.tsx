@@ -373,7 +373,7 @@ function PaymentContent() {
 
   return (
     <div dir="rtl" className="min-h-screen bg-[#F8F9FA] dark:bg-[#0B0F19] text-[#101828] dark:text-[#F2F4F7] transition-colors duration-200">
-      <Navbar />
+      <Navbar user={user} />
 
       <main className="max-w-2xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
         {step === "checkout" && (
