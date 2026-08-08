@@ -108,6 +108,7 @@ export function BookingButton({
   discountMonthly,
   discountTermly,
   discountYearly,
+  stagePricing,
   priceLanguagesMonthly,
   enableLanguagesTrack = true,
   paymentNotes,
