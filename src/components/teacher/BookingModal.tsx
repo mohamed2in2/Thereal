@@ -23,6 +23,7 @@ interface BookingModalProps {
   discountMonthly?: number | null;
   discountTermly?: number | null;
   discountYearly?: number | null;
+  stagePricing?: string | null;
   priceLanguagesMonthly?: number | null;
   enableLanguagesTrack?: boolean;
   paymentNotes?: string | null;
@@ -201,17 +202,41 @@ export function BookingButton({
     };
   };
 
-  const baseMonthly = priceMonthly && priceMonthly > 0 ? priceMonthly : 180;
-  const baseTermly = priceTermly && priceTermly > 0 ? priceTermly : 750;
-  const baseYearly = priceYearly && priceYearly > 0 ? priceYearly : 1200;
+  // Extract per-grade pricing config from stagePricing JSON
+  let stageConfig = {
+    priceMonthly: priceMonthly ?? 180,
+    priceTermly: priceTermly ?? 750,
+    priceYearly: priceYearly ?? 1200,
+    discountMonthly: discountMonthly ?? null,
+    discountTermly: discountTermly ?? null,
+    discountYearly: discountYearly ?? null,
+  };
 
-  const langRate = priceLanguagesMonthly != null && priceLanguagesMonthly >= 0 ? priceLanguagesMonthly : 50;
-  const langSurchargePerMonth = languageTrack === "languages" ? langRate : 0;
+  if (stagePricing) {
+    try {
+      const parsedMap = JSON.parse(stagePricing);
+      if (parsedMap && parsedMap[studentGrade]) {
+        const g = parsedMap[studentGrade];
+        stageConfig = {
+          priceMonthly: g.priceMonthly ?? priceMonthly ?? 180,
+          priceTermly: g.priceTermly ?? priceTermly ?? 750,
+          priceYearly: g.priceYearly ?? priceYearly ?? 1200,
+          discountMonthly: g.discountMonthly ?? discountMonthly ?? null,
+          discountTermly: g.discountTermly ?? discountTermly ?? null,
+          discountYearly: g.discountYearly ?? discountYearly ?? null,
+        };
+      }
+    } catch {}
+  }
+
+  const baseMonthly = stageConfig.priceMonthly > 0 ? stageConfig.priceMonthly : 180;
+  const baseTermly = stageConfig.priceTermly > 0 ? stageConfig.priceTermly : 750;
+  const baseYearly = stageConfig.priceYearly > 0 ? stageConfig.priceYearly : 1200;
 
   const plans: BookingPlan[] = [
-    createPlan("monthly", "اشتراك شهر واحد", "شهر واحد (1 Month)", baseMonthly + langSurchargePerMonth, discountMonthly, "📅", "#3B82F6", "rgba(59,130,246,0.1)"),
-    createPlan("termly", "اشتراك 3 شهور", "3 شهور (3 Months)", baseTermly + (langSurchargePerMonth * 3), discountTermly, "📚", "#F59E0B", "rgba(245,158,11,0.1)"),
-    createPlan("yearly", "اشتراك 6 شهور", "6 شهور (6 Months)", baseYearly + (langSurchargePerMonth * 6), discountYearly, "🎓", "#10B981", "rgba(16,185,129,0.1)"),
+    createPlan("monthly", "اشتراك شهر واحد", "شهر واحد (1 Month)", baseMonthly, stageConfig.discountMonthly, "📅", "#3B82F6", "rgba(59,130,246,0.1)"),
+    createPlan("termly", "اشتراك الترم", "ترم دراسي كامل (Term / 3 Months)", baseTermly, stageConfig.discountTermly, "📚", "#F59E0B", "rgba(245,158,11,0.1)"),
+    createPlan("yearly", "اشتراك سنة كاملة", "سنة دراسية كاملة (Year / 6 Months)", baseYearly, stageConfig.discountYearly, "🎓", "#10B981", "rgba(16,185,129,0.1)"),
   ];
 
   const maxDiscount = plans.reduce((max, p) => (p.discountPercent && p.discountPercent > max ? p.discountPercent : max), 0);

@@ -237,6 +237,9 @@ model TeacherProfile {
   discountTermly    Float?
   discountYearly    Float?
 
+  /// Per-grade specific pricing overrides (JSON: { sec_1: {...}, sec_2: {...} })
+  stagePricing      String?
+
   /// First course start date — shown under "احجز الان" button
   courseStartDate   DateTime?
 

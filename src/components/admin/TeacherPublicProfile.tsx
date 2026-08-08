@@ -21,6 +21,7 @@ type Profile = {
   discountMonthly: number | null;
   discountTermly: number | null;
   discountYearly: number | null;
+  stagePricing: string | null;
   priceLanguagesMonthly: number | null;
   enableLanguagesTrack?: boolean;
   paymentNotes: string | null;
@@ -74,7 +75,47 @@ export function TeacherPublicProfile() {
   const [saving, setSaving] = useState(false);
   const [origin, setOrigin] = useState("");
   const [slugState, setSlugState] = useState<"idle" | "checking" | "ok" | "taken" | "invalid">("idle");
+  const [activeStage, setActiveStage] = useState<"sec_1" | "sec_2">("sec_1");
   const photoInput = useRef<HTMLInputElement>(null);
+
+  const getStagePricing = (stage: "sec_1" | "sec_2") => {
+    let parsedMap: Record<string, any> = {};
+    try {
+      if (p?.stagePricing) parsedMap = JSON.parse(p.stagePricing);
+    } catch {}
+
+    const stageConfig = parsedMap[stage] || {};
+    return {
+      priceMonthly: stageConfig.priceMonthly ?? p?.priceMonthly ?? 180,
+      priceTermly: stageConfig.priceTermly ?? p?.priceTermly ?? 750,
+      priceYearly: stageConfig.priceYearly ?? p?.priceYearly ?? 1200,
+      discountMonthly: stageConfig.discountMonthly ?? p?.discountMonthly ?? null,
+      discountTermly: stageConfig.discountTermly ?? p?.discountTermly ?? null,
+      discountYearly: stageConfig.discountYearly ?? p?.discountYearly ?? null,
+    };
+  };
+
+  const updateStageField = (field: string, val: number | null) => {
+    if (!p) return;
+    let parsedMap: Record<string, any> = {};
+    try {
+      if (p.stagePricing) parsedMap = JSON.parse(p.stagePricing);
+    } catch {}
+
+    const currentValues = getStagePricing(activeStage);
+    const updatedObj = {
+      ...currentValues,
+      [field]: val,
+    };
+
+    parsedMap[activeStage] = updatedObj;
+
+    setP({
+      ...p,
+      stagePricing: JSON.stringify(parsedMap),
+      [field]: val,
+    });
+  };
 
   useEffect(() => {
     setOrigin(window.location.origin);
@@ -300,183 +341,171 @@ export function TeacherPublicProfile() {
         <div className="p-4 rounded-xl border border-[var(--border)] bg-[var(--bg)] space-y-3">
           <label className="block text-xs font-bold text-[var(--ink)]">تخصيص أسعار الاشتراك حسب المرحلة الدراسية:</label>
           <div className="grid grid-cols-2 gap-2">
-            <div className="p-3 rounded-lg border border-sky-500/30 bg-sky-500/10 text-right space-y-1">
+            <button
+              type="button"
+              onClick={() => setActiveStage("sec_1")}
+              className={`p-3 rounded-lg border text-right space-y-1 transition-all cursor-pointer ${
+                activeStage === "sec_1"
+                  ? "border-sky-500 bg-sky-500/15 ring-2 ring-sky-500/40 shadow-md"
+                  : "border-sky-500/20 bg-sky-500/5 hover:bg-sky-500/10 opacity-70"
+              }`}
+            >
               <span className="text-xs font-extrabold text-sky-500 flex items-center gap-1">
                 <span>🎓</span> أولى بكالوريا (1ère Bac)
               </span>
-              <p className="text-[11px] text-[var(--ink-muted)]">محددة كباقة أساسية لحجوزات طلاب الصف الأول بكالوريا</p>
-            </div>
+              <p className="text-[11px] text-[var(--ink-muted)]">
+                {activeStage === "sec_1" ? "تعديل أسعار الصف الأول بكالوريا (مفعل)" : "اضغط لتعديل أسعار الأول بكالوريا"}
+              </p>
+            </button>
 
-            <div className="p-3 rounded-lg border border-purple-500/30 bg-purple-500/10 text-right space-y-1">
+            <button
+              type="button"
+              onClick={() => setActiveStage("sec_2")}
+              className={`p-3 rounded-lg border text-right space-y-1 transition-all cursor-pointer ${
+                activeStage === "sec_2"
+                  ? "border-purple-500 bg-purple-500/15 ring-2 ring-purple-500/40 shadow-md"
+                  : "border-purple-500/20 bg-purple-500/5 hover:bg-purple-500/10 opacity-70"
+              }`}
+            >
               <span className="text-xs font-extrabold text-purple-400 flex items-center gap-1">
                 <span>🎓</span> ثانية بكالوريا (2ème Bac)
               </span>
-              <p className="text-[11px] text-[var(--ink-muted)]">محددة كباقة أساسية لحجوزات طلاب الصف الثاني بكالوريا</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Languages Track Toggle & Surcharge Setting */}
-        <div className="p-4 rounded-xl border border-sky-500/30 bg-sky-500/5 space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="font-bold text-sm text-[var(--ink)]">🌐 إتاحة الحجز بمسار "لغات / إنجليزي"</p>
-              <p className="text-xs text-[var(--ink-muted)] mt-0.5">عند تفعيل الخيار، يتمكن الطلاب من اختيار مسار اللغات عند الحجز.</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => set("enableLanguagesTrack", !(p.enableLanguagesTrack ?? true))}
-              role="switch"
-              aria-checked={p.enableLanguagesTrack ?? true}
-              className={`relative w-12 h-7 rounded-full transition-colors shrink-0 ${p.enableLanguagesTrack ?? true ? "bg-emerald-500" : "bg-[var(--border)]"}`}
-            >
-              <span className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-all ${p.enableLanguagesTrack ?? true ? "left-1" : "left-6"}`} />
+              <p className="text-[11px] text-[var(--ink-muted)]">
+                {activeStage === "sec_2" ? "تعديل أسعار الصف الثاني بكالوريا (مفعل)" : "اضغط لتعديل أسعار الثاني بكالوريا"}
+              </p>
             </button>
           </div>
-
-          {(p.enableLanguagesTrack ?? true) ? (
-            <div className="pt-2 border-t border-sky-500/20">
-              <label className="block text-xs font-bold text-sky-400 mb-1">💰 رسوم مسار اللغات / إنجليزي (إضافي شهرياً)</label>
-              <div className="flex flex-col sm:flex-row items-center gap-3">
-                <input
-                  type="number"
-                  min="0"
-                  step="5"
-                  className={`${input} sm:max-w-xs`}
-                  value={p.priceLanguagesMonthly ?? 50}
-                  onChange={(e) => set("priceLanguagesMonthly", e.target.value ? Number(e.target.value) : 0)}
-                  placeholder="50"
-                />
-                <span className="text-xs text-[var(--ink-muted)]">
-                  المبلغ يضاف تلقائياً لطلاب مسار اللغات (مثال: {p.priceLanguagesMonthly ?? 50}ج/شهر × 3 شهور = +{(p.priceLanguagesMonthly ?? 50) * 3}ج).
-                </span>
-              </div>
-            </div>
-          ) : (
-            <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-bold">
-              🚫 مسار اللغات معطّل حالياً — سيقتصر الحجز على المسار العربي فقط.
-            </div>
-          )}
         </div>
 
-        <div className="space-y-4">
-          {/* 1 Month Plan */}
-          <div className="p-4 rounded-xl border border-[var(--border)] bg-[var(--bg)]">
-            <h4 className="font-bold text-sm text-[var(--ink)] mb-3 flex items-center justify-between">
-              <span className="flex items-center gap-2"><span>📅</span> اشتراك شهر واحد (1 Month)</span>
-              {p.priceMonthly && (
-                <span className="text-xs font-mono text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
-                  صافي العربي: {Math.round((p.priceMonthly ?? 180) * (1 - (p.discountMonthly || 0) / 100))}ج | لغات: {Math.round((p.priceMonthly ?? 180) * (1 - (p.discountMonthly || 0) / 100)) + (p.priceLanguagesMonthly ?? 50)}ج
-                </span>
-              )}
-            </h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className={label}>السعر الأساسي (جنيه - افتراضي 180ج)</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="1"
-                  className={input}
-                  value={p.priceMonthly ?? ""}
-                  onChange={(e) => set("priceMonthly", e.target.value ? Number(e.target.value) : null)}
-                  placeholder="180"
-                />
+        {(() => {
+          const currentP = getStagePricing(activeStage);
+          const stageName = activeStage === "sec_1" ? "أولى بكالوريا" : "ثانية بكالوريا";
+          return (
+            <div className="space-y-4">
+              <div className="px-3 py-2 rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-400 text-xs font-bold flex items-center justify-between">
+                <span>📍 أسعار باقة: {stageName}</span>
+                <span className="text-[10px] text-[var(--ink-muted)]">التعديلات أدناه تنطبق على طلاب {stageName} فقط</span>
               </div>
-              <div>
-                <label className={label}>🏷️ نسبة الخصم (%)</label>
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  step="1"
-                  className={input}
-                  value={p.discountMonthly ?? ""}
-                  onChange={(e) => set("discountMonthly", e.target.value ? Number(e.target.value) : null)}
-                  placeholder="مثال: 10"
-                />
-              </div>
-            </div>
-          </div>
 
-          {/* 3 Months Plan */}
-          <div className="p-4 rounded-xl border border-[var(--border)] bg-[var(--bg)]">
-            <h4 className="font-bold text-sm text-[var(--ink)] mb-3 flex items-center justify-between">
-              <span className="flex items-center gap-2"><span>📚</span> اشتراك الترم (3 Months)</span>
-              {p.priceTermly && (
-                <span className="text-xs font-mono text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/20">
-                  صافي العربي: {Math.round((p.priceTermly ?? 750) * (1 - (p.discountTermly || 0) / 100))}ج | لغات: {Math.round((p.priceTermly ?? 750) * (1 - (p.discountTermly || 0) / 100)) + (p.priceLanguagesMonthly ?? 50) * 3}ج
-                </span>
-              )}
-            </h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className={label}>السعر الأساسي (جنيه - افتراضي 750ج)</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="1"
-                  className={input}
-                  value={p.priceTermly ?? ""}
-                  onChange={(e) => set("priceTermly", e.target.value ? Number(e.target.value) : null)}
-                  placeholder="750"
-                />
+              {/* 1 Month Plan */}
+              <div className="p-4 rounded-xl border border-[var(--border)] bg-[var(--bg)]">
+                <h4 className="font-bold text-sm text-[var(--ink)] mb-3 flex items-center justify-between">
+                  <span className="flex items-center gap-2"><span>📅</span> اشتراك شهر واحد (1 Month)</span>
+                  {currentP.priceMonthly && (
+                    <span className="text-xs font-mono text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
+                      الصافي: {Math.round((currentP.priceMonthly ?? 180) * (1 - (currentP.discountMonthly || 0) / 100))}ج
+                    </span>
+                  )}
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className={label}>السعر الأساسي (جنيه - افتراضي 180ج)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      className={input}
+                      value={currentP.priceMonthly ?? ""}
+                      onChange={(e) => updateStageField("priceMonthly", e.target.value ? Number(e.target.value) : null)}
+                      placeholder="180"
+                    />
+                  </div>
+                  <div>
+                    <label className={label}>🏷️ نسبة الخصم (%)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="1"
+                      className={input}
+                      value={currentP.discountMonthly ?? ""}
+                      onChange={(e) => updateStageField("discountMonthly", e.target.value ? Number(e.target.value) : null)}
+                      placeholder="مثال: 10"
+                    />
+                  </div>
+                </div>
               </div>
-              <div>
-                <label className={label}>🏷️ نسبة الخصم (%)</label>
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  step="1"
-                  className={input}
-                  value={p.discountTermly ?? ""}
-                  onChange={(e) => set("discountTermly", e.target.value ? Number(e.target.value) : null)}
-                  placeholder="مثال: 20"
-                />
-              </div>
-            </div>
-          </div>
 
-          {/* 6 Months Plan */}
-          <div className="p-4 rounded-xl border border-[var(--border)] bg-[var(--bg)]">
-            <h4 className="font-bold text-sm text-[var(--ink)] mb-3 flex items-center justify-between">
-              <span className="flex items-center gap-2"><span>🎓</span> اشتراك 6 شهور (6 Months)</span>
-              {p.priceYearly && (
-                <span className="text-xs font-mono text-purple-400 bg-purple-500/10 px-2.5 py-1 rounded-full border border-purple-500/20">
-                  صافي العربي: {Math.round((p.priceYearly ?? 1200) * (1 - (p.discountYearly || 0) / 100))}ج | لغات: {Math.round((p.priceYearly ?? 1200) * (1 - (p.discountYearly || 0) / 100)) + (p.priceLanguagesMonthly ?? 50) * 6}ج
-                </span>
-              )}
-            </h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className={label}>السعر الأساسي (جنيه - افتراضي 1200ج)</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="1"
-                  className={input}
-                  value={p.priceYearly ?? ""}
-                  onChange={(e) => set("priceYearly", e.target.value ? Number(e.target.value) : null)}
-                  placeholder="1200"
-                />
+              {/* 3 Months Plan (Term) */}
+              <div className="p-4 rounded-xl border border-[var(--border)] bg-[var(--bg)]">
+                <h4 className="font-bold text-sm text-[var(--ink)] mb-3 flex items-center justify-between">
+                  <span className="flex items-center gap-2"><span>📚</span> اشتراك الترم (Term / 3 Months)</span>
+                  {currentP.priceTermly && (
+                    <span className="text-xs font-mono text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/20">
+                      الصافي: {Math.round((currentP.priceTermly ?? 750) * (1 - (currentP.discountTermly || 0) / 100))}ج
+                    </span>
+                  )}
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className={label}>السعر الأساسي (جنيه - افتراضي 750ج)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      className={input}
+                      value={currentP.priceTermly ?? ""}
+                      onChange={(e) => updateStageField("priceTermly", e.target.value ? Number(e.target.value) : null)}
+                      placeholder="750"
+                    />
+                  </div>
+                  <div>
+                    <label className={label}>🏷️ نسبة الخصم (%)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="1"
+                      className={input}
+                      value={currentP.discountTermly ?? ""}
+                      onChange={(e) => updateStageField("discountTermly", e.target.value ? Number(e.target.value) : null)}
+                      placeholder="مثال: 20"
+                    />
+                  </div>
+                </div>
               </div>
-              <div>
-                <label className={label}>🏷️ نسبة الخصم (%)</label>
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  step="1"
-                  className={input}
-                  value={p.discountYearly ?? ""}
-                  onChange={(e) => set("discountYearly", e.target.value ? Number(e.target.value) : null)}
-                  placeholder="مثال: 30"
-                />
+
+              {/* 6 Months Plan (Year) */}
+              <div className="p-4 rounded-xl border border-[var(--border)] bg-[var(--bg)]">
+                <h4 className="font-bold text-sm text-[var(--ink)] mb-3 flex items-center justify-between">
+                  <span className="flex items-center gap-2"><span>🎓</span> اشتراك سنة كاملة (Year / 6 Months)</span>
+                  {currentP.priceYearly && (
+                    <span className="text-xs font-mono text-purple-400 bg-purple-500/10 px-2.5 py-1 rounded-full border border-purple-500/20">
+                      الصافي: {Math.round((currentP.priceYearly ?? 1200) * (1 - (currentP.discountYearly || 0) / 100))}ج
+                    </span>
+                  )}
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className={label}>السعر الأساسي (جنيه - افتراضي 1200ج)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      className={input}
+                      value={currentP.priceYearly ?? ""}
+                      onChange={(e) => updateStageField("priceYearly", e.target.value ? Number(e.target.value) : null)}
+                      placeholder="1200"
+                    />
+                  </div>
+                  <div>
+                    <label className={label}>🏷️ نسبة الخصم (%)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="1"
+                      className={input}
+                      value={currentP.discountYearly ?? ""}
+                      onChange={(e) => updateStageField("discountYearly", e.target.value ? Number(e.target.value) : null)}
+                      placeholder="مثال: 30"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
+          );
+        })()}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
           <div>
