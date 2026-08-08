@@ -463,57 +463,6 @@ export function BookingButton({
                   </button>
                 )}
               </div>
-
-              {/* Sha7nawy Instruction Modal */}
-              {walletModal && (
-                <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.7)" }} onClick={() => setWalletModal(null)}>
-                  <div className="w-full max-w-md rounded-2xl p-6 text-center space-y-4 shadow-2xl" style={{ background: "var(--surface, #1a1f2e)", border: "1px solid var(--border, rgba(255,255,255,0.1))" }} onClick={e => e.stopPropagation()}>
-                    <div className="text-4xl">📲</div>
-                    <h3 className="text-lg font-bold" style={{ color: "var(--ink, #fff)" }}>تم إرسال طلب الخصم بنجاح!</h3>
-                    <p className="text-xs text-gray-400 font-mono">رقم المرجع: {walletModal.reference}</p>
-                    
-                    <div className="p-4 rounded-xl space-y-2 text-right text-sm" style={{ background: "var(--bg, #0f1420)", border: "1px solid var(--border, rgba(255,255,255,0.08))" }}>
-                      <p className="font-bold text-center" style={{ color: "var(--brand, #6366f1)" }}>تعليمات إتمام العملية:</p>
-                      <p className="text-xs leading-relaxed" style={{ color: "var(--ink-muted, #aaa)" }}>{walletModal.instructions}</p>
-                    </div>
-
-                    <div className="pt-2 space-y-2">
-                      <button onClick={async () => {
-                        setWalletLoading(true);
-                        try {
-                          const res = await fetch("/api/payments/sha7nawy/confirm", {
-                            method: "POST", credentials: "include",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ ref_code: walletModal.reference }),
-                          });
-                          const d = await res.json().catch(() => ({}));
-                          setWalletLoading(false);
-                          if (res.ok && d.success) {
-                            setWalletModal(null);
-                            setWalletMsg("✅ تم تأكيد السحب وشحن حسابك بنجاح!");
-                            refreshBalance();
-                          } else {
-                            setWalletMsg(`⚠️ ${d.error || "العملية معلقة بانتظار موافقة العميل من المحفظة"}`);
-                          }
-                        } catch {
-                          setWalletLoading(false);
-                          setWalletMsg("❌ تعذر الاتصال بسيرفر التأكيد");
-                        }
-                      }} disabled={walletLoading}
-                        className="w-full py-3 rounded-xl text-white font-bold text-sm cursor-pointer border-none transition-all hover:opacity-90 shadow-md"
-                        style={{ background: "linear-gradient(135deg, var(--brand, #6366f1), #4f46e5)" }}>
-                        {walletLoading ? "جارٍ التحقق والتأكيد..." : "تأكيد واستعلام حالة الدفع 🔄"}
-                      </button>
-
-                      <button onClick={() => setWalletModal(null)}
-                        className="w-full py-2.5 rounded-xl text-xs font-bold border cursor-pointer transition-colors"
-                        style={{ background: "var(--bg, #0f1420)", border: "1px solid var(--border, rgba(255,255,255,0.1))", color: "var(--ink-muted, #aaa)" }}>
-                        إغلاق النافذة
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
             </motion.div>
           </motion.div>
         )}
