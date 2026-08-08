@@ -165,6 +165,8 @@ export default function TeacherDashboardPage() {
   const [nativeUploading, setNativeUploading] = useState(false);
   const [nativeProgress, setNativeProgress] = useState(0);
   const [nativeStatus, setNativeStatus] = useState("");
+  const [lastUploadedVideoId, setLastUploadedVideoId] = useState<string | null>(null);
+  const [lastCreatedVideoInfo, setLastCreatedVideoInfo] = useState<{ id: string; providerVideoId: string; title: string } | null>(null);
 
   const handleNativeFileUpload = async (file: File) => {
     if (!file) return;
@@ -198,8 +200,10 @@ export default function TeacherDashboardPage() {
       if (isLocal || uploadUrl === "/api/teacher/native-upload") {
         const uploadedVideoId = await new Promise<string>((resolve, reject) => {
           const xhr = new XMLHttpRequest();
+          const formData = new FormData();
+          formData.append("file", file);
+
           xhr.open("POST", "/api/teacher/native-upload", true);
-          xhr.setRequestHeader("Content-Type", "application/octet-stream");
           xhr.setRequestHeader("X-Filename", encodeURIComponent(file.name));
 
           xhr.upload.onprogress = (e) => {
@@ -223,7 +227,7 @@ export default function TeacherDashboardPage() {
           };
 
           xhr.onerror = () => reject(new Error("حدث خطأ في شبكة الاتصال أثناء الرفع"));
-          xhr.send(file);
+          xhr.send(formData);
         });
 
         setNewVideo((prev) => ({
@@ -231,8 +235,9 @@ export default function TeacherDashboardPage() {
           providerVideoId: uploadedVideoId,
           title: prev.title || file.name.replace(/\.[^/.]+$/, ""),
         }));
+        setLastUploadedVideoId(uploadedVideoId);
 
-        notify("success", "تم رفع الفيديو بنجاح على السيرفر مباشرة!");
+        notify("success", `تم رفع الفيديو بنجاح! معرّف الفيديو: ${uploadedVideoId}`);
         return;
       }
 
@@ -281,8 +286,9 @@ export default function TeacherDashboardPage() {
         providerVideoId: finalVideoId,
         title: prev.title || file.name.replace(/\.[^/.]+$/, ""),
       }));
+      setLastUploadedVideoId(finalVideoId);
 
-      notify("success", "تم رفع وتأكيد الفيديو بنجاح على سيرفر Native!");
+      notify("success", `تم رفع وتأكيد الفيديو بنجاح! معرّف الفيديو: ${finalVideoId}`);
     } catch (err: any) {
       notify("error", err.message || "حدث خطأ أثناء رفع الفيديو");
     } finally {
@@ -524,11 +530,20 @@ export default function TeacherDashboardPage() {
         publishAt: newVideo.publishAt || null,
       }),
     });
-    const data = await readJson<{ error?: string }>(res);
+    const data = await readJson<{ error?: string; video?: { id: string; providerVideoId: string; title: string } }>(res);
     if (res.ok) {
       setNewVideo({ title: "", videoProvider: "vdocipher", providerVideoId: "", durationMinutes: 0, maxWatchesPerUser: 3, publishAt: "", folderId: "" });
       if (selectedCourse) fetchFolders(selectedCourse.id);
-      notify("success", "تم إضافة الفيديو بنجاح");
+      if (data?.video?.id) {
+        setLastCreatedVideoInfo({
+          id: data.video.id,
+          providerVideoId: data.video.providerVideoId || "",
+          title: data.video.title || "",
+        });
+        notify("success", `تم إضافة الفيديو بنجاح! ID الداخلي: ${data.video.id}`);
+      } else {
+        notify("success", "تم إضافة الفيديو بنجاح");
+      }
     } else {
       notify("error", data?.error || "تعذر إضافة الفيديو");
     }
@@ -1723,6 +1738,32 @@ export default function TeacherDashboardPage() {
                                         style={{ width: `${nativeProgress}%` }}
                                       />
                                     </div>
+                                  </div>
+                                )}
+                                {lastUploadedVideoId && (
+                                  <div className="mt-2.5 p-3 rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 space-y-2">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-xs font-bold text-emerald-400 flex items-center gap-1">
+                                        <span>🎉</span> تم رفع الفيديو المباشر بنجاح!
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          navigator.clipboard.writeText(lastUploadedVideoId);
+                                          notify("success", "تم نسخ معرّف الفيديو (Video ID) للذاكرة!");
+                                        }}
+                                        className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white transition-all flex items-center gap-1 cursor-pointer"
+                                      >
+                                        <span>📋 نسخ معرّف الفيديو (Copy ID)</span>
+                                      </button>
+                                    </div>
+                                    <div className="flex items-center justify-between gap-2 bg-black/40 px-3 py-2 rounded-lg border border-emerald-500/20 text-xs font-mono select-all">
+                                      <span className="text-emerald-400 font-bold">Video ID:</span>
+                                      <span className="text-white font-bold tracking-wider">{lastUploadedVideoId}</span>
+                                    </div>
+                                    <p className="text-[10px] text-emerald-300/80 m-0">
+                                      💡 تم إدخال المعرف تلقائياً في حقل "معرف درس Native" أعلاه. يمكنك استخدامه مباشرة أو نسخه للاستخدام لاحقاً.
+                                    </p>
                                   </div>
                                 )}
                               </div>
