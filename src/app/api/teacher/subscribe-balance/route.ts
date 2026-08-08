@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "يجب تسجيل الدخول أولاً لشراء الاشتراك بالرصيد" }, { status: 401 });
     }
 
-    const { teacherId, planType, languageTrack } = await req.json().catch(() => ({}));
+    const { teacherId, planType, languageTrack, studentGrade } = await req.json().catch(() => ({}));
 
     if (!teacherId || typeof teacherId !== "string") {
       return NextResponse.json({ error: "معرف الأستاذ مطلوب" }, { status: 400 });
@@ -41,6 +41,7 @@ export async function POST(req: NextRequest) {
         priceTermly: true,
         priceYearly: true,
         priceLanguagesMonthly: true,
+        stagePricing: true,
         displayName: true,
         slug: true,
       },
@@ -50,14 +51,30 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "لم يتم العثور على الأستاذ" }, { status: 400 });
     }
 
-    // B9: No hardcoded price fallbacks (200 / 600 / 1200)
     const rawPriceMap: Record<string, number | null> = {
       monthly: profile.priceMonthly,
       termly: profile.priceTermly,
       yearly: profile.priceYearly,
     };
 
-    const planPrice = rawPriceMap[planType];
+    let planPrice = rawPriceMap[planType];
+    if (profile.stagePricing && studentGrade) {
+      try {
+        const parsedMap = JSON.parse(profile.stagePricing);
+        if (parsedMap && parsedMap[studentGrade]) {
+          const keyMap: Record<string, string> = {
+            monthly: "priceMonthly",
+            termly: "priceTermly",
+            yearly: "priceYearly",
+          };
+          const stageVal = parsedMap[studentGrade][keyMap[planType]];
+          if (typeof stageVal === "number" && stageVal > 0) {
+            planPrice = stageVal;
+          }
+        }
+      } catch {}
+    }
+
     if (planPrice === null || planPrice === undefined || planPrice <= 0) {
       return NextResponse.json(
         { error: "لسه الأستاذ محددش سعر الباقة دي. كلّم الدعم." },

@@ -123,27 +123,6 @@ export function BookingButton({
   const [languageTrack, setLanguageTrack] = useState<"arabic" | "languages">("arabic");
   const [userBalance, setUserBalance] = useState<number | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [selectedPlanType, setSelectedPlanType] = useState<"monthly" | "termly" | "yearly" | null>(null);
-
-  // Booking & Payment Mode State
-  const [payMode, setPayMode] = useState<"wallet" | "fawry" | "balance" | "whatsapp" | "code">("wallet");
-  
-  // Wallet state
-  const [walletPhone, setWalletPhone] = useState("");
-  const [selectedWalletMethod, setSelectedWalletMethod] = useState<"vf_cash" | "et_cash" | "fawry">("vf_cash");
-  const [walletLoading, setWalletLoading] = useState(false);
-  const [walletMsg, setWalletMsg] = useState("");
-  const [walletModal, setWalletModal] = useState<{ reference: string; instructions: string; methodLabel: string; amount: number } | null>(null);
-
-  // Balance state
-  const [balanceLoading, setBalanceLoading] = useState(false);
-  const [balanceMsg, setBalanceMsg] = useState("");
-
-  // Code state
-  const [code, setCode] = useState("");
-  const [codeApplying, setCodeApplying] = useState(false);
-  const [codeMsg, setCodeMsg] = useState("");
-
   useEffect(() => {
     fetch("/api/auth/me")
       .then((r) => r.json())
@@ -158,15 +137,6 @@ export function BookingButton({
       .catch(() => {});
   }, []);
 
-  const refreshBalance = () => {
-    fetch("/api/student/balance", { credentials: "include" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (d && typeof d.balance === "number") setUserBalance(d.balance);
-      })
-      .catch(() => {});
-  };
-
   const createPlan = (
     type: "monthly" | "termly" | "yearly",
     label: string,
@@ -177,21 +147,6 @@ export function BookingButton({
     accent: string,
     accentBg: string
   ): BookingPlan => {
-    const hasDisc = discountPct != null && discountPct > 0 && discountPct <= 100;
-    if (hasDisc) {
-      const discountedPrice = Math.round(rawPrice * (1 - discountPct! / 100));
-      return {
-        type,
-        label,
-        sublabel,
-        price: discountedPrice,
-        originalPrice: rawPrice,
-        discountPercent: discountPct!,
-        icon,
-        accent,
-        accentBg,
-      };
-    }
     return {
       type,
       label,
@@ -262,111 +217,6 @@ export function BookingButton({
       courseStartDate
     );
     window.open(waUrl, "_blank");
-  };
-
-  const handlePayViaWallet = async (plan: BookingPlan) => {
-    if (!isLoggedIn) {
-      window.location.href = `/login?redirect_url=${encodeURIComponent(window.location.pathname)}`;
-      return;
-    }
-    const isWallet = selectedWalletMethod === "vf_cash" || selectedWalletMethod === "et_cash";
-    if (isWallet && !walletPhone.trim()) {
-      setWalletMsg("❌ رقم المحفظة مطلوب");
-      return;
-    }
-    setWalletLoading(true);
-    setWalletMsg("");
-    try {
-      const res = await fetch("/api/payments/sha7nawy/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          number: isWallet ? walletPhone.trim() : "",
-          amount: plan.price,
-          method: selectedWalletMethod,
-          client: studentName || "Student",
-          details: `حجز اشتراك (${plan.label} - ${languageTrack === "languages" ? "لغات" : "عربي"}) - أستاذ ${teacherName}`,
-        }),
-      });
-      const d = await res.json().catch(() => ({}));
-      setWalletLoading(false);
-      if (res.ok && d.success) {
-        const targetUrl = d.checkoutUrl || d.data?.payment_page_url || d.data?.url || (d.provider === "shakeout" && d.reference ? `https://dash.shake-out.com/invoice/${d.reference}` : null);
-        if (targetUrl) {
-          window.location.href = targetUrl;
-          return;
-        }
-        setWalletModal({
-          reference: d.reference || "SH-PENDING",
-          instructions: d.instructions || "اطلب *9*1# لخصم من فودافون كاش أو وافق على طلب الدفع من تطبيق e& Money",
-          methodLabel: d.methodLabel || "المحفظة الإلكترونية",
-          amount: plan.price,
-        });
-      } else {
-        setWalletMsg(`❌ ${d.error || "تعذر بدء عملية الدفع"}`);
-      }
-    } catch {
-      setWalletLoading(false);
-      setWalletMsg("❌ حدث خطأ أثناء الاتصال ببوابة الدفع");
-    }
-  };
-
-  const handlePayViaBalance = async (plan: BookingPlan) => {
-    if (!isLoggedIn) {
-      setBalanceMsg("❌ يجب تسجيل الدخول للشراء بالرصيد");
-      return;
-    }
-    setBalanceLoading(true);
-    setBalanceMsg("");
-    try {
-      const res = await fetch("/api/teacher/subscribe-balance", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          teacherId: teacherId || "",
-          planType: plan.type,
-          languageTrack,
-          amount: plan.price,
-          planLabel: plan.label,
-          teacherName,
-        }),
-      });
-      const d = await res.json().catch(() => ({}));
-      setBalanceLoading(false);
-      if (res.ok && d.success) {
-        setBalanceMsg(`✅ ${d.message}`);
-        if (typeof d.newBalance === "number") setUserBalance(d.newBalance);
-      } else {
-        setBalanceMsg(`❌ ${d.error || "تعذر خصم الرصيد"}`);
-      }
-    } catch {
-      setBalanceLoading(false);
-      setBalanceMsg("❌ حدث خطأ أثناء الاتصال بالسيرفر");
-    }
-  };
-
-  const handleApplyCode = async () => {
-    if (!code.trim()) return;
-    setCodeApplying(true);
-    setCodeMsg("");
-    try {
-      const res = await fetch("/api/codes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: code.trim().toUpperCase() }),
-      });
-      const data = await res.json();
-      setCodeApplying(false);
-      if (res.ok) {
-        setCodeMsg("✅ تم تفعيل الكود بنجاح!");
-        refreshBalance();
-      } else {
-        setCodeMsg(`❌ ${data.error || "كود غير صحيح أو مستخدم من قبل"}`);
-      }
-    } catch {
-      setCodeApplying(false);
-      setCodeMsg("❌ تعذر الاتصال بسيرفر الأكواد");
-    }
   };
 
   return (
@@ -580,215 +430,36 @@ export function BookingButton({
                 </div>
               )}
 
-              {/* Payment Method Tabs (Wallet / Balance / WhatsApp / Code) */}
-              <div className="space-y-3 pt-2 border-t border-[var(--border,rgba(255,255,255,0.1))]">
-                <label className="block text-xs font-bold text-center" style={{ color: "var(--ink-muted, #aaa)" }}>
-                  اختر طريقة الحجز والدفع:
-                </label>
+              {/* Payment CTA Section */}
+              <div className="space-y-3 pt-4 border-t border-[var(--border,rgba(255,255,255,0.1))]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const params = new URLSearchParams({
+                      amount: String(activePlan.price),
+                      teacherId: teacherId || "",
+                      teacherName: teacherName || "",
+                      planType: activePlan.type,
+                      planLabel: activePlan.label,
+                      grade: studentGrade,
+                      context: `حجز ${activePlan.label} — ${gradeLabel} مع الأستاذ ${teacherName}`,
+                    });
+                    window.location.href = `/payment?${params.toString()}`;
+                  }}
+                  className="w-full py-4 px-6 rounded-2xl font-black text-base sm:text-lg text-white bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 shadow-xl shadow-emerald-500/25 transition-all flex items-center justify-center gap-3 cursor-pointer transform active:scale-98"
+                >
+                  <span>ادفع الآن 💳</span>
+                  <span className="bg-white/20 px-3.5 py-1 rounded-xl text-sm font-mono">{activePlan.price} جنيه</span>
+                </button>
 
-                <div className="grid grid-cols-5 gap-1 p-1 rounded-xl" style={{ background: "var(--bg, #0f1420)", border: "1px solid var(--border, rgba(255,255,255,0.1))" }}>
+                {bookingContactUrl && (
                   <button
-                    onClick={() => { setPayMode("wallet"); setSelectedWalletMethod("vf_cash"); }}
-                    className="py-2 px-1 rounded-lg text-xs font-bold border-none cursor-pointer transition-all text-center"
-                    style={{
-                      background: payMode === "wallet" ? "var(--brand, #6366f1)" : "transparent",
-                      color: payMode === "wallet" ? "#fff" : "var(--ink-muted, #aaa)",
-                    }}
-                  >
-                    📱 محفظة
-                  </button>
-
-                  <button
-                    onClick={() => { setPayMode("fawry"); setSelectedWalletMethod("fawry"); }}
-                    className="py-2 px-1 rounded-lg text-xs font-bold border-none cursor-pointer transition-all text-center"
-                    style={{
-                      background: payMode === "fawry" ? "#FFCC00" : "transparent",
-                      color: payMode === "fawry" ? "#000" : "var(--ink-muted, #aaa)",
-                    }}
-                  >
-                    🏪 فوري
-                  </button>
-
-                  <button
-                    onClick={() => setPayMode("balance")}
-                    className="py-2 px-1 rounded-lg text-xs font-bold border-none cursor-pointer transition-all text-center"
-                    style={{
-                      background: payMode === "balance" ? "#D97706" : "transparent",
-                      color: payMode === "balance" ? "#fff" : "var(--ink-muted, #aaa)",
-                    }}
-                  >
-                    💰 بالرصيد
-                  </button>
-
-                  <button
-                    onClick={() => setPayMode("whatsapp")}
-                    className="py-2 px-1 rounded-lg text-xs font-bold border-none cursor-pointer transition-all text-center"
-                    style={{
-                      background: payMode === "whatsapp" ? "#25D366" : "transparent",
-                      color: payMode === "whatsapp" ? "#fff" : "var(--ink-muted, #aaa)",
-                    }}
-                  >
-                    💬 واتساب
-                  </button>
-
-                  <button
-                    onClick={() => setPayMode("code")}
-                    className="py-2 px-1 rounded-lg text-xs font-bold border-none cursor-pointer transition-all text-center"
-                    style={{
-                      background: payMode === "code" ? "#10B981" : "transparent",
-                      color: payMode === "code" ? "#fff" : "var(--ink-muted, #aaa)",
-                    }}
-                  >
-                    🔑 كود
-                  </button>
-                </div>
-
-                {/* Option 1: Mobile Wallet / Fawry / Card Payment */}
-                {(payMode === "wallet" || payMode === "fawry") && activePlan && (
-                  <div className="p-4 rounded-2xl space-y-3" style={{ background: "var(--bg, #0f1420)", border: "1px solid var(--border, rgba(255,255,255,0.08))" }}>
-                    {payMode === "wallet" && (
-                      <div>
-                        <label className="block text-xs font-bold mb-1.5" style={{ color: "var(--ink-muted, #aaa)" }}>اختر طريقة الدفع المباشر:</label>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-                          {[
-                            { id: "vf_cash", label: "فودافون كاش", color: "#E60000" },
-                          ].map(m => (
-                            <button key={m.id} type="button" onClick={() => setSelectedWalletMethod(m.id as any)}
-                              className="py-2 px-1 rounded-lg text-xs font-bold border cursor-pointer transition-all text-center flex items-center justify-center gap-1"
-                              style={{
-                                borderColor: selectedWalletMethod === m.id ? m.color : "var(--border, rgba(255,255,255,0.1))",
-                                background: selectedWalletMethod === m.id ? `${m.color}20` : "var(--surface, #1a1f2e)",
-                                color: selectedWalletMethod === m.id ? m.color : "var(--ink-muted, #aaa)",
-                              }}>
-                              {m.label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* 2% Tax / Fee Breakdown */}
-                    <div className="p-3 rounded-xl text-xs space-y-1" style={{ background: "var(--surface, #1a1f2e)", border: "1px solid var(--border, rgba(255,255,255,0.06))" }}>
-                      <div className="flex justify-between" style={{ color: "var(--ink-muted, #aaa)" }}>
-                        <span>المبلغ الأصلي:</span>
-                        <span className="font-bold">{activePlan.price} جنيه</span>
-                      </div>
-                      <div className="flex justify-between" style={{ color: "var(--ink-muted, #aaa)" }}>
-                        <span>رسوم المعاملة والخدمة (2%):</span>
-                        <span className="font-bold">{Math.round(activePlan.price * 0.02 * 100) / 100} جنيه</span>
-                      </div>
-                      <div className="flex justify-between pt-1 border-t border-[var(--border,rgba(255,255,255,0.1))]" style={{ color: "var(--brand, #6366f1)" }}>
-                        <span className="font-black">الإجمالي المطلوب خصمه:</span>
-                        <span className="font-black text-sm">{Math.round((activePlan.price * 1.02) * 100) / 100} جنيه</span>
-                      </div>
-                    </div>
-
-                    {(() => {
-                      const isWallet = selectedWalletMethod === "vf_cash" || selectedWalletMethod === "et_cash";
-                      const isFawry = selectedWalletMethod === "fawry";
-                      const totalAmount = Math.round((activePlan.price * (isFawry ? 1.025 : 1.02)) * 100) / 100;
-
-                      return (
-                        <>
-                          {isWallet && (
-                            <div>
-                              <label className="block text-xs font-bold mb-1" style={{ color: "var(--ink-muted, #aaa)" }}>
-                                رقم المحفظة (11 رقماً):
-                              </label>
-                              <input type="tel" value={walletPhone} onChange={e => setWalletPhone(e.target.value)}
-                                placeholder="01xxxxxxxxx" dir="ltr"
-                                className="w-full p-2.5 rounded-xl text-center font-mono text-sm border focus:outline-none"
-                                style={{ border: "1px solid var(--border, rgba(255,255,255,0.1))", background: "var(--surface, #1a1f2e)", color: "var(--ink, #fff)" }} />
-                            </div>
-                          )}
-
-                          {isFawry && (
-                            <div className="p-3 rounded-xl text-xs text-amber-300 bg-amber-500/10 border border-amber-500/20 text-center leading-relaxed font-bold">
-                              🏪 خيار فوري كشك: سيتم إصدار كود مرجعي (Fawry Code). يمكنك الدفع كاش بهذا الكود في أي منفذ فوري أو سوبرماركت دون الحاجة لرقم محفظة.
-                            </div>
-                          )}
-
-                          <button
-                            onClick={() => handlePayViaWallet(activePlan)}
-                            disabled={walletLoading}
-                            className="w-full py-3.5 rounded-xl text-white font-bold text-sm cursor-pointer border-none transition-all hover:opacity-90 shadow-md flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                            style={{ background: "linear-gradient(135deg, var(--brand, #6366f1), #4f46e5)" }}
-                          >
-                            {walletLoading
-                              ? "جارٍ المعالجة..."
-                              : isWallet
-                              ? `خصم ${totalAmount} جنيه من المحفظة 📱`
-                              : isFawry
-                              ? `إصدار كود الدفع كاش بقيمة ${totalAmount} جنيه 🏪`
-                              : `الانتقال للبوابة البنكية للدفع (${totalAmount} جنيه) 💳`}
-                          </button>
-                        </>
-                      );
-                    })()}
-                    {walletMsg && <p className="text-xs font-semibold text-center" style={{ color: walletMsg.startsWith("❌") ? "#ef4444" : "#10b981" }}>{walletMsg}</p>}
-                  </div>
-                )}
-
-                {/* Option 2: Account Balance Payment */}
-                {payMode === "balance" && activePlan && (
-                  <div className="p-4 rounded-2xl space-y-3" style={{ background: "var(--bg, #0f1420)", border: "1px solid var(--border, rgba(255,255,255,0.08))" }}>
-                    <div className="flex items-center justify-between text-xs p-3 rounded-xl" style={{ background: "var(--surface, #1a1f2e)", border: "1px solid var(--border, rgba(255,255,255,0.1))" }}>
-                      <span style={{ color: "var(--ink-muted, #aaa)" }}>رصيدك الحالي في المنصة:</span>
-                      <span className="font-black text-amber-400 text-sm">{userBalance !== null ? `${userBalance} جنيه` : "غير معروف"}</span>
-                    </div>
-
-                    <button
-                      onClick={() => handlePayViaBalance(activePlan)}
-                      disabled={balanceLoading || (userBalance !== null && userBalance < activePlan.price)}
-                      className="w-full py-3.5 rounded-xl text-white font-bold text-sm cursor-pointer border-none transition-all disabled:opacity-50 hover:opacity-90 shadow-md flex items-center justify-center gap-2"
-                      style={{ background: "linear-gradient(135deg, #D97706, #B45309)" }}
-                    >
-                      {balanceLoading ? "جارٍ خصم الرصيد وتأكيد الحجز..." : `شراء بـ ${activePlan.price} جنيه من رصيدك 💰`}
-                    </button>
-                    
-                    {userBalance !== null && userBalance < activePlan.price && (
-                      <p className="text-xs text-center text-amber-400 font-semibold">
-                        ⚠️ رصيدك لا يكفي. يمكنك التبديل إلى تبويب المحفظة 📱 أو الكود 🔑 للشحن.
-                      </p>
-                    )}
-                    {balanceMsg && <p className="text-xs font-semibold text-center" style={{ color: balanceMsg.startsWith("❌") ? "#ef4444" : "#10b981" }}>{balanceMsg}</p>}
-                  </div>
-                )}
-
-                {/* Option 3: WhatsApp Booking */}
-                {payMode === "whatsapp" && activePlan && (
-                  <button
+                    type="button"
                     onClick={() => handleBookViaWhatsApp(activePlan)}
-                    className="w-full py-4 rounded-2xl text-base font-black text-white text-center flex items-center justify-center gap-2.5 border-none cursor-pointer transition-all hover:brightness-110 shadow-lg"
-                    style={{
-                      background: "linear-gradient(135deg, #25D366, #128C7E)",
-                      boxShadow: "0 8px 24px -4px rgba(37,211,102,0.4)",
-                    }}
+                    className="w-full py-3 px-4 rounded-xl text-xs font-bold text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 transition-all flex items-center justify-center gap-2 cursor-pointer"
                   >
-                    <svg className="w-6 h-6 fill-current" viewBox="0 0 24 24">
-                      <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l.399.636-1.157 4.227 4.321-1.133.58.337z"/>
-                    </svg>
-                    إرسال طلب الحجز عبر الواتساب ➔
+                    <span>💬 أو التواصل المباشر عبر واتساب المعلم</span>
                   </button>
-                )}
-
-                {/* Option 4: Access Code */}
-                {payMode === "code" && (
-                  <div className="p-4 rounded-2xl space-y-3" style={{ background: "var(--bg, #0f1420)", border: "1px solid var(--border, rgba(255,255,255,0.08))" }}>
-                    <p className="text-xs font-medium text-center" style={{ color: "var(--ink-muted, #aaa)" }}>أدخل كود تفعيل الاشتراك:</p>
-                    <div className="flex gap-2">
-                      <input type="text" value={code} onChange={e => setCode(e.target.value.toUpperCase())}
-                        onKeyDown={e => e.key === "Enter" && handleApplyCode()} placeholder="كود الاشتراك" maxLength={16} dir="ltr"
-                        className="flex-1 rounded-xl px-3 py-2.5 text-center font-mono text-sm tracking-widest focus:outline-none border"
-                        style={{ border: "1px solid var(--border, rgba(255,255,255,0.1))", background: "var(--surface, #1a1f2e)", color: "var(--ink, #fff)" }} />
-                      <button onClick={handleApplyCode} disabled={codeApplying || !code.trim()}
-                        className="rounded-xl px-4 py-2.5 text-white font-bold text-sm transition-colors disabled:opacity-50"
-                        style={{ background: "#10B981" }}>
-                        {codeApplying ? "..." : "تفعيل"}
-                      </button>
-                    </div>
-                    {codeMsg && <p className="text-xs font-semibold text-center" style={{ color: codeMsg.startsWith("❌") ? "#ef4444" : "#10b981" }}>{codeMsg}</p>}
-                  </div>
                 )}
               </div>
 

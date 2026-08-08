@@ -40,6 +40,11 @@ function PaymentContent() {
   const methodParam = searchParams.get("method");
   const returnHref = searchParams.get("return");
   const contextLabel = searchParams.get("context") ?? "";
+  const teacherIdParam = searchParams.get("teacherId");
+  const teacherNameParam = searchParams.get("teacherName");
+  const planTypeParam = searchParams.get("planType");
+  const planLabelParam = searchParams.get("planLabel");
+  const gradeParam = searchParams.get("grade");
 
   const [step, setStep] = useState<Step>("checkout");
   const [baseAmount, setBaseAmount] = useState<string>("100");
@@ -233,7 +238,42 @@ function PaymentContent() {
           </div>
         )}
 
-        {contextLabel && (
+        {teacherIdParam && (
+          <div className="mb-6 rounded-3xl border-2 border-emerald-500/30 bg-gradient-to-br from-emerald-500/10 via-teal-500/5 to-cyan-500/10 p-6 shadow-xl space-y-4 text-right dir-rtl">
+            <div className="flex items-center justify-between">
+              <span className="px-3.5 py-1 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-black">
+                🎓 تفاصيل طلب الاشتراك في المنصة
+              </span>
+              <span className="text-xs text-gray-400 font-mono">كود المعلم: #{teacherIdParam.slice(0, 8)}</span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10">
+                <span className="text-xs text-gray-400 font-semibold block mb-1">المعلم المعني</span>
+                <p className="text-base font-black text-white">أستاذ {teacherNameParam || "المعلم"}</p>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10">
+                <span className="text-xs text-gray-400 font-semibold block mb-1">الصف الدراسي</span>
+                <p className="text-base font-black text-sky-400">
+                  {gradeParam === "sec_2" ? "ثانية بكالوريا" : "أولى بكالوريا"}
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10">
+                <span className="text-xs text-gray-400 font-semibold block mb-1">نوع الاشتراك</span>
+                <p className="text-base font-black text-amber-400">{planLabelParam || "اشتراك"}</p>
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-emerald-500/20 flex items-center justify-between">
+              <span className="text-sm font-bold text-gray-300">إجمالي المبلغ المطلوب للدفع:</span>
+              <span className="text-2xl font-black text-emerald-400">{baseAmount} جنيه</span>
+            </div>
+          </div>
+        )}
+
+        {contextLabel && !teacherIdParam && (
           <div className="mb-6 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 p-4 text-center">
             <p className="text-sm font-extrabold text-emerald-600 dark:text-emerald-400">
               📌 {contextLabel}
