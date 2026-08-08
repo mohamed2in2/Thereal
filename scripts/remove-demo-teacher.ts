@@ -1,7 +1,7 @@
 import "dotenv/config";
-import { PrismaClient } from "../src/generated/prisma/client.ts";
+import { PrismaClient } from "../src/generated/prisma/client";
 import { PrismaLibSql } from "@prisma/adapter-libsql";
-import { resetDemoTeacherIdCache } from "../src/lib/demo.ts";
+import { resetDemoTeacherIdCache } from "../src/lib/demo";
 
 const dbUrl = process.env.DATABASE_URL || "file:./dev.db";
 const prisma = new PrismaClient({ adapter: new PrismaLibSql({ url: dbUrl }) });
