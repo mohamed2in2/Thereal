@@ -90,7 +90,7 @@ function PaymentContent() {
         setUnsupportedNotice(null);
       } else if (found && !found.available) {
         setUnsupportedNotice(
-          `طريقة الدفع المحددة (${found.label}) غير متاحة حالياً عبر البوابة. تم توجيهك لاختيار إحدى الوسائل المفعلة أدناه (فوري، البطاقات، أورانج كاش، أو فودافون كاش).`
+          `طريقة الدفع المحددة (${found.label}) غير متاحة حالياً عبر البوابة المباشرة. تم توجيهك لاختيار إحدى الوسائل المفعلة أدناه (فودافون كاش، فوري كشك، أو التواصل بالواتساب).`
         );
         setSelectedMethodId("vf_cash");
       }
@@ -99,11 +99,7 @@ function PaymentContent() {
 
   const validatePhone = useCallback((val: string) => {
     if (!val.trim()) {
-      setPhoneError("رقم المحفظة مطلوب لإتمام الخصم");
-      return false;
-    }
-    if (!validateEgyptianPhone(val)) {
-      setPhoneError("رقم المحفظة غير صحيح — يجب أن يكون رقم مصري مكون من 11 رقماً يبدأ بـ 01");
+      setPhoneError("رقم المحفظة / الهاتف مطلوب لإتمام الخصم");
       return false;
     }
     setPhoneError("");
@@ -144,7 +140,7 @@ function PaymentContent() {
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          number: normalizedPhone,
+          number: normalizedPhone || "01000000000",
           amount: amt,
           method: selectedMethod.id,
         }),
@@ -153,7 +149,7 @@ function PaymentContent() {
       const body = await res.json().catch(() => ({}));
 
       if (!res.ok || !body.success) {
-        setErrors([body.error || "تعذر بدء عملية الدفع عبر البوابة"]);
+        setErrors([body.error || "تعذر بدء عملية الدفع عبر بوابة الدفع الإلكتروني"]);
         setStep("error");
         setIsCreating(false);
         return;
@@ -201,18 +197,18 @@ function PaymentContent() {
     calculateAmountWithTax(Number(baseAmount) || 0, selectedMethod?.id || "vf_cash");
 
   return (
-    <div className="flex min-h-screen flex-col bg-gray-50 dark:bg-gray-950 font-sans">
+    <div className="flex min-h-screen flex-col bg-slate-50 dark:bg-[#090e17] text-slate-900 dark:text-slate-100 font-sans">
       <Navbar />
 
-      <main className="mx-auto w-full max-w-4xl flex-1 px-4 pb-16 pt-8 sm:px-6">
+      <main className="mx-auto w-full max-w-4xl flex-1 px-4 pb-20 pt-8 sm:px-6">
         {!userLoading && !user && (
-          <div className="mb-6 rounded-2xl bg-amber-500/10 border-2 border-amber-500/30 p-5 text-center dir-rtl">
-            <div className="text-3xl mb-2">🔒</div>
-            <h3 className="text-base font-extrabold text-amber-700 dark:text-amber-300 mb-1">
-              يلزم تسجيل الدخول أو إنشاء حساب لإتمام عملية الدفع
+          <div className="mb-6 rounded-3xl bg-amber-500/10 border-2 border-amber-500/30 p-6 text-center dir-rtl backdrop-blur-md">
+            <div className="text-4xl mb-2">🔒</div>
+            <h3 className="text-base sm:text-lg font-black text-amber-800 dark:text-amber-300 mb-1">
+              تسجيل الدخول مطلوب لإتمام عملية الدفع
             </h3>
-            <p className="text-xs sm:text-sm text-amber-600 dark:text-amber-400 mb-4 max-w-md mx-auto">
-              عفواً، يجب أن تملك حساباً مفصلاً على المنصة حتى يتم ربط رصيدك واشتراكاتك بحسابك الشخصي بصفة دائمة.
+            <p className="text-xs sm:text-sm text-amber-700 dark:text-amber-400 mb-4 max-w-md mx-auto leading-relaxed">
+              يرجى تسجيل الدخول أو إنشاء حساب جديد لربط الاشتراكات والرصيد بحسابك الشخصي بصفة دائمة.
             </p>
             <div className="flex items-center justify-center gap-3">
               <Button
@@ -220,7 +216,7 @@ function PaymentContent() {
                   const target = window.location.pathname + window.location.search;
                   router.push(`/login?redirect_url=${encodeURIComponent(target)}`);
                 }}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-5 py-2 text-xs sm:text-sm rounded-xl"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-black px-6 py-2.5 text-xs sm:text-sm rounded-2xl shadow-lg"
               >
                 تسجيل الدخول 🔑
               </Button>
@@ -230,7 +226,7 @@ function PaymentContent() {
                   router.push(`/signup?redirect_url=${encodeURIComponent(target)}`);
                 }}
                 variant="outline"
-                className="font-bold px-5 py-2 text-xs sm:text-sm rounded-xl border-amber-500/40 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10"
+                className="font-black px-6 py-2.5 text-xs sm:text-sm rounded-2xl border-amber-500/40 text-amber-800 dark:text-amber-300 hover:bg-amber-500/10"
               >
                 إنشاء حساب جديد ✨
               </Button>
@@ -239,43 +235,43 @@ function PaymentContent() {
         )}
 
         {teacherIdParam && (
-          <div className="mb-6 rounded-3xl border-2 border-emerald-500/30 bg-gradient-to-br from-emerald-500/10 via-teal-500/5 to-cyan-500/10 p-6 shadow-xl space-y-4 text-right dir-rtl">
+          <div className="mb-8 rounded-3xl border-2 border-emerald-500/30 bg-gradient-to-br from-white via-emerald-50/50 to-teal-50/50 dark:from-emerald-950/80 dark:via-slate-900/90 dark:to-teal-950/70 p-6 sm:p-8 shadow-xl dark:shadow-[0_0_35px_rgba(16,185,129,0.15)] space-y-4 text-right dir-rtl backdrop-blur-xl">
             <div className="flex items-center justify-between">
-              <span className="px-3.5 py-1 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-black">
+              <span className="px-4 py-1.5 rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-xs font-black border border-emerald-500/30">
                 🎓 تفاصيل طلب الاشتراك في المنصة
               </span>
-              <span className="text-xs text-gray-400 font-mono">كود المعلم: #{teacherIdParam.slice(0, 8)}</span>
+              <span className="text-xs text-slate-400 font-mono">كود المعلم: #{teacherIdParam.slice(0, 8)}</span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10">
-                <span className="text-xs text-gray-400 font-semibold block mb-1">المعلم المعني</span>
-                <p className="text-base font-black text-white">أستاذ {teacherNameParam || "المعلم"}</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+              <div className="p-4 rounded-2xl bg-white/80 dark:bg-slate-800/60 border border-slate-200/80 dark:border-emerald-500/20 shadow-sm">
+                <span className="text-xs text-slate-500 dark:text-slate-400 font-bold block mb-1">المعلم المعني</span>
+                <p className="text-base font-black text-slate-900 dark:text-white">أستاذ {teacherNameParam || "المعلم"}</p>
               </div>
 
-              <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10">
-                <span className="text-xs text-gray-400 font-semibold block mb-1">الصف الدراسي</span>
-                <p className="text-base font-black text-sky-400">
+              <div className="p-4 rounded-2xl bg-white/80 dark:bg-slate-800/60 border border-slate-200/80 dark:border-emerald-500/20 shadow-sm">
+                <span className="text-xs text-slate-500 dark:text-slate-400 font-bold block mb-1">الصف الدراسي</span>
+                <p className="text-base font-black text-teal-600 dark:text-teal-300">
                   {gradeParam === "sec_2" ? "ثانية بكالوريا" : "أولى بكالوريا"}
                 </p>
               </div>
 
-              <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10">
-                <span className="text-xs text-gray-400 font-semibold block mb-1">نوع الاشتراك</span>
-                <p className="text-base font-black text-amber-400">{planLabelParam || "اشتراك"}</p>
+              <div className="p-4 rounded-2xl bg-white/80 dark:bg-slate-800/60 border border-slate-200/80 dark:border-emerald-500/20 shadow-sm">
+                <span className="text-xs text-slate-500 dark:text-slate-400 font-bold block mb-1">نوع الاشتراك</span>
+                <p className="text-base font-black text-emerald-600 dark:text-emerald-400">{planLabelParam || "اشتراك"}</p>
               </div>
             </div>
 
-            <div className="pt-3 border-t border-emerald-500/20 flex items-center justify-between">
-              <span className="text-sm font-bold text-gray-300">إجمالي المبلغ المطلوب للدفع:</span>
-              <span className="text-2xl font-black text-emerald-400">{baseAmount} جنيه</span>
+            <div className="pt-4 border-t border-emerald-500/20 flex items-center justify-between">
+              <span className="text-sm font-bold text-slate-700 dark:text-slate-300">إجمالي المبلغ المطلوب للدفع:</span>
+              <span className="text-2xl sm:text-3xl font-black text-emerald-600 dark:text-emerald-400">{baseAmount} جنيه</span>
             </div>
           </div>
         )}
 
         {contextLabel && !teacherIdParam && (
           <div className="mb-6 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 p-4 text-center">
-            <p className="text-sm font-extrabold text-emerald-600 dark:text-emerald-400">
+            <p className="text-sm font-extrabold text-emerald-700 dark:text-emerald-400">
               📌 {contextLabel}
             </p>
           </div>
@@ -285,7 +281,7 @@ function PaymentContent() {
           <div className="mb-6 rounded-2xl bg-amber-500/10 border border-amber-500/30 p-4 dir-rtl text-right">
             <div className="flex items-start gap-3">
               <span className="text-xl">⚠️</span>
-              <p className="text-xs sm:text-sm font-bold text-amber-700 dark:text-amber-300 leading-relaxed">
+              <p className="text-xs sm:text-sm font-bold text-amber-800 dark:text-amber-300 leading-relaxed">
                 {unsupportedNotice}
               </p>
             </div>
@@ -296,43 +292,43 @@ function PaymentContent() {
           <div dir="rtl" className="space-y-8">
             {/* Header Title */}
             <div className="text-center space-y-2">
-              <h1 className="text-2xl sm:text-3xl font-black text-gray-900 dark:text-white">
+              <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">
                 إتمام عملية الدفع وشحن الرصيد
               </h1>
-              <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 font-medium">
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 font-medium">
                 اختر طريقة الدفع المناسبة وأدخل بيانات الشحن بأمان تام عبر بوابات الدفع الرسمية.
               </p>
             </div>
 
             {/* Step 1: Amount Selection & Calculator */}
-            <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900 space-y-6">
-              <div className="flex items-center gap-2 border-b border-gray-100 dark:border-gray-800 pb-3">
-                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+            <div className="rounded-3xl border-2 border-emerald-100 dark:border-emerald-500/20 bg-white dark:bg-slate-900/90 p-6 sm:p-8 shadow-lg dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)] space-y-6 backdrop-blur-xl">
+              <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-xs font-black text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
                   1
                 </span>
-                <h2 className="text-base font-extrabold text-gray-900 dark:text-white">
+                <h2 className="text-base font-extrabold text-slate-900 dark:text-white">
                   المبلغ والرسوم الشفافة
                 </h2>
               </div>
 
               {/* Amount Presets */}
               <div className="space-y-3">
-                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400">
+                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400">
                   اختر مبلغ الشحن الأساسي (ج.م):
                 </label>
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2.5">
                   {PRESET_AMOUNTS.map((p) => (
                     <button
                       key={p}
                       type="button"
                       onClick={() => setBaseAmount(String(p))}
-                      className={`rounded-xl border-2 px-4 py-2.5 text-sm font-bold transition-all ${
+                      className={`rounded-2xl border-2 px-5 py-2.5 text-sm font-black transition-all ${
                         baseAmount === String(p)
-                          ? "border-emerald-500 bg-emerald-50 text-emerald-700 dark:border-emerald-400 dark:bg-emerald-950/40 dark:text-emerald-300"
-                          : "border-gray-200 bg-white text-gray-700 hover:border-emerald-300 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300"
+                          ? "border-emerald-500 bg-emerald-50 text-emerald-800 dark:border-emerald-400 dark:bg-emerald-950/60 dark:text-emerald-300 shadow-md"
+                          : "border-slate-200 bg-white text-slate-700 hover:border-emerald-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
                       }`}
                     >
-                      {p} <span className="text-xs opacity-60">جنيه</span>
+                      {p} <span className="text-xs opacity-70">جنيه</span>
                     </button>
                   ))}
                 </div>
@@ -346,65 +342,67 @@ function PaymentContent() {
                     min={5}
                     max={50000}
                     dir="ltr"
-                    className="w-full rounded-xl border-2 border-gray-200 bg-white px-4 py-2.5 text-center text-lg font-bold text-gray-900 outline-none focus:border-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                    className="w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-center text-xl font-black text-slate-900 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
               </div>
 
               {/* Realtime Fee Breakdown */}
               {selectedMethod && (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 rounded-2xl bg-emerald-50/60 p-4 text-center dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900/40">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 rounded-2xl bg-gradient-to-r from-emerald-50 via-teal-50 to-sky-50 dark:from-emerald-950/40 dark:via-teal-950/30 dark:to-slate-900/60 p-4 text-center border border-teal-100 dark:border-emerald-500/20">
                   <div>
-                    <span className="text-[11px] text-gray-500 dark:text-gray-400 font-semibold">المبلغ المطلوب</span>
-                    <p className="text-base font-black text-gray-900 dark:text-white">{calcBase.toFixed(2)} ج.م</p>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold">المبلغ المطلوب</span>
+                    <p className="text-base font-black text-slate-900 dark:text-white">{calcBase.toFixed(2)} ج.م</p>
                   </div>
                   <div>
-                    <span className="text-[11px] text-gray-500 dark:text-gray-400 font-semibold">
-                      رسوم الخدمة ({calcFee}%)
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold">
+                      رسوم المعاملة ({calcFee}%)
                     </span>
                     <p className="text-base font-black text-amber-600 dark:text-amber-400">+{calcTax.toFixed(2)} ج.م</p>
                   </div>
                   <div>
-                    <span className="text-[11px] text-emerald-800 dark:text-emerald-300 font-bold">إجمالي الخصم</span>
+                    <span className="text-[11px] text-emerald-800 dark:text-emerald-300 font-bold">الإجمالي النهائي</span>
                     <p className="text-lg font-black text-emerald-600 dark:text-emerald-400">{calcTotal.toFixed(2)} ج.م</p>
                   </div>
                 </div>
               )}
             </div>
 
-            {/* Step 2: Verified Gateways & Payment Method Selection */}
-            <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900 space-y-6">
-              <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-3">
+            {/* Step 2: Payment Method Selection */}
+            <div className="rounded-3xl border-2 border-emerald-100 dark:border-emerald-500/20 bg-white dark:bg-slate-900/90 p-6 sm:p-8 shadow-lg dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)] space-y-6 backdrop-blur-xl">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
                 <div className="flex items-center gap-2">
-                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-xs font-black text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
                     2
                   </span>
-                  <h2 className="text-base font-extrabold text-gray-900 dark:text-white">
-                    وسائل الدفع المتاحة والموثقة
+                  <h2 className="text-base font-extrabold text-slate-900 dark:text-white">
+                    اختر طريقة الدفع المناسبة
                   </h2>
                 </div>
-                <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                  معتمدة ومأمنة 100%
+                <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                  🔒 مشفرة ومأمنة
                 </span>
               </div>
 
-              {/* Provider Information Highlights */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="rounded-2xl border border-emerald-200 bg-emerald-50/40 p-3.5 dark:border-emerald-900/50 dark:bg-emerald-950/20">
-                  <p className="text-xs font-black text-emerald-900 dark:text-emerald-200 flex items-center gap-1.5">
-                    ⚡ بوابة Shake-Out (dash.shake-out.com)
+              {/* Trust Badges Bar */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="rounded-2xl border border-emerald-200/80 bg-emerald-50/50 p-3 text-center dark:border-emerald-500/20 dark:bg-emerald-950/30">
+                  <p className="text-xs font-bold text-emerald-900 dark:text-emerald-200">
+                    ⚡ فودافون كاش (*9*1#)
                   </p>
-                  <p className="text-[11px] text-emerald-700 dark:text-emerald-400 mt-1 font-medium">
-                    تخدم: فوري باي كشك، الفيزا وماستركارد، ميزة الوطنية، وأورانج كاش.
-                  </p>
+                  <p className="text-[11px] text-emerald-700 dark:text-emerald-400 mt-0.5">تأكيد تلقائي فور الخصم</p>
                 </div>
-                <div className="rounded-2xl border border-teal-200 bg-teal-50/40 p-3.5 dark:border-teal-900/50 dark:bg-teal-950/20">
-                  <p className="text-xs font-black text-teal-900 dark:text-teal-200 flex items-center gap-1.5">
-                    📱 بوابة Sha7nawy (gate.sha7nawy.com)
+                <div className="rounded-2xl border border-teal-200/80 bg-teal-50/50 p-3 text-center dark:border-teal-500/20 dark:bg-teal-950/30">
+                  <p className="text-xs font-bold text-teal-900 dark:text-teal-200">
+                    🏪 كود فوري كاش
                   </p>
-                  <p className="text-[11px] text-teal-700 dark:text-teal-400 mt-1 font-medium">
-                    تخدم: فودافون كاش (*9*1#).
+                  <p className="text-[11px] text-teal-700 dark:text-teal-400 mt-0.5">سدد من أي كشك أو فرع</p>
+                </div>
+                <div className="rounded-2xl border border-sky-200/80 bg-sky-50/50 p-3 text-center dark:border-sky-500/20 dark:bg-sky-950/30">
+                  <p className="text-xs font-bold text-sky-900 dark:text-sky-200">
+                    💬 واتساب الخدمة Direct
                   </p>
+                  <p className="text-[11px] text-sky-700 dark:text-sky-400 mt-0.5">InstaPay وأكواد التفعيل</p>
                 </div>
               </div>
 
@@ -425,23 +423,23 @@ function PaymentContent() {
 
             {/* Step 3: Phone Entry & Action */}
             {selectedMethod && (
-              <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900 space-y-6">
-                <div className="flex items-center gap-2 border-b border-gray-100 dark:border-gray-800 pb-3">
-                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+              <div className="rounded-3xl border-2 border-emerald-100 dark:border-emerald-500/20 bg-white dark:bg-slate-900/90 p-6 sm:p-8 shadow-lg dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)] space-y-6 backdrop-blur-xl">
+                <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-xs font-black text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
                     3
                   </span>
-                  <h2 className="text-base font-extrabold text-gray-900 dark:text-white">
+                  <h2 className="text-base font-extrabold text-slate-900 dark:text-white">
                     تأكيد وإرسال طلب الدفع
                   </h2>
                 </div>
 
                 <div className="flex items-center gap-3">
-                  <PaymentProviderIcon method={selectedMethod} size={40} />
+                  <PaymentProviderIcon method={selectedMethod} size={44} />
                   <div>
-                    <h3 className="font-extrabold text-sm text-gray-900 dark:text-white">
+                    <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">
                       {selectedMethod.label}
                     </h3>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
                       {selectedMethod.labelEn} • {selectedMethod.processingSpeed}
                     </p>
                   </div>
@@ -450,8 +448,8 @@ function PaymentContent() {
                 {/* Phone Input if required */}
                 {selectedMethod.needsPhone && (
                   <div className="space-y-2">
-                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">
-                      أدخل رقم المحفظة الإلكترونية (11 رقماً):
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                      أدخل رقم هاتف المحفظة أو العميل:
                     </label>
                     <input
                       type="tel"
@@ -461,12 +459,12 @@ function PaymentContent() {
                         if (phoneError) validatePhone(e.target.value);
                       }}
                       onBlur={() => validatePhone(phone)}
-                      placeholder="01xxxxxxxxx"
+                      placeholder="أدخل رقمك هنا..."
                       dir="ltr"
-                      className={`w-full rounded-xl border-2 px-4 py-3 text-center text-lg font-mono outline-none transition-colors ${
+                      className={`w-full rounded-2xl border-2 px-4 py-3.5 text-center text-lg font-mono outline-none transition-colors ${
                         phoneError
                           ? "border-rose-400 bg-rose-50 dark:border-rose-700 dark:bg-rose-950/20"
-                          : "border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800"
+                          : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800"
                       } dark:text-white`}
                     />
                     {phoneError && (
@@ -482,13 +480,36 @@ function PaymentContent() {
                     onClick={handleCreatePayment}
                     isLoading={isCreating}
                     size="lg"
-                    className="w-full sm:w-auto min-w-[260px] rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg text-sm font-extrabold py-3.5"
+                    className="w-full sm:w-auto min-w-[280px] rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 text-white shadow-xl shadow-emerald-500/25 text-sm font-black py-4 transition-all"
                   >
                     تأكيد ودفع {calcTotal.toFixed(2)} ج.م بواسطة {selectedMethod.label} ←
                   </Button>
                 </div>
               </div>
             )}
+
+            {/* WhatsApp Support & Alternative Methods Card */}
+            <div className="rounded-3xl border-2 border-emerald-500/20 bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-cyan-500/10 p-6 sm:p-8 space-y-4 text-right dir-rtl shadow-md">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <span className="px-3.5 py-1 rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-xs font-black flex items-center gap-1.5 border border-emerald-500/30">
+                  💬 وسائل دفع إضافية والدعم الفوري
+                </span>
+                <span className="text-xs text-slate-500 dark:text-slate-400 font-bold">
+                  InstaPay (انستاباي) • أكواد التفعيل • تحويلات
+                </span>
+              </div>
+              <p className="text-xs sm:text-sm font-medium text-slate-700 dark:text-slate-300 leading-relaxed">
+                هل تريد الدفع عبر تطبيق <strong>InstaPay (انستاباي)</strong>، أو تفعيل حسابك باستخدام <strong>كود تفعيل 🔑</strong>، أو الحصول على مساعدة فورية؟ فريق الدفع متاح عبر الواتساب:
+              </p>
+              <a
+                href={`https://wa.me/?text=${encodeURIComponent(`السلام عليكم، أود استكمال الحجز والدفع عن طريق (InstaPay / كود التفعيل) بقيمة ${baseAmount} جنيه`)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex w-full sm:w-auto items-center justify-center gap-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white px-7 py-3.5 text-sm font-black shadow-lg shadow-emerald-600/25 transition-all cursor-pointer"
+              >
+                <span>💬 تواصل معنا عبر الواتساب لإتمام الدفع</span>
+              </a>
+            </div>
           </div>
         )}
 

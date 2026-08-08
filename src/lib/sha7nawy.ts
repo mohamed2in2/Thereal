@@ -99,23 +99,20 @@ export function calculateAmountWithTax(
 }
 
 /**
- * Validates an Egyptian mobile wallet phone number (11 digits starting with 01)
+ * Validates a mobile wallet phone number (allows any valid input format)
  */
 export function validateEgyptianPhone(phone: string): boolean {
   const clean = phone.trim().replace(/\D/g, "");
-  return /^01[0125]\d{8}$/.test(clean);
+  return clean.length >= 4;
 }
 
 /**
- * Normalizes phone number to 11 digits format (e.g. 01234567890)
+ * Normalizes phone number format
  */
 export function normalizeEgyptianPhone(phone: string): string {
   let clean = phone.trim().replace(/\D/g, "");
-  if (clean.startsWith("20")) {
+  if (clean.startsWith("20") && clean.length > 10) {
     clean = clean.slice(2);
-  }
-  if (clean.startsWith("+20")) {
-    clean = clean.slice(3);
   }
   return clean;
 }
@@ -130,11 +127,11 @@ export async function createSha7nawyPayment(
   const publicKey = process.env.SHA7NAWY_PUBLIC_KEY;
 
   if (!publicKey) {
-    console.warn("[Sha7nawy API] SHA7NAWY_PUBLIC_KEY is not configured in environment");
+    console.warn("[Payment API] Public key is not configured in environment");
     return {
       status: false,
       code: 400,
-      message: "بوابة Sha7nawy (gate.sha7nawy.com) قيد التفعيل. يرجى استخدام فوري في الوقت الحالي.",
+      message: "بوابة الدفع المباشر قيد الصيانة المؤقتة. يرجى اختيار وسيلة دفع أخرى.",
     };
   }
 
@@ -154,7 +151,7 @@ export async function createSha7nawyPayment(
       return {
         status: false,
         code: 400,
-        message: "رقم المحفظة غير صحيح — يجب أن يكون رقم مصري مكون من 11 رقماً يبدأ بـ 01",
+        message: "يرجى كتابة رقم هاتف المحفظة بشكل صحيح",
       };
     }
   }
