@@ -162,7 +162,11 @@ export async function initAlaslyUpload(filename: string, contentType: string, fi
 
   const json = await res.json().catch(() => ({}));
   if (!res.ok || (!json.uploadUrl && !json.upload_url && !json.assetId && !json.asset_id)) {
-    throw new Error(json.error || `Failed to initialize Native video upload (${res.status})`);
+    const rawErr = json.error || json.msg || json.message || `Failed to initialize Native video upload (${res.status})`;
+    if (rawErr === "invalid_api_key" || res.status === 401 || res.status === 403) {
+      throw new Error("مفتاح API الخاص بخدمة Native Video غير مفعّل أو غير صحيح. يرجى إضافة ALASLY_API_KEY و ALASLY_API_SECRET في ملف الـ .env على السيرفر");
+    }
+    throw new Error(rawErr);
   }
 
   return {
@@ -202,7 +206,11 @@ export async function completeAlaslyUpload(assetId: string): Promise<AlaslyUploa
 
   const json = await res.json().catch(() => ({}));
   if (!res.ok || (!json.videoId && !json.video_id)) {
-    throw new Error(json.error || `Failed to complete Native video upload (${res.status})`);
+    const rawErr = json.error || json.msg || json.message || `Failed to complete Native video upload (${res.status})`;
+    if (rawErr === "invalid_api_key" || res.status === 401 || res.status === 403) {
+      throw new Error("مفتاح API الخاص بخدمة Native Video غير مفعّل أو غير صحيح. يرجى إضافة ALASLY_API_KEY و ALASLY_API_SECRET في ملف الـ .env على السيرفر");
+    }
+    throw new Error(rawErr);
   }
 
   return {
