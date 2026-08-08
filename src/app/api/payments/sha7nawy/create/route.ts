@@ -15,6 +15,8 @@ import {
 import { getPaymentMethod } from "@/lib/payment-methods";
 import { paymentRateLimiter } from "@/lib/paymentRateLimiter";
 
+import { verifyAuthoritativePrice } from "@/lib/price-verifier";
+
 export async function POST(req: NextRequest) {
   const session = await getSession();
   if (!session) {
@@ -31,12 +33,30 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json().catch(() => ({}));
-    const { number, amount, method, courseTitle } = body as {
+    const {
+      number,
+      amount,
+      method,
+      courseId,
+      courseTitle,
+      teacherId,
+      planType,
+      grade,
+      languageTrack,
+      folderId,
+      planId,
+    } = body as {
       number?: string;
       amount?: number;
       method?: string;
       courseId?: string;
       courseTitle?: string;
+      teacherId?: string;
+      planType?: string;
+      grade?: string;
+      languageTrack?: string;
+      folderId?: string;
+      planId?: string;
     };
 
     if (!method) {
@@ -69,13 +89,34 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // ── Server-Side Authoritative Price Verification ──
+    const priceCheck = await verifyAuthoritativePrice({
+      amount,
+      teacherId,
+      planType,
+      grade,
+      languageTrack,
+      courseId,
+      folderId,
+      planId,
+    });
+
+    if (!priceCheck.valid) {
+      return NextResponse.json(
+        { error: priceCheck.error || "المبلغ المطلوب لا يطابق السعر الفعلي المعتمد." },
+        { status: 400 }
+      );
+    }
+
+    const verifiedBaseAmount = priceCheck.expectedPrice > 0 ? priceCheck.expectedPrice : amount;
+
     // Calculate tax / service fee dynamically
-    const { baseAmount, taxAmount, totalAmount } = calculateAmountWithTax(amount, methodConfig.id);
+    const { baseAmount, taxAmount, totalAmount } = calculateAmountWithTax(verifiedBaseAmount, methodConfig.id);
 
     const appUrl = (process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || "https://code-up.tech").replace(/\/$/, "");
 
-    const details = courseTitle
-      ? `شراء: ${courseTitle} (${baseAmount} جنيه + ${methodConfig.feePercentage}% رسوم) = ${totalAmount} جنيه`
+    const details = courseTitle || priceCheck.itemName
+      ? `شراء: ${courseTitle || priceCheck.itemName} (${baseAmount} جنيه + ${methodConfig.feePercentage}% رسوم) = ${totalAmount} جنيه`
       : `شحن رصيد: ${baseAmount} جنيه (+ ${methodConfig.feePercentage}% رسوم = ${totalAmount} جنيه)`;
 
     // Route dynamically based on provider: sha7nawy vs shakeout

@@ -9,6 +9,8 @@ import {
 import { calculateAmountWithTax } from "@/lib/sha7nawy";
 import { getPaymentMethod } from "@/lib/payment-methods";
 
+import { verifyAuthoritativePrice } from "@/lib/price-verifier";
+
 export async function POST(req: NextRequest) {
   const session = await getSession();
   if (!session) {
@@ -17,26 +19,66 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json().catch(() => ({}));
-    const { number, amount, method, courseTitle } = body as {
+    const {
+      number,
+      amount,
+      method,
+      courseId,
+      courseTitle,
+      teacherId,
+      planType,
+      grade,
+      languageTrack,
+      folderId,
+      planId,
+    } = body as {
       number?: string;
       amount?: number;
       method?: string;
+      courseId?: string;
       courseTitle?: string;
+      teacherId?: string;
+      planType?: string;
+      grade?: string;
+      languageTrack?: string;
+      folderId?: string;
+      planId?: string;
     };
 
     if (!amount || amount < 5) {
       return NextResponse.json({ error: "المبلغ مطلوب (الحد الأدنى 5 جنيه)" }, { status: 400 });
     }
 
+    // ── Server-Side Authoritative Price Verification ──
+    const priceCheck = await verifyAuthoritativePrice({
+      amount,
+      teacherId,
+      planType,
+      grade,
+      languageTrack,
+      courseId,
+      folderId,
+      planId,
+    });
+
+    if (!priceCheck.valid) {
+      return NextResponse.json(
+        { error: priceCheck.error || "المبلغ المطلوب لا يطابق السعر الفعلي المعتمد." },
+        { status: 400 }
+      );
+    }
+
+    const verifiedBaseAmount = priceCheck.expectedPrice > 0 ? priceCheck.expectedPrice : amount;
+
     const selectedMethod = method || "shakeout_wallet";
     const methodConfig = getPaymentMethod(selectedMethod);
-    const { baseAmount, taxAmount, totalAmount } = calculateAmountWithTax(amount, selectedMethod);
+    const { baseAmount, taxAmount, totalAmount } = calculateAmountWithTax(verifiedBaseAmount, selectedMethod);
 
     const appUrl = (process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || "https://code-up.tech").replace(/\/$/, "");
     const webhookUrl = `${appUrl}/api/payments/shakeout/webhook`;
 
-    const details = courseTitle
-      ? `شراء: ${courseTitle} عبر Shake-Out (${baseAmount} جنيه + ${methodConfig?.feePercentage ?? 2}% رسوم) = ${totalAmount} جنيه`
+    const details = courseTitle || priceCheck.itemName
+      ? `شراء: ${courseTitle || priceCheck.itemName} عبر Shake-Out (${baseAmount} جنيه + ${methodConfig?.feePercentage ?? 2}% رسوم) = ${totalAmount} جنيه`
       : `شحن رصيد: ${baseAmount} جنيه عبر Shake-Out (+ ${methodConfig?.feePercentage ?? 2}% رسوم = ${totalAmount} جنيه)`;
 
     const result = await createShakeOutPayment({
