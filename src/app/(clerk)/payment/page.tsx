@@ -418,8 +418,9 @@ function PaymentContent() {
                 اختر وسيلة الدفع:
               </label>
               <PaymentMethodGrid
-                selectedMethodId={selectedMethodId}
-                onSelectMethod={(m) => {
+                methods={allMethods}
+                selectedId={selectedMethodId}
+                onSelect={(m) => {
                   setSelectedMethodId(m.id);
                   setPhoneError("");
                 }}
