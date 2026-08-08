@@ -8,7 +8,7 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: ["localhost", "127.0.0.1", "*.app.github.dev"],
 
   turbopack: {
-    root: path.resolve(__dirname),
+    root: process.cwd(),
   },
 
   experimental: {
