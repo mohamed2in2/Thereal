@@ -161,6 +161,94 @@ export default function TeacherDashboardPage() {
   const [newFolder, setNewFolder] = useState("");
   const [newFolderPublishAt, setNewFolderPublishAt] = useState("");
   const [newVideo, setNewVideo] = useState({ title: "", videoProvider: "vdocipher", providerVideoId: "", durationMinutes: 0, maxWatchesPerUser: 3, publishAt: "", folderId: "" });
+  const [nativeUploading, setNativeUploading] = useState(false);
+  const [nativeProgress, setNativeProgress] = useState(0);
+  const [nativeStatus, setNativeStatus] = useState("");
+
+  const handleNativeFileUpload = async (file: File) => {
+    if (!file) return;
+    setNativeUploading(true);
+    setNativeProgress(0);
+    setNativeStatus("جاري تحضير رابط الرفع الموقّع...");
+
+    try {
+      // 1. Init upload via server route
+      const initRes = await fetch("/api/teacher/native-upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "init",
+          filename: file.name,
+          contentType: file.type || "video/mp4",
+          size: file.size,
+        }),
+      });
+
+      const initData = await initRes.json();
+      if (!initRes.ok || !initData.success) {
+        throw new Error(initData.error || "تعذر بدء عملية الرفع");
+      }
+
+      const { uploadUrl, assetId } = initData;
+
+      // 2. Upload directly to signed URL or asset endpoint with XHR progress
+      setNativeStatus("جاري رفع الملف للسيرفر...");
+
+      if (uploadUrl) {
+        await new Promise<void>((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open("PUT", uploadUrl, true);
+          if (file.type) xhr.setRequestHeader("Content-Type", file.type);
+
+          xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable) {
+              const percent = Math.round((e.loaded / e.total) * 100);
+              setNativeProgress(percent);
+            }
+          };
+
+          xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              resolve();
+            } else {
+              reject(new Error(`فشل رفع الملف (رمز الاستجابة: ${xhr.status})`));
+            }
+          };
+
+          xhr.onerror = () => reject(new Error("حدث خطأ في شبكة الاتصال أثناء الرفع"));
+          xhr.send(file);
+        });
+      }
+
+      // 3. Complete upload
+      setNativeStatus("جاري تأكيد ومعالجة الفيديو...");
+      const completeRes = await fetch("/api/teacher/native-upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "complete", assetId }),
+      });
+
+      const completeData = await completeRes.json();
+      if (!completeRes.ok || !completeData.success) {
+        throw new Error(completeData.error || "فشل تأكيد الرفع");
+      }
+
+      const finalVideoId = completeData.videoId || assetId;
+      setNewVideo((prev) => ({
+        ...prev,
+        providerVideoId: finalVideoId,
+        title: prev.title || file.name.replace(/\.[^/.]+$/, ""),
+      }));
+
+      notify("success", "تم رفع وتأكيد الفيديو بنجاح على سيرفر Native!");
+    } catch (err: any) {
+      notify("error", err.message || "حدث خطأ أثناء رفع الفيديو");
+    } finally {
+      setNativeUploading(false);
+      setNativeProgress(0);
+      setNativeStatus("");
+    }
+  };
   const [newQuiz, setNewQuiz] = useState<NewQuizState>({
     title: "", folderId: "",
     timeLimitMinutes: 30,
@@ -1315,10 +1403,50 @@ export default function TeacherDashboardPage() {
                               type="text"
                               value={newVideo.providerVideoId}
                               onChange={(e) => setNewVideo({ ...newVideo, providerVideoId: e.target.value.trim() })}
-                              placeholder={newVideo.videoProvider === "vdocipher" ? "مثال: abc123def456" : newVideo.videoProvider === "bunny" ? "مثال: 12345678-abcd-…" : newVideo.videoProvider === "alasly" ? "مثال: dQw4w9WgXcQ أو معرف الدرس" : "مثال: dQw4w9WgXcQ"}
+                              placeholder={newVideo.videoProvider === "vdocipher" ? "مثال: abc123def456" : newVideo.videoProvider === "bunny" ? "مثال: 12345678-abcd-…" : newVideo.videoProvider === "alasly" ? "أدخل معرف الدرس أو قم برفع الملف مباشرة أدناه" : "مثال: dQw4w9WgXcQ"}
                               dir="ltr"
                               className={`${input} font-mono`}
                             />
+
+                            {/* Native Video SaaS Direct Upload Button */}
+                            {newVideo.videoProvider === "alasly" && (
+                              <div className="mt-2.5 p-3 rounded-xl border border-sky-500/30 bg-sky-500/5 space-y-2">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                  <label className="text-xs font-bold text-[var(--ink)] flex items-center gap-1.5">
+                                    <span>⚡</span> رفع ملف فيديو مباشر إلى Native SaaS Engine:
+                                  </label>
+                                  <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-white text-xs font-bold transition-all cursor-pointer shrink-0">
+                                    <span>📁 اختر فيديو من جهازك</span>
+                                    <input
+                                      type="file"
+                                      accept="video/*"
+                                      disabled={nativeUploading}
+                                      className="hidden"
+                                      onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        if (file) handleNativeFileUpload(file);
+                                      }}
+                                    />
+                                  </label>
+                                </div>
+
+                                {nativeUploading && (
+                                  <div className="space-y-1.5 pt-1">
+                                    <div className="flex items-center justify-between text-[11px] font-bold text-sky-400">
+                                      <span>{nativeStatus}</span>
+                                      <span className="font-mono">{nativeProgress}%</span>
+                                    </div>
+                                    <div className="w-full h-2 rounded-full bg-[var(--border)] overflow-hidden">
+                                      <div
+                                        className="h-full bg-sky-500 transition-all duration-300"
+                                        style={{ width: `${nativeProgress}%` }}
+                                      />
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
                             <p className="text-[10px] text-[var(--ink-muted)] mt-1.5">
                               {newVideo.videoProvider === "vdocipher" && "من لوحة VdoCipher ‹ Videos ‹ انسخ الـ ID (أعلى درجات الحماية ضد التحميل والتسريب)"}
                               {newVideo.videoProvider === "alasly" && "محمي بنظام Super Native Security بحماية عالية، مع علامات مائية متحركة وحماية ضد تسجيل الشاشة"}

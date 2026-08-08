@@ -116,3 +116,98 @@ export async function getAlaslyPlaybackToken(lessonId: string, domain?: string):
     title: legacyJson.lesson?.title,
   };
 }
+
+export interface AlaslyUploadInitResult {
+  uploadUrl: string;
+  assetId: string;
+  expiresInSeconds?: number;
+}
+
+export interface AlaslyUploadCompleteResult {
+  videoId: string;
+  assetId: string;
+  status: string;
+}
+
+export async function initAlaslyUpload(filename: string, contentType: string, fileSize?: number): Promise<AlaslyUploadInitResult> {
+  const apiKey = process.env.ALASLY_API_KEY || "alk_06a5ofogdqo11inzwoqn186jukk0bh7o";
+  const apiSecret = process.env.ALASLY_API_SECRET || "als_ga4xg1zjs8h94ksv4rgbrc6yb4cjngf4pl0u7evxc106k7lq";
+
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const body = JSON.stringify({
+    filename,
+    file_name: filename,
+    contentType: contentType || "video/mp4",
+    content_type: contentType || "video/mp4",
+    size: fileSize || 0,
+  });
+
+  const hmacPayload = `${timestamp}.${body}`;
+  const signature = crypto.createHmac("sha256", apiSecret).update(hmacPayload).digest("hex");
+
+  const res = await fetch(`${ALASLY_V1_ENDPOINT}/upload/init`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "X-Api-Key": apiKey,
+      "x-timestamp": timestamp,
+      "X-Timestamp": timestamp,
+      "x-signature": signature,
+      "X-Alasly-Signature": signature,
+    },
+    body,
+    cache: "no-store",
+  });
+
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok || (!json.uploadUrl && !json.upload_url && !json.assetId && !json.asset_id)) {
+    throw new Error(json.error || `Failed to initialize Native video upload (${res.status})`);
+  }
+
+  return {
+    uploadUrl: json.uploadUrl || json.upload_url || json.signedUrl || "",
+    assetId: json.assetId || json.asset_id || "",
+    expiresInSeconds: json.expires_in || 300,
+  };
+}
+
+export async function completeAlaslyUpload(assetId: string): Promise<AlaslyUploadCompleteResult> {
+  const apiKey = process.env.ALASLY_API_KEY || "alk_06a5ofogdqo11inzwoqn186jukk0bh7o";
+  const apiSecret = process.env.ALASLY_API_SECRET || "als_ga4xg1zjs8h94ksv4rgbrc6yb4cjngf4pl0u7evxc106k7lq";
+
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const body = JSON.stringify({
+    assetId,
+    asset_id: assetId,
+  });
+
+  const hmacPayload = `${timestamp}.${body}`;
+  const signature = crypto.createHmac("sha256", apiSecret).update(hmacPayload).digest("hex");
+
+  const res = await fetch(`${ALASLY_V1_ENDPOINT}/upload/complete`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "X-Api-Key": apiKey,
+      "x-timestamp": timestamp,
+      "X-Timestamp": timestamp,
+      "x-signature": signature,
+      "X-Alasly-Signature": signature,
+    },
+    body,
+    cache: "no-store",
+  });
+
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok || (!json.videoId && !json.video_id)) {
+    throw new Error(json.error || `Failed to complete Native video upload (${res.status})`);
+  }
+
+  return {
+    videoId: json.videoId || json.video_id || assetId,
+    assetId: json.assetId || json.asset_id || assetId,
+    status: json.status || "ready",
+  };
+}
