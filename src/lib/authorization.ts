@@ -12,7 +12,7 @@ export async function checkCourseEnrollment(userId: string, courseId: string, ro
       courseId,
       studentId: userId,
       isActive: true,
-      OR: [{ accessType: "TERM" }, { accessType: "COURSE" }, { accessType: null }],
+      OR: [{ accessType: "TERM" }, { accessType: "COURSE" }, { folderId: null, videoId: null }],
     },
     select: { id: true }
   });
