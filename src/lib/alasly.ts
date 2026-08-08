@@ -19,8 +19,8 @@ export interface AlaslyPlaybackResult {
 }
 
 export async function getAlaslyPlaybackToken(lessonId: string, domain?: string): Promise<AlaslyPlaybackResult> {
-  const apiKey = process.env.ALASLY_API_KEY || "alk_06a5ofogdqo11inzwoqn186jukk0bh7o";
-  const apiSecret = process.env.ALASLY_API_SECRET || "als_ga4xg1zjs8h94ksv4rgbrc6yb4cjngf4pl0u7evxc106k7lq";
+  const apiKey = (process.env.ALASLY_API_KEY || "alk_06a5ofogdqo11inzwoqn186jukk0bh7o").trim();
+  const apiSecret = (process.env.ALASLY_API_SECRET || "als_ga4xg1zjs8h94ksv4rgbrc6yb4cjngf4pl0u7evxc106k7lq").trim();
 
   if (!lessonId) {
     throw new Error("Native/Alasly Video ID is required");
@@ -130,8 +130,8 @@ export interface AlaslyUploadCompleteResult {
 }
 
 export async function initAlaslyUpload(filename: string, contentType: string, fileSize?: number): Promise<AlaslyUploadInitResult> {
-  const apiKey = process.env.ALASLY_API_KEY || "alk_06a5ofogdqo11inzwoqn186jukk0bh7o";
-  const apiSecret = process.env.ALASLY_API_SECRET || "als_ga4xg1zjs8h94ksv4rgbrc6yb4cjngf4pl0u7evxc106k7lq";
+  const apiKey = (process.env.ALASLY_API_KEY || "alk_06a5ofogdqo11inzwoqn186jukk0bh7o").trim();
+  const apiSecret = (process.env.ALASLY_API_SECRET || "als_ga4xg1zjs8h94ksv4rgbrc6yb4cjngf4pl0u7evxc106k7lq").trim();
 
   const timestamp = Math.floor(Date.now() / 1000).toString();
   const body = JSON.stringify({
@@ -177,8 +177,8 @@ export async function initAlaslyUpload(filename: string, contentType: string, fi
 }
 
 export async function completeAlaslyUpload(assetId: string): Promise<AlaslyUploadCompleteResult> {
-  const apiKey = process.env.ALASLY_API_KEY || "alk_06a5ofogdqo11inzwoqn186jukk0bh7o";
-  const apiSecret = process.env.ALASLY_API_SECRET || "als_ga4xg1zjs8h94ksv4rgbrc6yb4cjngf4pl0u7evxc106k7lq";
+  const apiKey = (process.env.ALASLY_API_KEY || "alk_06a5ofogdqo11inzwoqn186jukk0bh7o").trim();
+  const apiSecret = (process.env.ALASLY_API_SECRET || "als_ga4xg1zjs8h94ksv4rgbrc6yb4cjngf4pl0u7evxc106k7lq").trim();
 
   const timestamp = Math.floor(Date.now() / 1000).toString();
   const body = JSON.stringify({
