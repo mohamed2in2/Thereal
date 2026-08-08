@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getStudentSession } from "@/lib/auth";
+import { canBypassPayment } from "@/lib/demo";
 
 export async function GET(req: NextRequest) {
   try {
@@ -10,8 +11,11 @@ export async function GET(req: NextRequest) {
     const teacherId = searchParams.get("teacher");
     const search = searchParams.get("search");
 
+    const session = await getStudentSession();
+    const isSuperadmin = session?.role === "superadmin";
+
     const where: Record<string, unknown> = {
-      teacher: { isDeleted: false },
+      teacher: isSuperadmin ? { isDeleted: false } : { isDeleted: false, isDemo: false },
     };
     if (stage) where.educationalStage = stage;
     if (subject) where.subject = subject;
@@ -24,7 +28,9 @@ export async function GET(req: NextRequest) {
       ];
     }
 
-    const session = await getStudentSession();
+    const teacherWhere: Record<string, unknown> = isSuperadmin
+      ? { role: "teacher", isDeleted: false }
+      : { role: "teacher", isDeleted: false, isDemo: false };
 
     const [courses, allTeachers] = await Promise.all([
       prisma.course.findMany({
@@ -42,7 +48,7 @@ export async function GET(req: NextRequest) {
         orderBy: { createdAt: "desc" },
       }),
       prisma.user.findMany({
-        where: { role: "teacher", isDeleted: false },
+        where: teacherWhere,
         select: {
           id: true,
           name: true,
@@ -80,16 +86,19 @@ export async function GET(req: NextRequest) {
     });
 
     const accessMap = new Set(accessCodes.map((code) => code.courseId));
-    const coursesWithAccess = courses.map((course) => {
-      const isOwnerTeacher = session.role === "teacher" && course.teacherId === session.id;
-      const isAdminPreview = session.role === "admin" || session.role === "superadmin";
-      const hasAccess = accessMap.has(course.id) || isOwnerTeacher || isAdminPreview;
-      return {
-        ...course,
-        hasAccess,
-        isOwnerTeacher,
-      };
-    });
+    const coursesWithAccess = await Promise.all(
+      courses.map(async (course) => {
+        const isOwnerTeacher = session.role === "teacher" && course.teacherId === session.id;
+        const isAdminPreview = session.role === "admin";
+        const isDemoBypass = await canBypassPayment(session.role, course.teacherId);
+        const hasAccess = accessMap.has(course.id) || isOwnerTeacher || isAdminPreview || isDemoBypass;
+        return {
+          ...course,
+          hasAccess,
+          isOwnerTeacher,
+        };
+      })
+    );
 
     const response = NextResponse.json({ courses: coursesWithAccess, teachers: formattedTeachers });
     response.headers.set("Cache-Control", "private, no-cache, no-store, max-age=0, must-revalidate");

@@ -259,6 +259,44 @@ export default function CoursesPage() {
               transition={{ duration: 0.4, ease: EASE }}
               className="space-y-3.5 max-w-3xl"
             >
+              {/* ── Superadmin-Only Pinned DEMO Teacher Showroom Card ── */}
+              {user?.role === "superadmin" && (
+                <Link href="/demo" className="no-underline block mb-4">
+                  <motion.div
+                    whileHover={{ scale: 1.01, boxShadow: "0 0 24px rgba(245,158,11,0.35)" }}
+                    whileTap={{ scale: 0.99 }}
+                    className="group relative flex items-center justify-between h-[84px] px-5 rounded-[22px] transition-all duration-200 cursor-pointer select-none"
+                    style={{
+                      background: "linear-gradient(135deg, rgba(254,243,199,0.15) 0%, rgba(253,230,138,0.08) 100%)",
+                      border: "2px dashed #f59e0b",
+                      boxShadow: "0 4px 16px rgba(245,158,11,0.15)",
+                    }}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="relative w-14 h-14 rounded-full overflow-hidden shrink-0 border-2 border-amber-400 bg-amber-500/20 flex items-center justify-center font-black text-2xl text-amber-500">
+                        ⭐
+                      </div>
+                      <div className="flex flex-col">
+                        <div className="flex items-center gap-2">
+                          <span className="font-black text-lg text-amber-500 tracking-tight">
+                            المدرس التجريبي (DEMO Showroom)
+                          </span>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-white uppercase tracking-wider">
+                            DEMO
+                          </span>
+                        </div>
+                        <span className="text-xs text-[var(--ink-muted)]">
+                          معاينة كامل مزايا المنصة للمشرف العام فقط — بدون دفع وبصلاحيات مطلقة
+                        </span>
+                      </div>
+                    </div>
+                    <span className="text-sm font-bold text-amber-500 group-hover:translate-x-[-4px] transition-transform">
+                      فتح المعاينة ←
+                    </span>
+                  </motion.div>
+                </Link>
+              )}
+
               {teachers.length > 0 ? (
                 teachers.map((teacher, i) => {
                   const targetHref = teacher.hasPublicPage && teacher.slug ? `/${teacher.slug}` : `/courses?teacher=${teacher.id}`;

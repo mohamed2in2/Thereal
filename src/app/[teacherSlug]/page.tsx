@@ -11,10 +11,18 @@ import { SetTeacherRefCookie } from "@/components/teacher/SetTeacherRefCookie";
 
 export const revalidate = 60; // Cache page for 60s for lightning fast <10ms loads
 
+import { getSession } from "@/lib/auth";
+
 const getProfile = cache(async (slug: string) => {
   if (RESERVED_SLUGS.has(slug.toLowerCase())) return null;
+  const session = await getSession();
+  const isSuperadmin = session?.role === "superadmin";
   return prisma.teacherProfile.findFirst({
-    where: { slug, isPublished: true, teacher: { isDeleted: false } },
+    where: {
+      slug,
+      isPublished: true,
+      teacher: isSuperadmin ? { isDeleted: false } : { isDeleted: false, isDemo: false },
+    },
     include: {
       teacher: {
         include: {
@@ -55,12 +63,15 @@ const STAGE_LABELS: Record<string, string> = {
 
 const isSafe = (s?: string | null) => !!s && (/^https?:\/\//i.test(s) || s.startsWith("data:image/") || s.startsWith("/"));
 
+import { DemoBanner } from "@/components/ui/DemoBanner";
+
 export default async function TeacherPage({ params }: { params: Promise<{ teacherSlug: string }> }) {
   const { teacherSlug } = await params;
   const p = await getProfile(teacherSlug);
   if (!p) notFound();
 
   const name = p.displayName ?? p.teacher.name;
+  const isDemo = p.teacher.isDemo;
   const courses = p.teacher.courses;
   const ordered = p.featuredCourseId
     ? [...courses].sort((a, b) => (a.id === p.featuredCourseId ? -1 : b.id === p.featuredCourseId ? 1 : 0))
@@ -82,6 +93,7 @@ export default async function TeacherPage({ params }: { params: Promise<{ teache
 
   return (
     <main dir="rtl" style={theme} className="min-h-screen bg-[var(--bg)] text-[var(--ink)]">
+      <DemoBanner show={isDemo} />
       <SetTeacherRefCookie teacherId={p.teacherId} />
       {/* Top bar */}
       <nav style={{ background: "var(--nav)" }} className="px-5 sm:px-8 py-3.5 flex items-center justify-between">

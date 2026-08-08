@@ -10,7 +10,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   let courses: { id: string; slug: string | null; updatedAt: Date }[] = [];
   try {
     courses = await prisma.course.findMany({
-      where: { teacher: { isDeleted: false } },
+      where: { teacher: { isDeleted: false, isDemo: false } },
       select: { id: true, slug: true, updatedAt: true },
     });
   } catch (error) {

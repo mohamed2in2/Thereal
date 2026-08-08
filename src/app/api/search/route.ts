@@ -10,6 +10,9 @@ export async function GET(req: NextRequest) {
   if (q.length < 2) return NextResponse.json({ courses: [], teachers: [], videos: [] });
 
   const isStudent = session.role === "student";
+  const isSuperadmin = session.role === "superadmin";
+
+  const teacherFilter = isSuperadmin ? { isDeleted: false } : { isDeleted: false, isDemo: false };
 
   // Parallel search across courses, teachers, videos
   const [courses, teachers, videos] = await Promise.all([
@@ -20,7 +23,7 @@ export async function GET(req: NextRequest) {
           { subject:     { contains: q } },
           { description: { contains: q } },
         ],
-        teacher: { isDeleted: false },
+        teacher: teacherFilter,
         ...(isStudent ? {
           accessCodes: { some: { studentId: session.id, isActive: true } },
         } : {}),
@@ -33,6 +36,7 @@ export async function GET(req: NextRequest) {
       where: {
         role: "teacher",
         isDeleted: false,
+        ...(isSuperadmin ? {} : { isDemo: false }),
         OR: [{ name: { contains: q } }],
         teacherProfile: { isPublished: true },
       },

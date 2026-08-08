@@ -58,6 +58,25 @@ class WhatsAppOrchestrator {
    * Dispatches a message using the configured delivery strategy & failover rules
    */
   public async sendMessage(params: SendMessageParams): Promise<SendResult> {
+    if (params.recipient) {
+      const cleanPhone = params.recipient.replace(/\D/g, "");
+      if (cleanPhone) {
+        const isDemoUser = await prisma.user.findFirst({
+          where: {
+            isDemo: true,
+            OR: [
+              { phone: { contains: cleanPhone } },
+              { parentPhone: { contains: cleanPhone } },
+            ],
+          },
+          select: { id: true },
+        });
+        if (isDemoUser) {
+          return { success: true, messageId: "DEMO_USER_WHATSAPP_SKIPPED", provider: "BAILEYS" };
+        }
+      }
+    }
+
     const config = await this.getConfig();
     const mode = (config.deliveryMode || "baileys_primary") as DeliveryMode;
 

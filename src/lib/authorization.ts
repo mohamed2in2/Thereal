@@ -1,19 +1,32 @@
-import { prisma } from "./prisma";
+import { canBypassPayment } from "./demo";
 
 /**
  * Checks if a student is enrolled in a course.
- * Enrolled means they have an active used AccessCode for the course.
+ * Enrolled means they have an active redeemed AccessCode bound to their studentId for the course.
+ * Optional role parameter allows superadmin demo bypass evaluation on denial.
  */
-export async function checkCourseEnrollment(userId: string, courseId: string): Promise<boolean> {
+export async function checkCourseEnrollment(userId: string, courseId: string, role?: string): Promise<boolean> {
   const code = await prisma.accessCode.findFirst({
     where: {
       courseId,
       studentId: userId,
-      isActive: true, // Wait, used codes can keep isActive true or false depending on DB schema logic. Let's make sure it handles used codes correctly. In the schema, a code has studentId set once redeemed. In route.ts it was checked with: prisma.accessCode.findFirst({ where: { courseId: course.id, studentId: session.id, isActive: true } })
+      isActive: true,
     },
     select: { id: true }
   });
-  return !!code;
+  if (code) return true;
+
+  if (role) {
+    const course = await prisma.course.findUnique({
+      where: { id: courseId },
+      select: { teacherId: true },
+    });
+    if (course?.teacherId && await canBypassPayment(role, course.teacherId)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 /**
@@ -50,7 +63,7 @@ export async function checkVideoAccess(userId: string, role: string, videoId: st
   if (role !== "student") return false;
 
   // 1. Check Course-level access
-  const enrolled = await checkCourseEnrollment(userId, video.folder.courseId);
+  const enrolled = await checkCourseEnrollment(userId, video.folder.courseId, role);
   if (enrolled) return true;
 
   // 2. Check Folder-level access (AccessCode or Purchase)
@@ -152,5 +165,5 @@ export async function checkHomeworkAccess(userId: string, role: string, homework
 
   if (!courseId) return false;
 
-  return await checkCourseEnrollment(userId, courseId);
+  return await checkCourseEnrollment(userId, courseId, role);
 }

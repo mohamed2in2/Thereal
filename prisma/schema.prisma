@@ -94,11 +94,14 @@ model User {
   parentVerificationStatus String                       @default("PENDING")
   parentVerificationEvents ParentVerificationEvent[]
 
+  isDemo                   Boolean                      @default(false)
+
   @@index([role])
   @@index([educationalStage])
   @@index([email])
   @@index([isDeleted])
   @@index([promoCode])
+  @@index([isDemo])
 }
 
 model Course {

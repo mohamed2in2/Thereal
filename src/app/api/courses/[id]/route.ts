@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { getConfigNumberClamped } from "@/lib/config";
+import { canBypassPayment } from "@/lib/demo";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -10,12 +11,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     if (!session) return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
 
     const { id } = await params;
-
-    // Course-entry access by role:
-    //  - student            → must be enrolled
-    //  - admin / superadmin → allowed (oversight / preview), no enrollment
-    //  - teacher            → blocked with a clear "you're a teacher" message
-    //  - staff              → blocked
     const role = session.role;
     let isTeacherPreview = false;
 
@@ -106,16 +101,26 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         }
 
         if (!hasPlanAccess) {
-          return NextResponse.json(
-            { error: "لا يوجد صلاحية للوصول. فعّل كود الكورس أو تواصل مع المعلم.", code: "NOT_ENROLLED" },
-            { status: 403 }
-          );
+          const targetCourseRow = await prisma.course.findUnique({
+            where: { id },
+            select: { teacherId: true },
+          });
+          const canBypass = await canBypassPayment(role, targetCourseRow?.teacherId);
+          if (!canBypass) {
+            return NextResponse.json(
+              { error: "لا يوجد صلاحية للوصول. فعّل كود الكورس أو تواصل مع المعلم.", code: "NOT_ENROLLED" },
+              { status: 403 }
+            );
+          }
         }
       }
     }
 
     const course = await prisma.course.findFirst({
-      where: { id, teacher: { isDeleted: false } },
+      where: {
+        id,
+        teacher: role === "superadmin" ? { isDeleted: false } : { isDeleted: false, isDemo: false },
+      },
       include: {
         teacher: { select: { id: true, name: true } },
         folders: {

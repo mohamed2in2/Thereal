@@ -6,17 +6,17 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: "*",
         allow: "/",
-        disallow: ["/adminpanel/", "/api/", "/parent/", "/student/", "/account/"],
+        disallow: ["/adminpanel/", "/api/", "/parent/", "/student/", "/account/", "/demo"],
       },
       {
         userAgent: "Bingbot",
         allow: "/",
-        disallow: ["/adminpanel/", "/api/", "/parent/", "/student/", "/account/"],
+        disallow: ["/adminpanel/", "/api/", "/parent/", "/student/", "/account/", "/demo"],
       },
       {
         userAgent: "Googlebot",
         allow: "/",
-        disallow: ["/adminpanel/", "/api/", "/parent/", "/student/", "/account/"],
+        disallow: ["/adminpanel/", "/api/", "/parent/", "/student/", "/account/", "/demo"],
       },
     ],
     sitemap: "https://code-up.tech/sitemap.xml",
