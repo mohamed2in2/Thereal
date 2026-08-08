@@ -108,12 +108,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const verifiedBaseAmount = priceCheck.expectedPrice > 0 ? priceCheck.expectedPrice : amount;
+    const rawVerifiedAmount = priceCheck.expectedPrice > 0 ? priceCheck.expectedPrice : amount;
+    const verifiedBaseAmount = methodConfig.id === "fawry" ? Math.max(10, rawVerifiedAmount) : rawVerifiedAmount;
 
     // Calculate tax / service fee dynamically
     const { baseAmount, taxAmount, totalAmount } = calculateAmountWithTax(verifiedBaseAmount, methodConfig.id);
 
-    const appUrl = (process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || "https://code-up.tech").replace(/\/$/, "");
+    const origin = req.nextUrl ? req.nextUrl.origin : "https://code-up.tech";
+    const appUrl = (process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || origin).replace(/\/$/, "");
 
     const details = courseTitle || priceCheck.itemName
       ? `شراء: ${courseTitle || priceCheck.itemName} (${baseAmount} جنيه + ${methodConfig.feePercentage}% رسوم) = ${totalAmount} جنيه`
@@ -121,13 +123,28 @@ export async function POST(req: NextRequest) {
 
     // Route internal payments (Platform Balance / Vouchers)
     if (methodConfig.id === "wallet_balance" || methodConfig.provider === "internal") {
+      const studentUser = await prisma.user.findUnique({
+        where: { id: session.id },
+        select: { balance: true },
+      });
+
+      const currentBalance = studentUser?.balance ?? 0;
+      if (currentBalance < verifiedBaseAmount) {
+        return NextResponse.json(
+          { error: `رصيد حسابك بالمنصة (${currentBalance} جنيه) لا يكفي لشراء المحتوى بالسعر المطلوب (${verifiedBaseAmount} جنيه). يمكنك شحن رصيدك عبر فودافون كاش أو فوري.` },
+          { status: 400 }
+        );
+      }
+
+      const reqHeaders = {
+        "Content-Type": "application/json",
+        "Cookie": req.headers.get("cookie") || "",
+      };
+
       if (teacherId && planType) {
-        const subRes = await fetch(`${appUrl}/api/teacher/subscribe-balance`, {
+        const subRes = await fetch(`${origin}/api/teacher/subscribe-balance`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Cookie": req.headers.get("cookie") || "",
-          },
+          headers: reqHeaders,
           body: JSON.stringify({ teacherId, planType, languageTrack, studentGrade: grade }),
         });
         const subData = await subRes.json().catch(() => ({}));
@@ -144,12 +161,9 @@ export async function POST(req: NextRequest) {
       }
 
       if (courseId) {
-        const courseRes = await fetch(`${appUrl}/api/courses/${courseId}/purchase`, {
+        const courseRes = await fetch(`${origin}/api/courses/${courseId}/purchase`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Cookie": req.headers.get("cookie") || "",
-          },
+          headers: reqHeaders,
           body: JSON.stringify({}),
         });
         const courseData = await courseRes.json().catch(() => ({}));
@@ -166,12 +180,9 @@ export async function POST(req: NextRequest) {
       }
 
       if (folderId) {
-        const folderRes = await fetch(`${appUrl}/api/folders/${folderId}/purchase`, {
+        const folderRes = await fetch(`${origin}/api/folders/${folderId}/purchase`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Cookie": req.headers.get("cookie") || "",
-          },
+          headers: reqHeaders,
           body: JSON.stringify({}),
         });
         const folderData = await folderRes.json().catch(() => ({}));
@@ -188,12 +199,9 @@ export async function POST(req: NextRequest) {
       }
 
       if (planId) {
-        const planRes = await fetch(`${appUrl}/api/plans/${planId}/purchase`, {
+        const planRes = await fetch(`${origin}/api/plans/${planId}/purchase`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Cookie": req.headers.get("cookie") || "",
-          },
+          headers: reqHeaders,
           body: JSON.stringify({}),
         });
         const planData = await planRes.json().catch(() => ({}));

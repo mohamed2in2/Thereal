@@ -129,7 +129,7 @@ export const PAYMENT_METHODS: readonly PaymentMethodConfig[] = [
     available: true,
     processingSpeed: "تأكيد فوري (*9*1#)",
     feePercentage: 2,
-    minAmount: 5,
+    minAmount: 1,
     maxAmount: 10000,
     shortNote: "اطلب *9*1# واقبل طلب الخصم برقمك السري خلال دقيقة",
     instructions: [
@@ -154,7 +154,7 @@ export const PAYMENT_METHODS: readonly PaymentMethodConfig[] = [
     available: true,
     processingSpeed: "فوري خلال دقائق",
     feePercentage: 1,
-    minAmount: 10,
+    minAmount: 1,
     maxAmount: 20000,
     shortNote: "احتفظ بالرقم المرجعي وسدد كاش في أي كشك أو فرع فوري",
     instructions: [

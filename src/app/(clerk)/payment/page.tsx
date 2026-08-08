@@ -237,7 +237,7 @@ function PaymentContent() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           number: selectedMethod.needsCode ? code.trim() : (normalizedPhone || "01000000000"),
-          amount: amt,
+          amount: effectiveBaseAmount,
           method: selectedMethod.id,
           code: selectedMethod.needsCode ? code.trim() : undefined,
           teacherId: teacherIdParam || undefined,
@@ -366,7 +366,10 @@ function PaymentContent() {
     }
   }, [returnHref, router]);
 
-  const taxCalculation = calculateAmountWithTax(Number(baseAmount) || 0, selectedMethodId);
+  const rawAmt = Number(baseAmount) || 0;
+  const isFawryMinAdjusted = selectedMethodId === "fawry" && rawAmt > 0 && rawAmt < 10;
+  const effectiveBaseAmount = selectedMethodId === "fawry" ? Math.max(10, rawAmt) : rawAmt;
+  const taxCalculation = calculateAmountWithTax(effectiveBaseAmount, selectedMethodId);
 
   return (
     <div dir="rtl" className="min-h-screen bg-[#F8F9FA] dark:bg-[#0B0F19] text-[#101828] dark:text-[#F2F4F7] transition-colors duration-200">
@@ -411,6 +414,13 @@ function PaymentContent() {
                   </span>
                 )}
               </div>
+
+              {isFawryMinAdjusted && (
+                <div className="p-2.5 rounded-xl bg-sky-500/10 border border-sky-500/30 text-sky-600 dark:text-sky-300 text-xs font-bold flex items-center gap-1.5">
+                  <span>⚡</span>
+                  <span>تم رفع المبلغ تلقائياً ليكون 10 جنيهات (أقل قيمة تقبلها شبكة فوري Fawry Pay)</span>
+                </div>
+              )}
 
               <div className="relative">
                 <input

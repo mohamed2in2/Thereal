@@ -258,6 +258,60 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Check Money Code (Prepaid cash recharge card)
+    const moneyCode = await prisma.moneyCode.findUnique({ where: { code: normalizedCode } });
+    if (moneyCode) {
+      if (moneyCode.isUsed) {
+        return NextResponse.json({ error: "هذا الكود مستخدم بالفعل" }, { status: 400 });
+      }
+      if (moneyCode.expiresAt && moneyCode.expiresAt < new Date()) {
+        return NextResponse.json({ error: "هذا الكود منتهي الصلاحية" }, { status: 400 });
+      }
+
+      try {
+        const creditedAmount = await prisma.$transaction(async (tx) => {
+          const updateResult = await tx.moneyCode.updateMany({
+            where: { id: moneyCode.id, isUsed: false },
+            data: { isUsed: true, usedById: session.id, usedAt: new Date() },
+          });
+
+          if (updateResult.count === 0) {
+            throw new Error("ALREADY_USED");
+          }
+
+          await tx.user.update({
+            where: { id: session.id },
+            data: { balance: { increment: moneyCode.amount } },
+          });
+
+          await tx.balanceTransaction.create({
+            data: {
+              userId: session.id,
+              type: "credit_code",
+              amount: moneyCode.amount,
+              note: `كود: ${normalizedCode}`,
+            },
+          });
+
+          return moneyCode.amount;
+        });
+
+        void ReferralService.qualifyAndRewardReferral(session.id, `code:${normalizedCode}`).catch(() => {});
+
+        return NextResponse.json({
+          success: true,
+          type: "money_code",
+          credited: creditedAmount,
+          message: `تم شحن رصيدك بـ ${creditedAmount} جنيه بنجاح! 🎉`,
+        });
+      } catch (err: any) {
+        if (err.message === "ALREADY_USED") {
+          return NextResponse.json({ error: "هذا الكود مستخدم بالفعل" }, { status: 400 });
+        }
+        throw err;
+      }
+    }
+
     // Check Teacher Promo Code
     const teacher = await prisma.user.findFirst({
       where: {
