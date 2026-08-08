@@ -190,10 +190,52 @@ export default function TeacherDashboardPage() {
         throw new Error(initData.error || "تعذر بدء عملية الرفع");
       }
 
-      const { uploadUrl, assetId } = initData;
+      const { uploadUrl, assetId, isLocal } = initData;
 
-      // 2. Upload directly to signed URL or asset endpoint with XHR progress
+      // 2. Upload directly to signed URL or local server endpoint with XHR progress
       setNativeStatus("جاري رفع الملف للسيرفر...");
+
+      if (isLocal || uploadUrl === "/api/teacher/native-upload") {
+        const formData = new FormData();
+        formData.append("file", file);
+
+        const uploadedVideoId = await new Promise<string>((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open("POST", "/api/teacher/native-upload", true);
+
+          xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable) {
+              const percent = Math.round((e.loaded / e.total) * 100);
+              setNativeProgress(percent);
+            }
+          };
+
+          xhr.onload = () => {
+            try {
+              const resJson = JSON.parse(xhr.responseText);
+              if (xhr.status >= 200 && xhr.status < 300 && resJson.success) {
+                resolve(resJson.videoId || resJson.assetId);
+              } else {
+                reject(new Error(resJson.error || `فشل رفع الملف (رمز الاستجابة: ${xhr.status})`));
+              }
+            } catch {
+              reject(new Error("حدث خطأ في معالجة استجابة السيرفر"));
+            }
+          };
+
+          xhr.onerror = () => reject(new Error("حدث خطأ في شبكة الاتصال أثناء الرفع"));
+          xhr.send(formData);
+        });
+
+        setNewVideo((prev) => ({
+          ...prev,
+          providerVideoId: uploadedVideoId,
+          title: prev.title || file.name.replace(/\.[^/.]+$/, ""),
+        }));
+
+        notify("success", "تم رفع الفيديو بنجاح على السيرفر مباشرة!");
+        return;
+      }
 
       if (uploadUrl) {
         await new Promise<void>((resolve, reject) => {

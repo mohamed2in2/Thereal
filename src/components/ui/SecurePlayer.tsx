@@ -188,6 +188,8 @@ export function SecurePlayer({
     }
   }, [paused, provider]);
 
+  const isDirectVideo = embedUrl.startsWith("/api/") || embedUrl.includes(".mp4") || embedUrl.includes(".webm") || embedUrl.includes(".mov");
+
   return (
     <div
       ref={wrapRef}
@@ -201,16 +203,30 @@ export function SecurePlayer({
       }
       onContextMenu={(e) => e.preventDefault()}
     >
-      <iframe
-        ref={iframeRef}
-        src={embedUrl}
-        title={title}
-        className="absolute inset-0 w-full h-full"
-        allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture"
-        referrerPolicy="strict-origin"
-        style={{ border: "none" }}
-        draggable={false}
-      />
+      {isDirectVideo ? (
+        <video
+          src={embedUrl}
+          controls
+          controlsList="nodownload noplaybackrate"
+          className="absolute inset-0 w-full h-full object-contain"
+          onContextMenu={(e) => e.preventDefault()}
+          onPlay={() => onPlay?.()}
+          onPause={() => onPause?.()}
+          onEnded={() => onEnded?.()}
+          onTimeUpdate={(e) => onProgress?.((e.target as HTMLVideoElement).currentTime)}
+        />
+      ) : (
+        <iframe
+          ref={iframeRef}
+          src={embedUrl}
+          title={title}
+          className="absolute inset-0 w-full h-full"
+          allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture"
+          referrerPolicy="strict-origin"
+          style={{ border: "none" }}
+          draggable={false}
+        />
+      )}
 
       <VideoWatermark label={watermark} onFlash={handleFlash} />
 

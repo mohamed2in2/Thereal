@@ -26,6 +26,17 @@ export async function getAlaslyPlaybackToken(lessonId: string, domain?: string):
     throw new Error("Native/Alasly Video ID is required");
   }
 
+  // Handle local video server streaming
+  if (lessonId.startsWith("local_") || lessonId.endsWith(".mp4") || lessonId.endsWith(".webm") || lessonId.endsWith(".mov")) {
+    return {
+      token: "local",
+      expiresInSeconds: 86400,
+      expiresAt: new Date(Date.now() + 86400 * 1000).toISOString(),
+      embedUrl: `/api/videos/stream/${encodeURIComponent(lessonId)}`,
+      title: "Local Native Video",
+    };
+  }
+
   const currentDomain = domain || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
   const timestamp = Math.floor(Date.now() / 1000).toString();
