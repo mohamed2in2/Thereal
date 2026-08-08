@@ -298,6 +298,20 @@ export async function rejectParentToken(rawToken: string, ip: string = "127.0.0.
   return { ok: true, studentId: parentToken.studentId };
 }
 
+export async function resetParentVerificationLimits(studentId: string) {
+  await prisma.parentToken.updateMany({
+    where: { studentId },
+    data: { issueCount: 0 },
+  });
+
+  await prisma.parentVerificationEvent.deleteMany({
+    where: {
+      studentId,
+      action: "REISSUED",
+    },
+  });
+}
+
 /**
  * Student re-issues parent link with a new phone number
  */
@@ -306,8 +320,12 @@ export async function reissueParentToken(
   newParentPhone: string,
   ip: string = "127.0.0.1",
   userAgent?: string,
-  options?: { allowSamePhone?: boolean; bypassRateLimit?: boolean }
+  options?: { allowSamePhone?: boolean; bypassRateLimit?: boolean; resetLimits?: boolean }
 ) {
+  if (options?.resetLimits) {
+    await resetParentVerificationLimits(studentId);
+  }
+
   if (!isValidEgyptianMobile(newParentPhone)) {
     throw new Error("رقم الهاتف غير صحيح. يجب أن يكون رقم موبايل مصري يبدأ بـ 010 أو 011 أو 012 أو 015.");
   }
@@ -354,6 +372,8 @@ export async function reissueParentToken(
   expiresAt.setDate(expiresAt.getDate() + TOKEN_EXPIRY_DAYS);
   const now = new Date();
 
+  const isPhoneChanged = !existingToken?.parentPhoneSnapshot || existingToken.parentPhoneSnapshot !== cleanPhone;
+
   const parentToken = await prisma.parentToken.upsert({
     where: { studentId },
     create: {
@@ -368,7 +388,7 @@ export async function reissueParentToken(
       tokenHash,
       status: "PENDING",
       parentPhoneSnapshot: cleanPhone,
-      issueCount: { increment: 1 },
+      issueCount: isPhoneChanged ? { increment: 1 } : undefined,
       confirmedAt: null,
       confirmedByIp: null,
       rejectedAt: null,

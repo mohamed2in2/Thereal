@@ -192,9 +192,28 @@ export function StudentsSection({ userRole = "superadmin" }: { userRole?: string
       toastSuccess(json.message || "تم تحديث الرقم وإرسال الرابط بنجاح");
       setEditPhoneStudent(null);
       setNewParentPhone("");
-      void search(lastSearch.current.filters, lastSearch.current.page);
     } catch (err: any) {
       toastError(err?.message || "تعذر تحديث الرقم وإرسال الرابط");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleResetParentLimits = async (student: Student) => {
+    setActionLoading(true);
+    try {
+      const res = await fetch("/api/student/parent-phone", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ studentId: student.id, resetCount: true }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "تعذر تصفير العداد");
+      toastSuccess(json.message || "تم تصفير عداد المحاولات وفك الحظر بنجاح");
+      void search(lastSearch.current.filters, lastSearch.current.page);
+    } catch (err: any) {
+      toastError(err?.message || "تعذر تصفير العداد");
     } finally {
       setActionLoading(false);
     }
@@ -452,7 +471,7 @@ export function StudentsSection({ userRole = "superadmin" }: { userRole?: string
                       >
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 bg-green-700 rounded-lg flex items-center justify-center text-white font-bold text-xs shrink-0">
+<div className="w-8 h-8 bg-green-700 rounded-lg flex items-center justify-center text-white font-bold text-xs shrink-0">
                               {s.name[0]}
                             </div>
                             <div className="min-w-0">
@@ -463,6 +482,17 @@ export function StudentsSection({ userRole = "superadmin" }: { userRole?: string
                                   className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20"
                                 >
                                   ⚠️ غيّر الرقم {issueCount} مرات
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleResetParentLimits(s);
+                                    }}
+                                    disabled={actionLoading}
+                                    title="تصفير عداد المحاولات وفك الحظر عاجلاً"
+                                    className="ms-1 px-1.5 py-0.5 bg-amber-500/30 hover:bg-amber-500/50 text-white rounded text-[9px] font-bold transition-colors"
+                                  >
+                                    🔄 تصفير
+                                  </button>
                                 </span>
                               )}
                             </div>

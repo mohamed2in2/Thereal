@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { reissueParentToken } from "@/lib/whatsapp/parentToken";
+import { reissueParentToken, resetParentVerificationLimits } from "@/lib/whatsapp/parentToken";
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,12 +13,9 @@ export async function POST(req: NextRequest) {
       parentPhone?: string;
       studentId?: string;
       allowSamePhone?: boolean;
+      resetCount?: boolean;
     };
-    const { parentPhone, studentId, allowSamePhone } = body;
-
-    if (!parentPhone || typeof parentPhone !== "string") {
-      return NextResponse.json({ error: "رقم هاتف ولي الأمر مطلوب" }, { status: 400 });
-    }
+    const { parentPhone, studentId, allowSamePhone, resetCount } = body;
 
     let targetStudentId = session.id;
     let isAdmin = false;
@@ -31,18 +28,43 @@ export async function POST(req: NextRequest) {
       isAdmin = true;
     }
 
+    if (resetCount) {
+      if (!isAdmin) {
+        return NextResponse.json({ error: "غير مصرح بتصفير المحاولات" }, { status: 403 });
+      }
+      await resetParentVerificationLimits(targetStudentId);
+      return NextResponse.json({
+        success: true,
+        message: "تم تصفير عداد المحاولات وفك الحظر عن الطالب بنجاح",
+      });
+    }
+
+    if (!parentPhone || typeof parentPhone !== "string") {
+      return NextResponse.json({ error: "رقم هاتف ولي الأمر مطلوب" }, { status: 400 });
+    }
+
     const ip = req.headers.get("x-forwarded-for")?.split(",")[0] || req.headers.get("x-real-ip") || "127.0.0.1";
     const userAgent = req.headers.get("user-agent") || undefined;
 
     const result = await reissueParentToken(targetStudentId, parentPhone, ip, userAgent, {
       allowSamePhone: allowSamePhone || isAdmin,
       bypassRateLimit: isAdmin,
+      resetLimits: isAdmin,
     });
+
+    const dispatchSuccess = result.dispatchResult?.success ?? false;
+    const dispatchError = result.dispatchResult?.error;
+
+    let msg = "تم إرسال رابط متابعة جديد لولي الأمر عبر الواتساب بنجاح";
+    if (!dispatchSuccess) {
+      msg = `تم توليد وتحديث الرابط بنجاح. تنبيه: تعذر الإرسال عبر الواتساب (${dispatchError || "محرك الواتساب غير متصل"})`;
+    }
 
     return NextResponse.json({
       success: true,
-      message: "تم إرسال رابط متابعة جديد لولي أمرك عبر الواتساب بنجاح",
-      dispatchSuccess: result.dispatchResult?.success ?? false,
+      message: msg,
+      dispatchSuccess,
+      dispatchError,
     });
   } catch (error: any) {
     return NextResponse.json({ error: error?.message || "تعذر إرسال الرابط" }, { status: 400 });
