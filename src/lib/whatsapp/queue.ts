@@ -207,7 +207,7 @@ class WhatsAppQueueManager {
         const metaRes = await officialMetaProvider.sendMessage({
           recipient: item.phoneE164,
           content: item.content,
-          messageType: item.type === "OTP" ? "OTP" : "TEXT",
+          messageType: item.type === "OTP" ? "OTP" : "CUSTOM",
         });
 
         if (metaRes.success) {
