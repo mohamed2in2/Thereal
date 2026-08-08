@@ -249,6 +249,23 @@ export default function TeacherDashboardPage() {
       setNativeStatus("");
     }
   };
+  const [showJsonGuide, setShowJsonGuide] = useState(false);
+  const [newFolderHomework, setNewFolderHomework] = useState({
+    folderId: "",
+    title: "",
+    description: "",
+    type: "exam" as "link" | "exam" | "terminal" | "upload",
+    linkUrl: "",
+    videoId: "",
+    timeLimitMinutes: 30,
+    dueAt: "",
+    isPublished: true,
+    expectedOutput: "",
+    codeTemplate: "",
+    codeLanguage: "python",
+    allowedFileTypes: "pdf,py,js,zip",
+    questions: [{ question: "", imageUrl: "", optionA: "", optionB: "", optionC: "", optionD: "", correctAnswer: "A" }],
+  });
   const [newQuiz, setNewQuiz] = useState<NewQuizState>({
     title: "", folderId: "",
     timeLimitMinutes: 30,
@@ -521,7 +538,7 @@ export default function TeacherDashboardPage() {
         },
         {
           question: "اشرح قانون نيوتن الأول وتطبيقاته باختصار",
-          questionType": "essay"
+          "questionType": "essay"
         }
       ]
     };
@@ -602,6 +619,126 @@ export default function TeacherDashboardPage() {
       notify("success", "تم إضافة الاختبار بنجاح");
     } else {
       notify("error", data?.error || "تعذر إضافة الاختبار");
+    }
+  };
+
+  const handleFolderHwJsonImport = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const text = e.target?.result as string;
+        const parsed = JSON.parse(text);
+        let importedTitle = "";
+        let importedTime = 30;
+        let rawQuestions: any[] = [];
+
+        if (Array.isArray(parsed)) {
+          rawQuestions = parsed;
+        } else if (parsed && typeof parsed === "object") {
+          if (typeof parsed.title === "string") importedTitle = parsed.title;
+          if (typeof parsed.timeLimitMinutes === "number") importedTime = parsed.timeLimitMinutes;
+          if (Array.isArray(parsed.questions)) rawQuestions = parsed.questions;
+        }
+
+        if (!rawQuestions || rawQuestions.length === 0) {
+          notify("error", "ملف الـ JSON لا يحتوي على أي أسئلة صحيحة");
+          return;
+        }
+
+        const validQuestions = rawQuestions.map((q, idx) => {
+          if (!q || typeof q !== "object") throw new Error(`السؤال ${idx + 1} بتنسيق غير صحيح`);
+          return {
+            question: String(q.question || q.title || "").trim(),
+            imageUrl: typeof q.imageUrl === "string" ? q.imageUrl.trim() : "",
+            optionA: String(q.optionA || q.a || "").trim(),
+            optionB: String(q.optionB || q.b || "").trim(),
+            optionC: String(q.optionC || q.c || "").trim(),
+            optionD: String(q.optionD || q.d || "").trim(),
+            correctAnswer: (["A", "B", "C", "D"].includes(String(q.correctAnswer).toUpperCase()) ? String(q.correctAnswer).toUpperCase() : "A"),
+          };
+        });
+
+        setNewFolderHomework((prev) => ({
+          ...prev,
+          title: importedTitle || prev.title,
+          timeLimitMinutes: importedTime || prev.timeLimitMinutes,
+          questions: validQuestions,
+        }));
+        notify("success", `تم استيراد ${validQuestions.length} سؤال من ملف الـ JSON بنجاح ✅`);
+      } catch (err: any) {
+        notify("error", err?.message || "فشل قراءة ملف الـ JSON، تأكد من صحة التنسيق");
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const addHomeworkToFolder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newFolderHomework.folderId) return;
+    const payload: Record<string, unknown> = {
+      title: newFolderHomework.title,
+      description: newFolderHomework.description || undefined,
+      type: newFolderHomework.type,
+      courseId: selectedCourse?.id || undefined,
+      folderId: newFolderHomework.folderId,
+      videoId: newFolderHomework.videoId || undefined,
+      dueAt: newFolderHomework.dueAt || undefined,
+      timeLimitMinutes: newFolderHomework.timeLimitMinutes,
+      isPublished: newFolderHomework.isPublished,
+    };
+    if (newFolderHomework.type === "link") payload.linkUrl = newFolderHomework.linkUrl;
+    if (newFolderHomework.type === "terminal") {
+      payload.expectedOutput = newFolderHomework.expectedOutput;
+      payload.codeTemplate = newFolderHomework.codeTemplate || undefined;
+      payload.codeLanguage = newFolderHomework.codeLanguage;
+    }
+    if (newFolderHomework.type === "upload") payload.allowedFileTypes = newFolderHomework.allowedFileTypes || undefined;
+    if (newFolderHomework.type === "exam") payload.questions = newFolderHomework.questions;
+
+    const res = await fetch("/api/admin/homework", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await readJson<{ error?: string }>(res);
+    if (res.ok) {
+      setNewFolderHomework({
+        folderId: "",
+        title: "",
+        description: "",
+        type: "exam",
+        linkUrl: "",
+        videoId: "",
+        timeLimitMinutes: 30,
+        dueAt: "",
+        isPublished: true,
+        expectedOutput: "",
+        codeTemplate: "",
+        codeLanguage: "python",
+        allowedFileTypes: "pdf,py,js,zip",
+        questions: [{ question: "", imageUrl: "", optionA: "", optionB: "", optionC: "", optionD: "", correctAnswer: "A" }],
+      });
+      if (selectedCourse) fetchFolders(selectedCourse.id);
+      notify("success", "تم إضافة الواجب للمحاضرة بنجاح ✅");
+    } else {
+      notify("error", data?.error || "تعذر إضافة الواجب");
+    }
+  };
+
+  const deleteHomeworkFromFolder = async (homeworkId: string) => {
+    if (!(await askConfirm({ title: "حذف الواجب", message: "سيتم حذف هذا الواجب وجميع إجابات الطلاب المرتبطة به نهائياً.", confirmLabel: "حذف الواجب" }))) return;
+    const res = await fetch("/api/admin/homework", {
+      method: "DELETE",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ homeworkId }),
+    });
+    if (res.ok) {
+      if (selectedCourse) fetchFolders(selectedCourse.id);
+      notify("success", "تم حذف الواجب بنجاح");
+    } else {
+      notify("error", "تعذر حذف الواجب");
     }
   };
 
@@ -1415,7 +1552,27 @@ export default function TeacherDashboardPage() {
                                     </div>
                                   );
                                 })}
-                                {f.materials?.map((m) => (
+                                 {f.quizzes?.map((qz) => (
+                                   <div key={qz.id} className="flex items-center gap-2 rounded-xl border border-sky-500/20 bg-sky-500/5 px-3 py-2.5">
+                                     <span className="shrink-0 text-sky-500"><IconClipboard className="w-4 h-4" /></span>
+                                     <p className="text-sm text-[var(--ink)] font-bold truncate flex-1 min-w-0">{qz.title || "اختبار المحاضرة"}</p>
+                                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-500">اختبار</span>
+                                   </div>
+                                 ))}
+                                 {f.homeworks?.map((hw) => (
+                                   <div key={hw.id} className="flex items-center gap-2 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2.5">
+                                     <span className="shrink-0 text-amber-500"><IconBook className="w-4 h-4" /></span>
+                                     <div className="flex-1 min-w-0">
+                                       <p className="text-sm text-[var(--ink)] font-bold truncate">{hw.title}</p>
+                                       <p className="text-[10px] text-[var(--ink-muted)]">{hw.type === "exam" ? "واجب أسئلة" : hw.type === "terminal" ? "كود برمجي" : hw.type === "upload" ? "تسليم ملف" : "رابط"}</p>
+                                     </div>
+                                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-500">واجب</span>
+                                     <button onClick={() => deleteHomeworkFromFolder(hw.id)} aria-label="حذف الواجب" className="shrink-0 w-7 h-7 rounded-lg flex items-center justify-center text-[var(--error)] hover:bg-[var(--error)]/10 transition-colors">
+                                       <IconTrash className="w-3.5 h-3.5" />
+                                     </button>
+                                   </div>
+                                 ))}
+                                 {f.materials?.map((m) => (
                                   <div key={m.id} className="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5">
                                     <span className="shrink-0 text-[var(--ink-muted)]">{m.type === "pdf" ? <IconFile className="w-4 h-4" /> : <IconLink className="w-4 h-4" />}</span>
                                     <p className="text-sm text-[var(--ink)] font-medium truncate flex-1 min-w-0">{m.title}</p>
@@ -1621,6 +1778,13 @@ export default function TeacherDashboardPage() {
                           >
                             📄 تحميل قالب JSON
                           </button>
+                          <button
+                            type="button"
+                            onClick={() => setShowJsonGuide(true)}
+                            className="px-3 py-1.5 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 text-purple-500 text-xs font-bold transition-all"
+                          >
+                            ❓ دليل صياغة JSON
+                          </button>
                         </div>
                       </div>
                       <form onSubmit={addQuiz} className="space-y-4">
@@ -1749,6 +1913,161 @@ export default function TeacherDashboardPage() {
                             إضافة الاختبار
                           </button>
                         </div>
+                      </form>
+                    </div>
+
+                    {/* Add Homework to Folder card */}
+                    <div className={cardPad}>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3 border-b border-[var(--border)]">
+                        <div>
+                          <h3 className="font-bold text-[var(--ink)] flex items-center gap-2">
+                            <IconBook className="w-4 h-4 text-amber-500" /> إضافة واجب للمحاضرة
+                          </h3>
+                          <p className="text-xs text-[var(--ink-muted)] mt-0.5">يمكنك ربط الواجب بمحاضرة محددة أو فيديو وإضافة أسئلة MCQ أو ملفات</p>
+                        </div>
+                        {newFolderHomework.type === "exam" && (
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 text-xs font-bold transition-all cursor-pointer">
+                              <span>📥 استيراد أسئلة من JSON</span>
+                              <input
+                                type="file"
+                                accept=".json,application/json"
+                                className="hidden"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) handleFolderHwJsonImport(file);
+                                  e.target.value = "";
+                                }}
+                              />
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => setShowJsonGuide(true)}
+                              className="px-3 py-1.5 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 text-purple-500 text-xs font-bold transition-all"
+                            >
+                              ❓ دليل صياغة JSON
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      <form onSubmit={addHomeworkToFolder} className="space-y-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <select
+                            value={newFolderHomework.folderId}
+                            onChange={(e) => setNewFolderHomework({ ...newFolderHomework, folderId: e.target.value })}
+                            className={input}
+                          >
+                            <option value="">اختر المحاضرة *</option>
+                            {folders.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+                          </select>
+                          <input
+                            type="text"
+                            value={newFolderHomework.title}
+                            onChange={(e) => setNewFolderHomework({ ...newFolderHomework, title: e.target.value })}
+                            placeholder="عنوان الواجب *"
+                            className={input}
+                          />
+                          <select
+                            value={newFolderHomework.type}
+                            onChange={(e) => setNewFolderHomework({ ...newFolderHomework, type: e.target.value as any })}
+                            className={input}
+                          >
+                            <option value="exam">📝 اختبار أسئلة MCQ</option>
+                            <option value="terminal">💻 كود برمجي / Terminal</option>
+                            <option value="upload">📎 رفع وتكليف ملفات</option>
+                            <option value="link">🔗 رابط خارجي</option>
+                          </select>
+                        </div>
+
+                        {newFolderHomework.type === "link" && (
+                          <input
+                            type="url"
+                            value={newFolderHomework.linkUrl}
+                            onChange={(e) => setNewFolderHomework({ ...newFolderHomework, linkUrl: e.target.value })}
+                            placeholder="رابط الواجب https://..."
+                            className={input}
+                            dir="ltr"
+                          />
+                        )}
+
+                        {newFolderHomework.type === "exam" && (
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                              <label className={label}>أسئلة الواجب ({newFolderHomework.questions.length})</label>
+                              <input
+                                type="number"
+                                min={1}
+                                max={240}
+                                value={newFolderHomework.timeLimitMinutes}
+                                onChange={(e) => setNewFolderHomework({ ...newFolderHomework, timeLimitMinutes: Number(e.target.value) || 30 })}
+                                placeholder="الوقت المحدد (دقائق)"
+                                className={`${input} w-40 text-xs`}
+                                dir="ltr"
+                              />
+                            </div>
+                            {newFolderHomework.questions.map((q, qi) => (
+                              <div key={qi} className="rounded-xl border border-[var(--border)] bg-[var(--bg)] p-4 space-y-3">
+                                <div className="flex items-center justify-between gap-3">
+                                  <p className="text-sm font-bold text-[var(--ink)]">السؤال {qi + 1}</p>
+                                </div>
+                                <input
+                                  type="text"
+                                  value={q.question}
+                                  onChange={(e) => {
+                                    const qs = [...newFolderHomework.questions];
+                                    qs[qi].question = e.target.value;
+                                    setNewFolderHomework({ ...newFolderHomework, questions: qs });
+                                  }}
+                                  placeholder="نص السؤال"
+                                  className={input}
+                                />
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                  {(["A", "B", "C", "D"] as const).map((opt) => {
+                                    const optKey = `option${opt}` as "optionA" | "optionB" | "optionC" | "optionD";
+                                    return (
+                                      <div key={opt} className="flex gap-2 items-center">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const qs = [...newFolderHomework.questions];
+                                            qs[qi].correctAnswer = opt;
+                                            setNewFolderHomework({ ...newFolderHomework, questions: qs });
+                                          }}
+                                          className={`shrink-0 w-7 h-7 rounded-lg text-xs font-bold transition-colors ${q.correctAnswer === opt ? "bg-amber-500 text-white" : "bg-[var(--border)] text-[var(--ink-muted)] hover:text-[var(--ink)]"}`}
+                                        >
+                                          {opt}
+                                        </button>
+                                        <input
+                                          type="text"
+                                          value={q[optKey] || ""}
+                                          onChange={(e) => {
+                                            const qs = [...newFolderHomework.questions];
+                                            qs[qi][optKey] = e.target.value;
+                                            setNewFolderHomework({ ...newFolderHomework, questions: qs });
+                                          }}
+                                          placeholder={`الخيار ${opt}`}
+                                          className={input}
+                                        />
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            ))}
+                            <button
+                              type="button"
+                              onClick={() => setNewFolderHomework({ ...newFolderHomework, questions: [...newFolderHomework.questions, { question: "", imageUrl: "", optionA: "", optionB: "", optionC: "", optionD: "", correctAnswer: "A" }] })}
+                              className={ghostBtn}
+                            >
+                              <IconPlus className="w-4 h-4" /> سؤال جديد للواجب
+                            </button>
+                          </div>
+                        )}
+
+                        <button type="submit" disabled={!newFolderHomework.folderId || !newFolderHomework.title} className={`${primaryBtn} w-full`}>
+                          إضافة الواجب للمحاضرة
+                        </button>
                       </form>
                     </div>
                   </div>
@@ -2323,6 +2642,114 @@ export default function TeacherDashboardPage() {
         onConfirm={() => { confirmState?.resolve(true); setConfirmState(null); }}
         onCancel={() => { confirmState?.resolve(false); setConfirmState(null); }}
       />
+
+      {showJsonGuide && <JSONGuideModal onClose={() => setShowJsonGuide(false)} notify={notify} />}
+    </div>
+  );
+}
+
+function JSONGuideModal({ onClose, notify }: { onClose: () => void; notify: (type: "success" | "error", text: string) => void }) {
+  const fullExamSample = {
+    title: "اختبار شهر أكتوبر في الفيزياء",
+    timeLimitMinutes: 30,
+    questions: [
+      {
+        question: "ما هي وحدة قياس القوة في النظام الدولي؟",
+        questionType: "mcq",
+        imageUrl: "https://example.com/image.png",
+        optionA: "النيوتن",
+        optionB: "الجول",
+        optionC: "الفولت",
+        optionD: "الواط",
+        correctAnswer: "A"
+      },
+      {
+        question: "اشرح قانون نيوتن الأول وتطبيقاته باختصار",
+        "questionType": "essay"
+      }
+    ]
+  };
+
+  const arrayQuestionsSample = [
+    {
+      question: "ما الفرق بين السرعة القياسية والسرعة المتجهة؟",
+      optionA: "السرعة المتجهة تتضمن الاتجاه والقياسية لا تتضمنه",
+      optionB: "لا يوجد فرق بينهما",
+      optionC: "السرعة القياسية أسرع دائماً",
+      optionD: "السرعة المتجهة تُقاس بالفولت",
+      correctAnswer: "A"
+    }
+  ];
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+      <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl max-w-2xl w-full p-6 space-y-5 text-right max-h-[90vh] overflow-y-auto shadow-2xl">
+        <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
+          <h3 className="text-lg font-bold text-[var(--ink)] flex items-center gap-2">
+            <span>💡 دليل وتنسيق صياغة ملف الـ JSON</span>
+          </h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-200 text-lg font-bold p-1">✕</button>
+        </div>
+
+        <div className="space-y-4 text-xs leading-relaxed text-[var(--ink-muted)]">
+          <p className="text-sm font-semibold text-[var(--ink)]">
+            يمكنك إعداد الأسئلة في أي محرر نصوص أو عبر برامج الذكاء الاصطناعي (مثل ChatGPT) وحفظ الملف بصيغة <code className="bg-sky-500/10 text-sky-400 px-1.5 py-0.5 rounded font-mono">.json</code> بأحد التنسيقين التاليين:
+          </p>
+
+          <div className="bg-[var(--bg)] border border-[var(--border)] rounded-xl p-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-sky-400">1️⃣ استيراد اختبار/واجب كامل (عنوان + وقت + أسئلة):</span>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(JSON.stringify(fullExamSample, null, 2));
+                  notify("success", "تم نسخ كود الـ JSON إلى الحافظة 📋");
+                }}
+                className="px-2.5 py-1 rounded bg-sky-500/20 text-sky-400 hover:bg-sky-500/30 text-[11px] font-bold"
+              >
+                📋 نسخ النموذج
+              </button>
+            </div>
+            <pre className="font-mono text-[11px] text-emerald-400 bg-black/40 p-3 rounded-lg overflow-x-auto text-left" dir="ltr">
+{JSON.stringify(fullExamSample, null, 2)}
+            </pre>
+          </div>
+
+          <div className="bg-[var(--bg)] border border-[var(--border)] rounded-xl p-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-sky-400">2️⃣ استيراد قائمة أسئلة مباشرة (Array of Questions):</span>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(JSON.stringify(arrayQuestionsSample, null, 2));
+                  notify("success", "تم نسخ كود الـ JSON إلى الحافظة 📋");
+                }}
+                className="px-2.5 py-1 rounded bg-sky-500/20 text-sky-400 hover:bg-sky-500/30 text-[11px] font-bold"
+              >
+                📋 نسخ النموذج
+              </button>
+            </div>
+            <pre className="font-mono text-[11px] text-emerald-400 bg-black/40 p-3 rounded-lg overflow-x-auto text-left" dir="ltr">
+{JSON.stringify(arrayQuestionsSample, null, 2)}
+            </pre>
+          </div>
+
+          <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-amber-500 space-y-1">
+            <p className="font-bold">⚠️ قواعد وإرشادات صياغة الـ JSON:</p>
+            <ul className="list-disc list-inside space-y-1 text-[11px]">
+              <li>حدد الإجابة الصحيحة في <code className="font-mono font-bold">correctAnswer</code> بأحد الحروف: <code className="font-mono">"A"</code> أو <code className="font-mono">"B"</code> أو <code className="font-mono">"C"</code> أو <code className="font-mono">"D"</code>.</li>
+              <li>للأسئلة المقالية (التي تتطلب تصحيحاً كتابياً بدلاً من التلقائي): اجعل <code className="font-mono font-bold">"questionType": "essay"</code>.</li>
+              <li>الصورة التوضيحية <code className="font-mono font-bold">imageUrl</code> اختيارية ويمكن تركها فارغة <code className="font-mono">""</code> أو وضع رابط مباشر <code className="font-mono">"https://..."</code>.</li>
+            </ul>
+          </div>
+        </div>
+
+        <div className="pt-2 text-left">
+          <button type="button" onClick={onClose} className="px-5 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-white font-bold text-xs">
+            فهمت، إغلاق الدليل
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

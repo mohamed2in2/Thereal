@@ -64,6 +64,7 @@ export async function POST(req: NextRequest) {
     type: "link" | "exam" | "terminal" | "upload";
     linkUrl?: string;
     courseId?: string;
+    folderId?: string;           // link to specific folder/محاضرة
     videoId?: string;           // link to specific lesson
     dueAt?: string;
     timeLimitMinutes?: number;
@@ -125,6 +126,7 @@ export async function POST(req: NextRequest) {
       type:             body.type,
       linkUrl:          body.linkUrl?.trim() ?? null,
       courseId:         body.courseId ?? null,
+      folderId:         body.folderId ?? null,
       videoId:          body.videoId ?? null,
       dueAt:            body.dueAt ? new Date(body.dueAt) : null,
       timeLimitMinutes: body.timeLimitMinutes ?? 30,

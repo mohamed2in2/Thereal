@@ -282,6 +282,7 @@ model Folder {
   materials          Material[]
   quizzes            Quiz[]
   videos             Video[]
+  homeworks          Homework[]
   folderPurchases    FolderPurchase[]
   accessCodes        AccessCode[]
 
@@ -841,6 +842,7 @@ model Homework {
   id               String               @id @default(cuid())
   teacherId        String
   courseId         String? // optional: link to a course
+  folderId         String? // optional: link to a specific folder/محاضرة
   /// Link to a specific lesson/video this homework belongs to
   videoId          String?
   title            String
@@ -859,12 +861,14 @@ model Homework {
   createdAt        DateTime             @default(now())
   updatedAt        DateTime             @updatedAt
   teacher          User                 @relation("TeacherHomework", fields: [teacherId], references: [id], onDelete: Cascade)
+  folder           Folder?              @relation(fields: [folderId], references: [id], onDelete: Cascade)
   video            Video?               @relation(fields: [videoId], references: [id], onDelete: SetNull)
   questions        HomeworkQuestion[]
   submissions      HomeworkSubmission[]
 
   @@index([teacherId])
   @@index([courseId])
+  @@index([folderId])
   @@index([videoId])
   @@index([isPublished])
 }

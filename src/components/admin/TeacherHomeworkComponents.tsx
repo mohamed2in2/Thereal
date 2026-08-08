@@ -248,6 +248,7 @@ export function HomeworkManagerSection({
     questions: [{ question: "", imageUrl: "", optionA: "", optionB: "", optionC: "", optionD: "", correctAnswer: "A" }],
   });
 
+  const [showGuide, setShowGuide] = useState(false);
   const input = "w-full px-3.5 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--bg)] text-[var(--ink)] text-sm focus:outline-none focus:border-sky-400/60 transition-all";
   const label = "block text-xs font-semibold text-[var(--ink-muted)] mb-1.5";
   const btn = "inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-white text-sm font-bold transition-colors disabled:opacity-50";
@@ -614,6 +615,13 @@ export function HomeworkManagerSection({
                   >
                     📄 تحميل قالب JSON
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowGuide(true)}
+                    className="px-3 py-1.5 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 text-purple-500 text-xs font-bold transition-all"
+                  >
+                    ❓ دليل صياغة JSON
+                  </button>
                 </div>
               </div>
               {form.questions.map((q, qi) => (
@@ -695,6 +703,77 @@ export function HomeworkManagerSection({
             </div>
           ))
         )}
+      </div>
+
+      {showGuide && <HwJsonGuideModal onClose={() => setShowGuide(false)} notify={notify} />}
+    </div>
+  );
+}
+
+function HwJsonGuideModal({ onClose, notify }: { onClose: () => void; notify: (type: "success" | "error", text: string) => void }) {
+  const fullSample = {
+    title: "واجب الرياضيات الشامل",
+    timeLimitMinutes: 30,
+    questions: [
+      {
+        question: "ما حاصل ضرب 7 × 8؟",
+        optionA: "56",
+        optionB: "48",
+        optionC: "64",
+        optionD: "54",
+        correctAnswer: "A"
+      }
+    ]
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+      <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl max-w-2xl w-full p-6 space-y-5 text-right max-h-[90vh] overflow-y-auto shadow-2xl">
+        <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
+          <h3 className="text-lg font-bold text-[var(--ink)] flex items-center gap-2">
+            <span>💡 دليل صياغة أسئلة الواجب بصيغة JSON</span>
+          </h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-200 text-lg font-bold p-1">✕</button>
+        </div>
+
+        <div className="space-y-4 text-xs leading-relaxed text-[var(--ink-muted)]">
+          <p className="text-sm font-semibold text-[var(--ink)]">
+            انسخ الكود التالي وحفظه في ملف باسم <code className="bg-sky-500/10 text-sky-400 px-1.5 py-0.5 rounded font-mono">homework.json</code> لاستيراده فوراً:
+          </p>
+
+          <div className="bg-[var(--bg)] border border-[var(--border)] rounded-xl p-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-sky-400">📋 نموذج كود JSON جاهز:</span>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(JSON.stringify(fullSample, null, 2));
+                  notify("success", "تم نسخ كود الـ JSON إلى الحافظة 📋");
+                }}
+                className="px-2.5 py-1 rounded bg-sky-500/20 text-sky-400 hover:bg-sky-500/30 text-[11px] font-bold"
+              >
+                📋 نسخ الكود
+              </button>
+            </div>
+            <pre className="font-mono text-[11px] text-emerald-400 bg-black/40 p-3 rounded-lg overflow-x-auto text-left" dir="ltr">
+{JSON.stringify(fullSample, null, 2)}
+            </pre>
+          </div>
+
+          <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-amber-500 space-y-1">
+            <p className="font-bold">⚠️ تنبيهات:</p>
+            <ul className="list-disc list-inside space-y-1 text-[11px]">
+              <li>الإجابة الصحيحة <code className="font-mono font-bold">correctAnswer</code> تكون بالحروف الكبيرة: <code className="font-mono">"A"</code>, <code className="font-mono">"B"</code>, <code className="font-mono">"C"</code>, أو <code className="font-mono">"D"</code>.</li>
+              <li>يمكنك أيضاً استيراد مصفوفة أسئلة مباشرة <code className="font-mono">[ &#123; ... &#125; ]</code>.</li>
+            </ul>
+          </div>
+        </div>
+
+        <div className="pt-2 text-left">
+          <button type="button" onClick={onClose} className="px-5 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-white font-bold text-xs">
+            إغلاق
+          </button>
+        </div>
       </div>
     </div>
   );
