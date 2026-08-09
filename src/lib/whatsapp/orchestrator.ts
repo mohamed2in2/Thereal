@@ -81,21 +81,41 @@ class WhatsAppOrchestrator {
     const mode = (config.deliveryMode || "baileys_primary") as DeliveryMode;
 
     let primary: ProviderId = "BAILEYS";
-    let fallback: ProviderId | null = "OFFICIAL_API";
+    let fallback: ProviderId | null = null;
+
+    // Meta API only supports OTP (authentication templates).
+    // All other message types (PARENT_LINK, NOTIFICATION, CUSTOM, ANNOUNCEMENT)
+    // must go through Baileys because Meta doesn't allow free-form text messages.
+    const isOtpMessage = params.messageType === "OTP";
 
     if (mode === "baileys_only") {
       primary = "BAILEYS";
       fallback = null;
     } else if (mode === "official_only") {
-      primary = "OFFICIAL_API";
-      fallback = null;
+      if (isOtpMessage) {
+        primary = "OFFICIAL_API";
+        fallback = "BAILEYS"; // Still fall back to Baileys if Meta fails
+      } else {
+        // Meta can't send non-OTP messages, use Baileys
+        primary = "BAILEYS";
+        fallback = null;
+      }
     } else if (mode === "official_primary") {
-      primary = "OFFICIAL_API";
-      fallback = "BAILEYS";
+      if (isOtpMessage) {
+        primary = "OFFICIAL_API";
+        fallback = "BAILEYS";
+      } else {
+        primary = "BAILEYS";
+        fallback = null;
+      }
     } else {
       // default: baileys_primary
       primary = "BAILEYS";
-      fallback = "OFFICIAL_API";
+      if (isOtpMessage) {
+        fallback = "OFFICIAL_API"; // Only OTP can fall back to Meta
+      } else {
+        fallback = null; // Non-OTP stays Baileys only
+      }
     }
 
     let retries = 0;
