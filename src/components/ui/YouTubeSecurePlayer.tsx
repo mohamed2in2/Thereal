@@ -312,9 +312,10 @@ export function YouTubeSecurePlayer({
       const lowerK = k.toLowerCase();
 
       const isPrtScn = k === "PrintScreen" || e.code === "PrintScreen";
-      const isWinSnipping = (e.metaKey || (e as any).winKey) && e.shiftKey && lowerK === "s";
-      const isWinGameBar = (e.metaKey || (e as any).winKey) && lowerK === "g";
-      const isMacScreenshot = e.metaKey && e.shiftKey && ["3", "4", "5", "#", "$", "%"].includes(k);
+      const isMeta = e.metaKey || (typeof e.getModifierState === "function" && (e.getModifierState("Meta") || e.getModifierState("OS")));
+      const isWinSnipping = isMeta && e.shiftKey && lowerK === "s";
+      const isWinGameBar = isMeta && lowerK === "g";
+      const isMacScreenshot = isMeta && e.shiftKey && ["3", "4", "5", "#", "$", "%"].includes(k);
       const isBrowserScreenshot = e.ctrlKey && e.shiftKey && lowerK === "s";
       const isDevTools =
         k === "F12" ||

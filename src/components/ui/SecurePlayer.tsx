@@ -203,12 +203,14 @@ export function SecurePlayer({
       // PrintScreen (PrtScn) / Alt+PrtScn / Win+PrtScn
       const isPrtScn = k === "PrintScreen" || e.code === "PrintScreen";
       
+      const isMeta = e.metaKey || (typeof e.getModifierState === "function" && (e.getModifierState("Meta") || e.getModifierState("OS")));
+
       // Windows Snipping Tool (Win + Shift + S) or Xbox Game Bar (Win + G)
-      const isWinSnipping = (e.metaKey || e.winKey) && e.shiftKey && (lowerK === "s");
-      const isWinGameBar = (e.metaKey || e.winKey) && (lowerK === "g");
+      const isWinSnipping = isMeta && e.shiftKey && (lowerK === "s");
+      const isWinGameBar = isMeta && (lowerK === "g");
 
       // Mac Screenshot Shortcuts: Cmd + Shift + 3, Cmd + Shift + 4, Cmd + Shift + 5
-      const isMacScreenshot = e.metaKey && e.shiftKey && ["3", "4", "5", "#", "$", "%"].includes(k);
+      const isMacScreenshot = isMeta && e.shiftKey && ["3", "4", "5", "#", "$", "%"].includes(k);
 
       // Browser Screenshot (Ctrl + Shift + S)
       const isBrowserScreenshot = e.ctrlKey && e.shiftKey && lowerK === "s";
