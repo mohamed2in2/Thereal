@@ -209,3 +209,52 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "حدث خطأ أثناء إضافة الطالب" }, { status: 500 });
   }
 }
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const session = await getSession();
+    if (!session || (session.role !== "teacher" && session.role !== "admin" && session.role !== "superadmin")) {
+      return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get("id");
+
+    if (!id) {
+      return NextResponse.json({ error: "معرف الاشتراك (id) مطلوب للحذف" }, { status: 400 });
+    }
+
+    const sub = await prisma.teacherSubscription.findUnique({
+      where: { id },
+      select: { id: true, teacherId: true, studentName: true, planLabel: true, studentId: true },
+    });
+
+    if (!sub) {
+      return NextResponse.json({ error: "الاشتراك غير موجود" }, { status: 404 });
+    }
+
+    // Security check: teacher can only delete subscriptions for their own account unless admin/superadmin
+    if (session.role === "teacher" && sub.teacherId !== session.id) {
+      return NextResponse.json({ error: "غير مصرح لك بحذف هذا الاشتراك" }, { status: 403 });
+    }
+
+    await prisma.teacherSubscription.delete({
+      where: { id },
+    });
+
+    const { logAdminAction } = await import("@/lib/admin-auth");
+    await logAdminAction({
+      adminId: session.id,
+      adminName: session.name,
+      action: "DELETE_TEACHER_SUBSCRIPTION",
+      targetType: "STUDENT",
+      targetId: sub.studentId,
+      targetName: `حذف اشتراك: ${sub.studentName} (${sub.planLabel})`,
+    }).catch(() => {});
+
+    return NextResponse.json({ success: true, message: "تم حذف الاشتراك وإغلاقه بنجاح" });
+  } catch (error) {
+    console.error("[teacher/subscriptions DELETE] error:", error);
+    return NextResponse.json({ error: "حدث خطأ أثناء حذف الاشتراك" }, { status: 500 });
+  }
+}

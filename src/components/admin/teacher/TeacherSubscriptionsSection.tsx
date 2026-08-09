@@ -115,6 +115,28 @@ export function TeacherSubscriptionsSection() {
     }
   };
 
+  const handleDeleteSubscription = async (sub: SubscriptionItem) => {
+    const studentName = sub.studentName || sub.student.name || "الطالب";
+    if (!window.confirm(`هل أنت تأكد من إلغاء وحذف اشتراك ${studentName} (${sub.planLabel})؟`)) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/teacher/subscriptions?id=${sub.id}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        toastSuccess("تم حذف وتفريغ الاشتراك بنجاح");
+        fetchSubscriptions();
+      } else {
+        toastError(data.error || "تعذر حذف الاشتراك");
+      }
+    } catch {
+      toastError("حدث خطأ في الشبكة أثناء الحذف");
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header Banner */}
@@ -208,6 +230,7 @@ export function TeacherSubscriptionsSection() {
                   <th className="p-4">رقم التواصل</th>
                   <th className="p-4">تاريخ الحجز</th>
                   <th className="p-4 text-center">الحالة</th>
+                  <th className="p-4 text-center">الإجراءات</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border)]">
@@ -248,6 +271,16 @@ export function TeacherSubscriptionsSection() {
                         <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
                           🟢 نشط
                         </span>
+                      </td>
+                      <td className="p-4 text-center">
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteSubscription(sub)}
+                          className="px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/20 text-[11px] font-bold transition-all cursor-pointer"
+                          title="إلغاء وحذف اشتراك هذا الطالب"
+                        >
+                          🗑️ حذف
+                        </button>
                       </td>
                     </tr>
                   );
