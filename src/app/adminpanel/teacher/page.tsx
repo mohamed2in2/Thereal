@@ -1329,8 +1329,8 @@ export default function TeacherDashboardPage() {
                               <div className="space-y-2">
                                 {f.videos?.map((video) => {
                                   const prov = video.videoProvider || "vdocipher";
-                                  const provLabel = prov === "bunny" ? "Bunny" : prov === "youtube" ? "YouTube" : "VdoCipher";
-                                  const provColor = prov === "bunny" ? "text-orange-500 bg-orange-500/12" : prov === "youtube" ? "text-red-500 bg-red-500/12" : "text-sky-500 bg-sky-500/12";
+                                  const provLabel = prov === "bunny" ? "Bunny CDN" : prov === "youtube" ? "YouTube" : prov === "alasly" ? "Native" : "VdoCipher";
+                                  const provColor = prov === "bunny" ? "text-orange-500 bg-orange-500/12" : prov === "youtube" ? "text-red-500 bg-red-500/12" : prov === "alasly" ? "text-emerald-500 bg-emerald-500/12" : "text-sky-500 bg-sky-500/12";
                                   return (
                                     <div key={video.id} className="flex flex-col gap-2 rounded-xl border border-[var(--border)] bg-[var(--bg)] p-3">
                                       <div className="flex flex-wrap items-center gap-2">
