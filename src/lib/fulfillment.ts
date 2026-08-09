@@ -106,6 +106,8 @@ export async function fulfillPendingItemPurchase({
     const expiresAt = new Date(baseDate);
     expiresAt.setMonth(expiresAt.getMonth() + months);
 
+    const trackedLang = isLanguages ? "languages" : "arabic";
+
     await tx.teacherSubscription.upsert({
       where: {
         studentId_teacherId_planType: {
@@ -121,6 +123,7 @@ export async function fulfillPendingItemPurchase({
         planLabel,
         amount: baseAmount,
         educationalStage: targetStage,
+        languageTrack: trackedLang,
         studentName: studentUser?.name,
         studentPhone: studentUser?.phone,
         parentPhone: studentUser?.parentPhone,
@@ -131,6 +134,7 @@ export async function fulfillPendingItemPurchase({
         planLabel,
         amount: baseAmount,
         educationalStage: targetStage,
+        languageTrack: trackedLang,
         studentName: studentUser?.name,
         studentPhone: studentUser?.phone,
         parentPhone: studentUser?.parentPhone,

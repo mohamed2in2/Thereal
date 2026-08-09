@@ -85,24 +85,15 @@ export async function verifyAuthoritativePrice(params: {
     }
 
     const isLanguages = languageTrack === "languages" || languageTrack === "english";
-    const monthsMap: Record<string, number> = { monthly: 1, termly: 3, yearly: 6 };
-    const months = monthsMap[planType] || 1;
+    const langMonthsMap: Record<string, number> = { monthly: 1, termly: 5, yearly: 10 };
+    const langMonths = langMonthsMap[planType] || 1;
 
-    if (isLanguages && (profile.priceLanguagesMonthly === null || profile.priceLanguagesMonthly === undefined || profile.priceLanguagesMonthly < 0)) {
-      return {
-        valid: false,
-        expectedPrice: 0,
-        itemName: "اشتراك معلم",
-        error: "لسه الأستاذ محددش سعر مسار اللغات (Language Track). كلّم الدعم.",
-      };
-    }
-
-    const langRate = isLanguages ? (profile.priceLanguagesMonthly ?? 0) : 0;
-    const languageSurcharge = langRate * months;
+    const langRate = isLanguages ? (profile.priceLanguagesMonthly ?? 50) : 0;
+    const languageSurcharge = langRate * langMonths;
 
     const expectedPrice = Math.max(planPrice + languageSurcharge, 1);
     const teacherName = profile.displayName || teacher.name;
-    const itemName = `اشتراك ${planType === "monthly" ? "شهري" : planType === "termly" ? "ترمي" : "سنوي"} مع ${teacherName}`;
+    const itemName = `اشتراك ${planType === "monthly" ? "شهري" : planType === "termly" ? "ترمي" : "سنوي"} (${isLanguages ? "لغات / إنجليزي" : "عربي"}) مع ${teacherName}`;
 
     // Reject if client amount is lower than expected
     if (amount < expectedPrice - 0.01) {

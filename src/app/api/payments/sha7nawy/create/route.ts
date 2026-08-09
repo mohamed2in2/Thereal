@@ -242,6 +242,8 @@ export async function POST(req: NextRequest) {
               },
             });
 
+            const trackedLang = isLanguages ? "languages" : "arabic";
+
             await tx.teacherSubscription.upsert({
               where: {
                 studentId_teacherId_planType: {
@@ -257,6 +259,7 @@ export async function POST(req: NextRequest) {
                 planLabel,
                 amount: verifiedBaseAmount,
                 educationalStage: userDetails?.educationalStage,
+                languageTrack: trackedLang,
                 studentName: userDetails?.name,
                 studentPhone: userDetails?.phone,
                 parentPhone: userDetails?.parentPhone,
@@ -267,6 +270,7 @@ export async function POST(req: NextRequest) {
                 planLabel,
                 amount: verifiedBaseAmount,
                 educationalStage: userDetails?.educationalStage,
+                languageTrack: trackedLang,
                 studentName: userDetails?.name,
                 studentPhone: userDetails?.phone,
                 parentPhone: userDetails?.parentPhone,

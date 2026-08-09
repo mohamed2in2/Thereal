@@ -379,6 +379,16 @@ export function TeacherPublicProfile() {
         {(() => {
           const currentP = getStagePricing(activeStage);
           const stageName = activeStage === "sec_1" ? "أولى بكالوريا" : "ثانية بكالوريا";
+          const langRate = p.priceLanguagesMonthly ?? 50;
+
+          const monthlyAr = currentP.priceMonthly ?? 180;
+          const termlyAr = currentP.priceTermly ?? 750;
+          const yearlyAr = currentP.priceYearly ?? 1200;
+
+          const monthlyEn = monthlyAr + (1 * langRate);
+          const termlyEn = termlyAr + (5 * langRate);
+          const yearlyEn = yearlyAr + (10 * langRate);
+
           return (
             <div className="space-y-4">
               <div className="px-3 py-2 rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-400 text-xs font-bold flex items-center justify-between">
@@ -386,18 +396,48 @@ export function TeacherPublicProfile() {
                 <span className="text-[10px] text-[var(--ink-muted)]">التعديلات أدناه تنطبق على طلاب {stageName} فقط</span>
               </div>
 
+              {/* Languages Track Surcharge Config */}
+              <div className="p-4 rounded-xl border border-indigo-500/30 bg-indigo-500/5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-sm text-[var(--ink)] flex items-center gap-2">
+                    <span>🇬🇧</span> رسوم مسار اللغات / إنجليزي (إضافة شهرياً)
+                  </h4>
+                  <span className="text-xs font-mono text-indigo-400 bg-indigo-500/10 px-2.5 py-1 rounded-full border border-indigo-500/20 font-bold">
+                    +{langRate} جنيه / شهرياً
+                  </span>
+                </div>
+                <div>
+                  <label className={label}>المبلغ المضاف لطلاب اللغات شهرياً (افتراضي 50 جنيه):</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    className={input}
+                    value={p.priceLanguagesMonthly ?? 50}
+                    onChange={(e) => set("priceLanguagesMonthly", e.target.value ? Number(e.target.value) : 0)}
+                    placeholder="50"
+                  />
+                  <p className="text-[11px] text-[var(--ink-muted)] mt-1.5">
+                    يتم ضرب هذه الإضافة تلقائياً: 1 شهر للشهري (+{langRate}ج)، 5 شهور للترم (+{langRate * 5}ج)، و10 شهور للسنة الكاملة (+{langRate * 10}ج).
+                  </p>
+                </div>
+              </div>
+
               {/* 1 Month Plan */}
               <div className="p-4 rounded-xl border border-[var(--border)] bg-[var(--bg)]">
                 <h4 className="font-bold text-sm text-[var(--ink)] mb-3 flex items-center justify-between">
                   <span className="flex items-center gap-2"><span>📅</span> اشتراك شهر واحد</span>
-                  {currentP.priceMonthly && (
-                    <span className="text-xs font-mono text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
-                      السعر الحقيقي: {currentP.priceMonthly}ج
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-mono text-sky-400 bg-sky-500/10 px-2.5 py-1 rounded-full border border-sky-500/20">
+                      عربي: {monthlyAr}ج
                     </span>
-                  )}
+                    <span className="text-xs font-mono text-indigo-400 bg-indigo-500/10 px-2.5 py-1 rounded-full border border-indigo-500/20">
+                      لغات: {monthlyEn}ج
+                    </span>
+                  </div>
                 </h4>
                 <div>
-                  <label className={label}>السعر المباشر (جنيه - افتراضي 180ج)</label>
+                  <label className={label}>السعر المباشر للمسار العربي (جنيه - افتراضي 180ج)</label>
                   <input
                     type="number"
                     min="0"
@@ -413,15 +453,18 @@ export function TeacherPublicProfile() {
               {/* 3 Months Plan (Term) */}
               <div className="p-4 rounded-xl border border-[var(--border)] bg-[var(--bg)]">
                 <h4 className="font-bold text-sm text-[var(--ink)] mb-3 flex items-center justify-between">
-                  <span className="flex items-center gap-2"><span>📚</span> اشتراك الترم</span>
-                  {currentP.priceTermly && (
+                  <span className="flex items-center gap-2"><span>📚</span> اشتراك الترم (5 شهور لغات)</span>
+                  <div className="flex items-center gap-2">
                     <span className="text-xs font-mono text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/20">
-                      السعر الحقيقي: {currentP.priceTermly}ج
+                      عربي: {termlyAr}ج
                     </span>
-                  )}
+                    <span className="text-xs font-mono text-indigo-400 bg-indigo-500/10 px-2.5 py-1 rounded-full border border-indigo-500/20">
+                      لغات: {termlyEn}ج (+{langRate * 5}ج)
+                    </span>
+                  </div>
                 </h4>
                 <div>
-                  <label className={label}>السعر المباشر (جنيه - افتراضي 750ج)</label>
+                  <label className={label}>السعر المباشر للمسار العربي (جنيه - افتراضي 750ج)</label>
                   <input
                     type="number"
                     min="0"
@@ -437,15 +480,18 @@ export function TeacherPublicProfile() {
               {/* 6 Months Plan (Year) */}
               <div className="p-4 rounded-xl border border-[var(--border)] bg-[var(--bg)]">
                 <h4 className="font-bold text-sm text-[var(--ink)] mb-3 flex items-center justify-between">
-                  <span className="flex items-center gap-2"><span>🎓</span> اشتراك سنة كاملة</span>
-                  {currentP.priceYearly && (
+                  <span className="flex items-center gap-2"><span>🎓</span> اشتراك سنة كاملة (10 شهور لغات)</span>
+                  <div className="flex items-center gap-2">
                     <span className="text-xs font-mono text-purple-400 bg-purple-500/10 px-2.5 py-1 rounded-full border border-purple-500/20">
-                      السعر الحقيقي: {currentP.priceYearly}ج
+                      عربي: {yearlyAr}ج
                     </span>
-                  )}
+                    <span className="text-xs font-mono text-indigo-400 bg-indigo-500/10 px-2.5 py-1 rounded-full border border-indigo-500/20">
+                      لغات: {yearlyEn}ج (+{langRate * 10}ج)
+                    </span>
+                  </div>
                 </h4>
                 <div>
-                  <label className={label}>السعر المباشر (جنيه - افتراضي 1200ج)</label>
+                  <label className={label}>السعر المباشر للمسار العربي (جنيه - افتراضي 1200ج)</label>
                   <input
                     type="number"
                     min="0"
@@ -455,6 +501,27 @@ export function TeacherPublicProfile() {
                     onChange={(e) => updateStageField("priceYearly", e.target.value ? Number(e.target.value) : null)}
                     placeholder="1200"
                   />
+                </div>
+              </div>
+
+              {/* Comparison Summary Card */}
+              <div className="p-4 rounded-2xl border border-sky-500/30 bg-sky-500/5 space-y-3">
+                <h4 className="font-black text-xs text-sky-400 flex items-center gap-2">
+                  <span>📊</span> ملخص أسعار الحجز المباشر لطلاب ({stageName}):
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div className="p-3 rounded-xl bg-[var(--surface)] border border-[var(--border)] space-y-1">
+                    <span className="font-bold text-sky-500 block">🇪🇬 المسار العربي:</span>
+                    <p className="text-[11px] text-[var(--ink-muted)]">📅 شهري: <strong className="text-[var(--ink)]">{monthlyAr} جنيه</strong></p>
+                    <p className="text-[11px] text-[var(--ink-muted)]">📚 ترم كامل: <strong className="text-[var(--ink)]">{termlyAr} جنيه</strong></p>
+                    <p className="text-[11px] text-[var(--ink-muted)]">🎓 سنة كاملة: <strong className="text-[var(--ink)]">{yearlyAr} جنيه</strong></p>
+                  </div>
+                  <div className="p-3 rounded-xl bg-[var(--surface)] border border-[var(--border)] space-y-1">
+                    <span className="font-bold text-indigo-400 block">🇬🇧 مسار اللغات / إنجليزي:</span>
+                    <p className="text-[11px] text-[var(--ink-muted)]">📅 شهري: <strong className="text-[var(--ink)]">{monthlyEn} جنيه</strong> (+{langRate}ج)</p>
+                    <p className="text-[11px] text-[var(--ink-muted)]">📚 ترم كامل: <strong className="text-[var(--ink)]">{termlyEn} جنيه</strong> (+{langRate * 5}ج)</p>
+                    <p className="text-[11px] text-[var(--ink-muted)]">🎓 سنة كاملة: <strong className="text-[var(--ink)]">{yearlyEn} جنيه</strong> (+{langRate * 10}ج)</p>
+                  </div>
                 </div>
               </div>
             </div>

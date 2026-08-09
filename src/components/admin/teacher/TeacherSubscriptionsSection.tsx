@@ -12,6 +12,7 @@ interface SubscriptionItem {
   planLabel: string;
   amount: number;
   educationalStage: string | null;
+  languageTrack?: string | null;
   studentName: string | null;
   studentPhone: string | null;
   parentPhone: string | null;
@@ -47,11 +48,13 @@ export function TeacherSubscriptionsSection() {
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState("");
   const [planFilter, setPlanFilter] = useState("");
+  const [trackFilter, setTrackFilter] = useState("");
 
   // Add modal state
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [studentInput, setStudentInput] = useState("");
   const [selectedPlanType, setSelectedPlanType] = useState("monthly");
+  const [selectedLanguageTrack, setSelectedLanguageTrack] = useState("arabic");
   const [adding, setAdding] = useState(false);
 
   const fetchSubscriptions = useCallback(async () => {
@@ -61,6 +64,7 @@ export function TeacherSubscriptionsSection() {
       if (search) params.set("q", search);
       if (stageFilter) params.set("stage", stageFilter);
       if (planFilter) params.set("plan", planFilter);
+      if (trackFilter) params.set("track", trackFilter);
 
       const res = await fetch(`/api/teacher/subscriptions?${params.toString()}`);
       const data = await res.json();
@@ -74,7 +78,7 @@ export function TeacherSubscriptionsSection() {
     } finally {
       setLoading(false);
     }
-  }, [search, stageFilter, planFilter, toastError]);
+  }, [search, stageFilter, planFilter, trackFilter, toastError]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -97,6 +101,7 @@ export function TeacherSubscriptionsSection() {
         body: JSON.stringify({
           studentEmailOrPhone: studentInput.trim(),
           planType: selectedPlanType,
+          languageTrack: selectedLanguageTrack,
         }),
       });
       const data = await res.json();
@@ -147,7 +152,7 @@ export function TeacherSubscriptionsSection() {
             الطلاب الحاطين واشتراكاتهم
           </h2>
           <p className="text-xs text-[var(--ink-muted)] mt-1">
-            عرض وتصنيف جميع الطلاب الذين قاموا بحجز اشتراكاتك (شهري / ترم / سنوي) ومعلومات التواصل الخاصة بهم.
+            عرض وتصنيف جميع الطلاب الذين قاموا بحجز اشتراكاتك ومعرفة المسار المختار (عربي / لغات).
           </p>
         </div>
 
@@ -161,7 +166,7 @@ export function TeacherSubscriptionsSection() {
       </div>
 
       {/* Filters */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
         <input
           type="text"
           value={search}
@@ -191,6 +196,16 @@ export function TeacherSubscriptionsSection() {
           <option value="termly">اشتراك ترم كامل</option>
           <option value="yearly">اشتراك سنوي</option>
         </select>
+
+        <select
+          value={trackFilter}
+          onChange={(e) => setTrackFilter(e.target.value)}
+          className="w-full px-4 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] text-[var(--ink)] text-xs focus:outline-none focus:border-sky-400"
+        >
+          <option value="">جميع مسارات الدراسة</option>
+          <option value="arabic">🇪🇬 المسار العربي</option>
+          <option value="languages">🇬🇧 مسار اللغات / إنجليزي</option>
+        </select>
       </div>
 
       {/* Stats Summary */}
@@ -200,12 +215,16 @@ export function TeacherSubscriptionsSection() {
           <span className="text-xl font-black text-sky-500">{subscriptions.length} طالب</span>
         </div>
         <div className="p-4 rounded-xl border border-[var(--border)] bg-[var(--surface)]">
-          <span className="text-[10px] font-bold text-[var(--ink-muted)] block">اشتراكات شهرية</span>
-          <span className="text-xl font-black text-blue-500">{subscriptions.filter((s) => s.planType === "monthly").length}</span>
+          <span className="text-[10px] font-bold text-[var(--ink-muted)] block">مسار عربي</span>
+          <span className="text-xl font-black text-sky-400">
+            {subscriptions.filter((s) => !s.languageTrack || s.languageTrack === "arabic").length}
+          </span>
         </div>
         <div className="p-4 rounded-xl border border-[var(--border)] bg-[var(--surface)]">
-          <span className="text-[10px] font-bold text-[var(--ink-muted)] block">اشتراكات ترم</span>
-          <span className="text-xl font-black text-amber-500">{subscriptions.filter((s) => s.planType === "termly").length}</span>
+          <span className="text-[10px] font-bold text-[var(--ink-muted)] block">مسار لغات / إنجليزي</span>
+          <span className="text-xl font-black text-indigo-400">
+            {subscriptions.filter((s) => s.languageTrack === "languages" || s.languageTrack === "english").length}
+          </span>
         </div>
         <div className="p-4 rounded-xl border border-[var(--border)] bg-[var(--surface)]">
           <span className="text-[10px] font-bold text-[var(--ink-muted)] block">اشتراكات سنوية</span>
@@ -226,6 +245,7 @@ export function TeacherSubscriptionsSection() {
                 <tr>
                   <th className="p-4">الطالب</th>
                   <th className="p-4">المرحلة الدراسية</th>
+                  <th className="p-4">مسار الدراسة</th>
                   <th className="p-4">الباقة المشتراة</th>
                   <th className="p-4">رقم التواصل</th>
                   <th className="p-4">تاريخ الحجز</th>
@@ -240,6 +260,7 @@ export function TeacherSubscriptionsSection() {
                   const badge = PLAN_BADGES[sub.planType] || { label: sub.planLabel, bg: "rgba(99,102,241,0.12)", color: "#6366f1" };
                   const phone = sub.studentPhone || sub.student.phone || "-";
                   const parentPhone = sub.parentPhone || sub.student.parentPhone || "-";
+                  const isLang = sub.languageTrack === "languages" || sub.languageTrack === "english";
 
                   return (
                     <tr key={sub.id} className="hover:bg-[var(--bg)]/50 transition-colors">
@@ -248,6 +269,17 @@ export function TeacherSubscriptionsSection() {
                         <div className="text-[10px] text-[var(--ink-muted)] font-mono">{sub.student.email}</div>
                       </td>
                       <td className="p-4 font-semibold text-[var(--ink)]">{stage}</td>
+                      <td className="p-4">
+                        <span
+                          className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold ${
+                            isLang
+                              ? "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20"
+                              : "bg-sky-500/10 text-sky-400 border border-sky-500/20"
+                          }`}
+                        >
+                          {isLang ? "🇬🇧 لغات / إنجليزي" : "🇪🇬 عربي"}
+                        </span>
+                      </td>
                       <td className="p-4">
                         <span
                           className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold"
@@ -310,6 +342,18 @@ export function TeacherSubscriptionsSection() {
                   placeholder="مثال: student@email.com أو 01012345678"
                   className="w-full p-3 rounded-xl border border-[var(--border)] bg-[var(--bg)] text-xs text-[var(--ink)] focus:outline-none focus:border-sky-400"
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold mb-1 text-[var(--ink-muted)]">اختر مسار الدراسة:</label>
+                <select
+                  value={selectedLanguageTrack}
+                  onChange={(e) => setSelectedLanguageTrack(e.target.value)}
+                  className="w-full p-3 rounded-xl border border-[var(--border)] bg-[var(--bg)] text-xs text-[var(--ink)] focus:outline-none focus:border-sky-400"
+                >
+                  <option value="arabic">🇪🇬 المسار العربي</option>
+                  <option value="languages">🇬🇧 مسار اللغات / إنجليزي</option>
+                </select>
               </div>
 
               <div>

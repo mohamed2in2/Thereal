@@ -190,10 +190,44 @@ export function BookingButton({
   const baseTermly = stageConfig.priceTermly > 0 ? stageConfig.priceTermly : 750;
   const baseYearly = stageConfig.priceYearly > 0 ? stageConfig.priceYearly : 1200;
 
+  const langRate = priceLanguagesMonthly ?? 50;
+  const isLanguages = languageTrack === "languages";
+
+  const monthlyPrice = baseMonthly + (isLanguages ? 1 * langRate : 0);
+  const termlyPrice = baseTermly + (isLanguages ? 5 * langRate : 0);
+  const yearlyPrice = baseYearly + (isLanguages ? 10 * langRate : 0);
+
   const plans: BookingPlan[] = [
-    createPlan("monthly", "اشتراك شهر واحد", "شهر واحد فقط", baseMonthly, null, "📅", "#3B82F6", "rgba(59,130,246,0.1)"),
-    createPlan("termly", "اشتراك الترم", "ترم دراسي كامل", baseTermly, null, "📚", "#F59E0B", "rgba(245,158,11,0.1)"),
-    createPlan("yearly", "اشتراك سنة كاملة", "سنة دراسية كاملة", baseYearly, null, "🎓", "#10B981", "rgba(16,185,129,0.1)"),
+    createPlan(
+      "monthly",
+      `اشتراك شهر واحد ${isLanguages ? "(لغات)" : "(عربي)"}`,
+      isLanguages ? `يشمل رسوم اللغات (+${langRate}ج)` : "شهر واحد فقط",
+      monthlyPrice,
+      null,
+      "📅",
+      "#3B82F6",
+      "rgba(59,130,246,0.1)"
+    ),
+    createPlan(
+      "termly",
+      `اشتراك الترم ${isLanguages ? "(لغات)" : "(عربي)"}`,
+      isLanguages ? `يشمل رسوم اللغات 5 شهور (+${langRate * 5}ج)` : "ترم دراسي كامل",
+      termlyPrice,
+      null,
+      "📚",
+      "#F59E0B",
+      "rgba(245,158,11,0.1)"
+    ),
+    createPlan(
+      "yearly",
+      `اشتراك سنة كاملة ${isLanguages ? "(لغات)" : "(عربي)"}`,
+      isLanguages ? `يشمل رسوم اللغات 10 شهور (+${langRate * 10}ج)` : "سنة دراسية كاملة",
+      yearlyPrice,
+      null,
+      "🎓",
+      "#10B981",
+      "rgba(16,185,129,0.1)"
+    ),
   ];
 
   const maxDiscount = plans.reduce((max, p) => (p.discountPercent && p.discountPercent > max ? p.discountPercent : max), 0);
@@ -343,6 +377,38 @@ export function BookingButton({
                     ))}
                   </select>
                 </div>
+
+                {enableLanguagesTrack && (
+                  <div>
+                    <label className="block text-xs font-bold mb-1.5" style={{ color: "var(--ink-muted, #aaa)" }}>
+                      🌐 مسار الدراسة (عربي / لغات):
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setLanguageTrack("arabic")}
+                        className={`p-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                          languageTrack === "arabic"
+                            ? "bg-sky-500/20 text-sky-400 border-sky-500/50 shadow-md"
+                            : "bg-[var(--surface,#1a1f2e)] text-[var(--ink-muted,#888)] border-[var(--border,rgba(255,255,255,0.1))] hover:text-white"
+                        }`}
+                      >
+                        <span>🇪🇬</span> المسار العربي
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setLanguageTrack("languages")}
+                        className={`p-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                          languageTrack === "languages"
+                            ? "bg-indigo-500/20 text-indigo-400 border-indigo-500/50 shadow-md"
+                            : "bg-[var(--surface,#1a1f2e)] text-[var(--ink-muted,#888)] border-[var(--border,rgba(255,255,255,0.1))] hover:text-white"
+                        }`}
+                      >
+                        <span>🇬🇧</span> مسار اللغات / إنجليزي
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Plans Selection */}

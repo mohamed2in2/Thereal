@@ -12,6 +12,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const stage = searchParams.get("stage");
     const plan = searchParams.get("plan");
+    const track = searchParams.get("track");
     const query = searchParams.get("q");
 
     const teacherId = session.id;
@@ -20,6 +21,7 @@ export async function GET(req: NextRequest) {
 
     if (stage) where.educationalStage = stage;
     if (plan) where.planType = plan;
+    if (track) where.languageTrack = track;
     if (query) {
       where.OR = [
         { studentName: { contains: query, mode: "insensitive" } },
@@ -71,7 +73,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "حساب تجريبي — لا يمكن تسجيل مشتركين يدويين" }, { status: 403 });
     }
 
-    const { studentEmailOrPhone, planType, planLabel, educationalStage } = await req.json().catch(() => ({}));
+    const { studentEmailOrPhone, planType, planLabel, educationalStage, languageTrack } = await req.json().catch(() => ({}));
 
     if (!studentEmailOrPhone || !planType) {
       return NextResponse.json({ error: "بيانات الطالب ونوع الباقة مطلوبة" }, { status: 400 });
@@ -98,7 +100,7 @@ export async function POST(req: NextRequest) {
 
     const profile = await prisma.teacherProfile.findUnique({
       where: { teacherId: session.id },
-      select: { priceMonthly: true, priceTermly: true, priceYearly: true, stagePricing: true },
+      select: { priceMonthly: true, priceTermly: true, priceYearly: true, stagePricing: true, priceLanguagesMonthly: true },
     });
 
     const monthsMap: Record<string, number> = {
@@ -132,10 +134,18 @@ export async function POST(req: NextRequest) {
       } catch {}
     }
 
+    const isLanguages = languageTrack === "languages" || languageTrack === "english";
+    const langMonthsMap: Record<string, number> = { monthly: 1, termly: 5, yearly: 10 };
+    const langRate = isLanguages ? (profile?.priceLanguagesMonthly ?? 50) : 0;
+    const languageSurcharge = langRate * (langMonthsMap[planType] || 1);
+    subPrice += languageSurcharge;
+
+    const trackedLang = isLanguages ? "languages" : "arabic";
+
     const labelMap: Record<string, string> = {
-      monthly: "اشتراك شهري (1 Month)",
-      termly: "اشتراك ترم كامل (3 Months)",
-      yearly: "اشتراك سنوي (6 Months)",
+      monthly: `اشتراك شهري (${isLanguages ? "لغات" : "عربي"})`,
+      termly: `اشتراك ترم كامل (${isLanguages ? "لغات" : "عربي"})`,
+      yearly: `اشتراك سنوي (${isLanguages ? "لغات" : "عربي"})`,
     };
 
     // Calculate expiry extending from current active expiresAt
@@ -174,6 +184,7 @@ export async function POST(req: NextRequest) {
         planLabel: planLabel || labelMap[planType] || "اشتراك معلم",
         amount: subPrice,
         educationalStage: targetStage,
+        languageTrack: trackedLang,
         studentName: student.name,
         studentPhone: student.phone,
         parentPhone: student.parentPhone,
@@ -184,6 +195,7 @@ export async function POST(req: NextRequest) {
         planLabel: planLabel || labelMap[planType] || "اشتراك معلم",
         amount: subPrice,
         educationalStage: targetStage,
+        languageTrack: trackedLang,
         studentName: student.name,
         studentPhone: student.phone,
         parentPhone: student.parentPhone,
