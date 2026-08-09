@@ -32,6 +32,9 @@ export interface ProviderStatus {
   name: string;
   connected: boolean;
   statusText: string;
+  qrCodeDataUrl?: string | null;
+  state?: string;
+  user?: { jid?: string; name?: string; phone?: string } | null;
   health: ProviderHealth;
 }
 

@@ -90,6 +90,7 @@ class BaileysProvider implements WhatsAppProvider {
     const isConn = whatsappClient.isConnected();
     const state = whatsappClient.getState();
     const user = whatsappClient.getConnectedUser();
+    const clientStatus = whatsappClient.getStatus();
 
     const estWaitMs = messageQueue.getEstimatedWaitTimeMs();
     const waitSec = Math.round(estWaitMs / 1000);
@@ -101,7 +102,14 @@ class BaileysProvider implements WhatsAppProvider {
       connected: isConn,
       statusText: isConn
         ? `🟢 Connected (${user || "Paired"})${queueWarn}`
+        : state === "PAIRING"
+        ? "📱 QR Code Ready — Scan to pair"
+        : state === "CONNECTING"
+        ? "⏳ Connecting..."
         : `🔴 Disconnected (${state})`,
+      qrCodeDataUrl: clientStatus.qrCodeDataUrl,
+      state: state,
+      user: clientStatus.user,
       health: {
         online: isConn,
         lastSuccessfulSend: this.lastSuccessfulSend,

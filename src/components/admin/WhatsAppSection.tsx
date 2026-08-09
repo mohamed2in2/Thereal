@@ -129,8 +129,15 @@ export function WhatsAppSection() {
         body: JSON.stringify({ action }),
       });
       const json = await res.json();
-      alert(json.message || "تم تنفيذ الإجراء");
+      if (action === "logout") {
+        alert(json.message || "تم تنفيذ الإجراء");
+      }
+      // For reconnect, don't show alert — the QR code will appear automatically
+      // Fetch immediately to show QR code faster
       fetchStatus();
+      // Fetch again after a short delay to catch the QR code generation
+      setTimeout(fetchStatus, 2000);
+      setTimeout(fetchStatus, 4000);
     } catch {
       alert("حدث خطأ أثناء الاتصال");
     }
@@ -289,17 +296,71 @@ export function WhatsAppSection() {
                 </div>
               </div>
 
+              {/* QR Code Display Area — Visible when disconnected/pairing */}
+              {!baileys?.connected && (
+                <div className="bg-slate-950/80 p-4 rounded-xl border border-slate-800 space-y-3">
+                  {baileys?.state === "PAIRING" && baileys?.qrCodeDataUrl ? (
+                    <>
+                      <div className="flex items-center gap-2 text-xs font-bold text-emerald-400">
+                        <span className="relative flex h-2.5 w-2.5">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+                        </span>
+                        📱 QR Code جاهز — امسح الكود بواتساب الآن
+                      </div>
+                      <div className="flex justify-center">
+                        <div className="bg-white p-3 rounded-2xl shadow-lg shadow-emerald-500/10">
+                          <img
+                            src={baileys.qrCodeDataUrl}
+                            alt="WhatsApp QR Code"
+                            className="w-48 h-48 sm:w-56 sm:h-56"
+                          />
+                        </div>
+                      </div>
+                      <p className="text-[11px] text-slate-400 text-center">
+                        افتح واتساب على هاتفك → الأجهزة المرتبطة → ربط جهاز → امسح الكود
+                      </p>
+                    </>
+                  ) : baileys?.state === "CONNECTING" ? (
+                    <div className="flex items-center justify-center gap-3 py-4">
+                      <div className="w-6 h-6 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
+                      <span className="text-xs font-bold text-sky-400">⏳ جاري الاتصال بخوادم واتساب...</span>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-3 py-4">
+                      <div className="w-12 h-12 rounded-full bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-xl">
+                        📵
+                      </div>
+                      <p className="text-xs font-bold text-rose-400">غير متصل — اضغط &quot;إعادة الاتصال&quot; لتوليد QR Code جديد</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Connected User Info */}
+              {baileys?.connected && baileys?.user && (
+                <div className="bg-emerald-500/10 p-3 rounded-xl border border-emerald-500/30 flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full bg-emerald-500/20 flex items-center justify-center text-lg">✅</div>
+                  <div>
+                    <p className="text-xs font-bold text-emerald-400">متصل بنجاح</p>
+                    <p className="text-[11px] text-slate-300 font-mono dir-ltr">
+                      {baileys.user.phone || baileys.user.name || baileys.user.jid}
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Action Buttons */}
               <div className="flex items-center gap-2 pt-1">
                 <button
                   onClick={() => handleAction("reconnect")}
-                  className="flex-1 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold border border-slate-700 transition-all cursor-pointer"
+                  className="flex-1 py-2.5 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 text-xs font-bold border border-sky-500/30 transition-all cursor-pointer flex items-center justify-center gap-1.5"
                 >
-                  🔄 إعادة الاتصال بالخادم
+                  🔄 {baileys?.connected ? "إعادة الاتصال" : "توليد QR Code جديد"}
                 </button>
                 <button
                   onClick={() => handleAction("logout")}
-                  className="px-4 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-xs font-bold border border-rose-500/30 transition-all cursor-pointer"
+                  className="px-4 py-2.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-xs font-bold border border-rose-500/30 transition-all cursor-pointer"
                 >
                   🚪 خروج
                 </button>

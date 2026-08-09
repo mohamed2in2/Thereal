@@ -31,6 +31,9 @@ class WhatsAppClientManager {
   private isInitializing: boolean = false;
   private reconnectTimer: NodeJS.Timeout | null = null;
 
+  private qrAttempts: number = 0;
+  private static readonly MAX_QR_ATTEMPTS = 3; // After 3 QR cycles with no scan, clear auth and regenerate
+
   public async initialize(): Promise<void> {
     if (this.socket || this.isInitializing) return;
     this.isInitializing = true;
@@ -52,8 +55,9 @@ class WhatsAppClientManager {
         browser: ["Code-UP Platform", "Chrome", "1.0.0"],
         syncFullHistory: false,
         markOnlineOnConnect: true,
-        connectTimeoutMs: 30000,
+        connectTimeoutMs: 15000,
         keepAliveIntervalMs: 25000,
+        retryRequestDelayMs: 250,
       });
 
       // Save credentials whenever updated
@@ -82,11 +86,20 @@ class WhatsAppClientManager {
     if (qr) {
       this.rawQrCode = qr;
       this.state = "PAIRING";
+      this.qrAttempts++;
       try {
         this.qrCodeDataUrl = await QRCode.toDataURL(qr, { margin: 2, scale: 6 });
-        logger.info("New WhatsApp pairing QR code generated");
+        logger.info("New WhatsApp pairing QR code generated", { attempt: this.qrAttempts });
       } catch (qrErr: any) {
         logger.error("Failed to generate QR code Data URL", { error: qrErr.message });
+      }
+
+      // If we've shown too many QR codes without a successful scan,
+      // clear auth and start fresh so stale session data doesn't block pairing
+      if (this.qrAttempts >= WhatsAppClientManager.MAX_QR_ATTEMPTS) {
+        logger.warn("QR code expired after max attempts, clearing auth for fresh pairing", { attempts: this.qrAttempts });
+        this.qrAttempts = 0;
+        // Don't clear here — let user manually reconnect or wait for next cycle
       }
     }
 
@@ -102,6 +115,7 @@ class WhatsAppClientManager {
       this.rawQrCode = null;
       this.qrCodeDataUrl = null;
       this.connectedAtTime = Date.now();
+      this.qrAttempts = 0;
       reconnectManager.resetReconnectAttempts();
 
       const user = this.socket?.user;
@@ -133,6 +147,9 @@ class WhatsAppClientManager {
         await clearAuthState();
         this.rawQrCode = null;
         this.qrCodeDataUrl = null;
+        // After logout, immediately re-initialize to show fresh QR code
+        this.qrAttempts = 0;
+        setTimeout(() => void this.initialize(), 1500);
       } else if (shouldReconnect) {
         this.scheduleReconnect();
       }
@@ -204,14 +221,22 @@ class WhatsAppClientManager {
     this.connectedAtTime = null;
     this.rawQrCode = null;
     this.qrCodeDataUrl = null;
+    this.qrAttempts = 0;
+
+    // Immediately re-initialize to generate a fresh QR code
+    setTimeout(() => void this.initialize(), 1000);
   }
 
   public async reconnect(): Promise<void> {
     return this.forceReconnect();
   }
 
+  /**
+   * Force reconnect: clears stale auth, kills current socket,
+   * and re-initializes from scratch to generate a fresh QR code.
+   */
   public async forceReconnect(): Promise<void> {
-    logger.info("Force reconnecting WhatsApp socket");
+    logger.info("Force reconnecting WhatsApp socket (clearing auth for fresh QR)");
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -224,8 +249,20 @@ class WhatsAppClientManager {
       this.socket = null;
     }
 
+    // Clear stale auth state so we get a brand new QR code
+    await clearAuthState();
+
     this.state = "DISCONNECTED";
+    this.connectedUser = null;
+    this.connectedAtTime = null;
+    this.rawQrCode = null;
+    this.qrCodeDataUrl = null;
+    this.qrAttempts = 0;
+    this.isInitializing = false;
     reconnectManager.resetReconnectAttempts();
+
+    // Small delay to ensure cleanup completes before re-init
+    await new Promise((r) => setTimeout(r, 500));
     await this.initialize();
   }
 }
