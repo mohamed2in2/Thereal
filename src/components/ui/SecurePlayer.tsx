@@ -187,39 +187,88 @@ export function SecurePlayer({
 
   const [screenCaptured, setScreenCaptured] = useState(false);
 
-  // Screen capture & keypress deterrence listeners
+  // PC Anti-Screenshot & Anti-Screen-Recording Protection Engine
   React.useEffect(() => {
+    const triggerBlackout = () => {
+      setScreenCaptured(true);
+      if (typeof onPause === "function") {
+        onPause();
+      }
+    };
+
     const handleKeyDown = (e: KeyboardEvent) => {
-      // PrintScreen key or Alt+PrintScreen or Meta+Shift+S (Windows Snipping Tool)
-      if (
-        e.key === "PrintScreen" ||
-        (e.altKey && e.key === "PrintScreen") ||
-        (e.metaKey && e.shiftKey && (e.key === "s" || e.key === "S"))
-      ) {
-        setScreenCaptured(true);
-        setTimeout(() => setScreenCaptured(false), 3000);
+      const k = e.key;
+      const lowerK = k.toLowerCase();
+
+      // PrintScreen (PrtScn) / Alt+PrtScn / Win+PrtScn
+      const isPrtScn = k === "PrintScreen" || e.code === "PrintScreen";
+      
+      // Windows Snipping Tool (Win + Shift + S) or Xbox Game Bar (Win + G)
+      const isWinSnipping = (e.metaKey || e.winKey) && e.shiftKey && (lowerK === "s");
+      const isWinGameBar = (e.metaKey || e.winKey) && (lowerK === "g");
+
+      // Mac Screenshot Shortcuts: Cmd + Shift + 3, Cmd + Shift + 4, Cmd + Shift + 5
+      const isMacScreenshot = e.metaKey && e.shiftKey && ["3", "4", "5", "#", "$", "%"].includes(k);
+
+      // Browser Screenshot (Ctrl + Shift + S)
+      const isBrowserScreenshot = e.ctrlKey && e.shiftKey && lowerK === "s";
+
+      // DevTools (F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+U)
+      const isDevTools =
+        k === "F12" ||
+        (e.ctrlKey && e.shiftKey && (lowerK === "i" || lowerK === "j" || lowerK === "c")) ||
+        (e.ctrlKey && lowerK === "u");
+
+      if (isPrtScn || isWinSnipping || isWinGameBar || isMacScreenshot || isBrowserScreenshot || isDevTools) {
+        e.preventDefault();
+        e.stopPropagation();
+        triggerBlackout();
+
+        // Clear clipboard if screenshot attempted
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+          navigator.clipboard.writeText("").catch(() => {});
+        }
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === "PrintScreen" || e.code === "PrintScreen") {
+        triggerBlackout();
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+          navigator.clipboard.writeText("").catch(() => {});
+        }
       }
     };
 
     const handleBlur = () => {
-      // Blur player when window loses focus (e.g. user Alt-Tabs or opens screen recorder control)
-      setScreenCaptured(true);
+      // Blackout when user clicks outside, opens Snipping Tool overlay, or switches apps/tabs
+      triggerBlackout();
     };
 
     const handleFocus = () => {
       setScreenCaptured(false);
     };
 
-    window.addEventListener("keydown", handleKeyDown);
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        triggerBlackout();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown, true);
+    window.addEventListener("keyup", handleKeyUp, true);
     window.addEventListener("blur", handleBlur);
     window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
-      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keydown", handleKeyDown, true);
+      window.removeEventListener("keyup", handleKeyUp, true);
       window.removeEventListener("blur", handleBlur);
       window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, []);
+  }, [onPause]);
 
   return (
     <div
