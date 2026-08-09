@@ -433,6 +433,39 @@ export function BookingButton({
 
               {/* Payment CTA Section */}
               <div className="space-y-3 pt-4 border-t border-[var(--border,rgba(255,255,255,0.1))]">
+                {isLoggedIn && userBalance !== null && userBalance >= activePlan.price && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const res = await fetch("/api/teacher/subscribe-balance", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            teacherId,
+                            planType: activePlan.type,
+                            languageTrack,
+                            studentGrade,
+                          }),
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                          alert(data.message || "تم حجز وتفعيل الاشتراك بنجاح! 🎉");
+                          setIsOpen(false);
+                          window.location.reload();
+                        } else {
+                          alert(data.error || "حدث خطأ أثناء الخصم من الرصيد");
+                        }
+                      } catch {
+                        alert("تعذر الاتصال بالخادم لإتمام العملية");
+                      }
+                    }}
+                    className="w-full py-3.5 px-6 rounded-2xl font-black text-sm sm:text-base text-white bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 shadow-lg shadow-teal-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <span>⚡ اشترك الآن فوراً برصيدك المتاح ({userBalance} جنيه)</span>
+                  </button>
+                )}
+
                 <button
                   type="button"
                   onClick={() => {
@@ -443,13 +476,14 @@ export function BookingButton({
                       planType: activePlan.type,
                       planLabel: activePlan.label,
                       grade: studentGrade,
+                      languageTrack,
                       context: `حجز ${activePlan.label} — ${gradeLabel} مع الأستاذ ${teacherName}`,
                     });
                     window.location.href = `/payment?${params.toString()}`;
                   }}
                   className="w-full py-4 px-6 rounded-2xl font-black text-base sm:text-lg text-white bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 shadow-xl shadow-emerald-500/25 transition-all flex items-center justify-center gap-3 cursor-pointer transform active:scale-98"
                 >
-                  <span>ادفع الآن 💳</span>
+                  <span>ادفع وسدد الآن 💳</span>
                   <span className="bg-white/20 px-3.5 py-1 rounded-xl text-sm font-mono">{activePlan.price} جنيه</span>
                 </button>
 

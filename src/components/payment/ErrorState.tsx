@@ -58,12 +58,12 @@ export function ErrorState({
               </button>
             )}
             <a
-              href="https://wa.me/?text=%D8%A7%D9%84%D8%B3%D9%84%D8%A7%D9%85%20%D8%B9%D9%84%D9%8A%D9%83%D9%85%D9%8F%D8%8C%20%D8%A3%D9%88%D8%AF%20%D8%A7%D9%84%D9%85%D8%B3%D8%A7%D8%B9%D8%AF%D8%A9%20%D9%81%D9%8A%20%D8%A5%D8%AA%D9%85%D8%A7%D9%85%20%D8%B9%D9%85%D9%84%D9%8A%D8%A9%20%D8%A7%D9%84%D8%AF%D9%81%D8%B9"
+              href={`https://wa.me/${(process.env.NEXT_PUBLIC_PAYMENT_ACCESS_PASSWORD || "+201285353604").replace(/\D/g, "")}?text=${encodeURIComponent("السلام عليكم، أود المساعدة في إتمام عملية الدفع والشحن على منصة Code-UP")}`}
               target="_blank"
               rel="noopener noreferrer"
               className="text-[15px] font-medium text-[#047857] dark:text-[#10B981] underline min-h-[44px] inline-flex items-center"
             >
-              تواصل معنا عبر الواتساب
+              تواصل معنا عبر الواتساب 💬
             </a>
           </div>
         </div>

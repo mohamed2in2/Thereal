@@ -1,15 +1,11 @@
 import type { NextConfig } from "next";
-import path from "path";
 
 const nextConfig: NextConfig = {
   output: "standalone",
   serverExternalPackages: ["@whiskeysockets/baileys"],
   productionBrowserSourceMaps: false,
   allowedDevOrigins: ["localhost", "127.0.0.1", "*.app.github.dev"],
-
-  turbopack: {
-    root: process.cwd(),
-  },
+  transpilePackages: ["framer-motion", "motion-dom", "motion-utils", "axios"],
 
   experimental: {
     serverActions: {

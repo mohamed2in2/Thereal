@@ -41,6 +41,7 @@ function PaymentContent() {
   const courseIdParam = searchParams.get("courseId");
   const folderIdParam = searchParams.get("folderId");
   const planIdParam = searchParams.get("planId");
+  const languageTrackParam = searchParams.get("languageTrack");
   const contextParam = searchParams.get("context");
 
   const [step, setStep] = useState<Step>("checkout");
@@ -62,7 +63,7 @@ function PaymentContent() {
   // 15-Minute Countdown Timer for Payment Instructions
   const [timeLeftSeconds, setTimeLeftSeconds] = useState<number>(15 * 60);
 
-  const [user, setUser] = useState<{ id: string; name: string; role: string } | null>(null);
+  const [user, setUser] = useState<{ id: string; name: string; role: string; balance?: number } | null>(null);
   const [userLoading, setUserLoading] = useState(true);
 
   const allMethods = listPaymentMethods();
@@ -74,7 +75,7 @@ function PaymentContent() {
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (d?.user) {
-          setUser({ id: d.user.id, name: d.user.name, role: d.user.role });
+          setUser({ id: d.user.id, name: d.user.name, role: d.user.role, balance: d.user.balance });
         } else {
           setUser(null);
         }
@@ -251,6 +252,7 @@ function PaymentContent() {
           teacherId: teacherIdParam || undefined,
           planType: planTypeParam || undefined,
           grade: gradeParam || undefined,
+          languageTrack: languageTrackParam || undefined,
           courseId: courseIdParam || undefined,
           folderId: folderIdParam || undefined,
           planId: planIdParam || undefined,
@@ -270,6 +272,21 @@ function PaymentContent() {
       if (body.isPaidWithBalance) {
         toastSuccess(body.message || "تمت عملية الشراء من الرصيد بنجاح! 🎉");
         setStep("success");
+        setIsCreating(false);
+        return;
+      }
+
+      if (body.whatsappUrl) {
+        toastSuccess("جاري فتح واتساب للتأكيد والتفعيل الفوري... 💬");
+        window.open(body.whatsappUrl, "_blank");
+        setIntent({
+          reference: body.reference || "IPN-DIRECT",
+          method: body.method || selectedMethod.id,
+          totalAmount: body.totalAmount || amt,
+          instructions: body.instructions || selectedMethod.shortNote,
+        });
+        setTimeLeftSeconds(15 * 60);
+        setStep("instructions");
         setIsCreating(false);
         return;
       }
@@ -410,6 +427,30 @@ function PaymentContent() {
               </div>
             )}
 
+            {/* Quick Balance Purchase Callout */}
+            {user?.balance !== undefined && user.balance >= Number(baseAmount) && Number(baseAmount) > 0 && (
+              <div className="p-4 rounded-2xl bg-teal-500/15 border border-teal-500/30 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs sm:text-sm">
+                <div className="flex items-center gap-2.5 font-bold text-teal-900 dark:text-teal-200">
+                  <span className="text-xl">💰</span>
+                  <div>
+                    <p>يتوفر في حسابك رصيد كافٍ ({user.balance} جنيه)!</p>
+                    <p className="text-[11px] font-normal text-teal-700 dark:text-teal-300">يمكنك إتمام الحجز والشراء مباشرة من رصيدك دون أي رسوم إضافية.</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedMethodId("wallet_balance");
+                    setTimeout(() => handleCreatePayment(), 50);
+                  }}
+                  disabled={isCreating}
+                  className="shrink-0 px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-black text-xs shadow-md transition-all cursor-pointer"
+                >
+                  خصم وإتمام الشراء بالرصيد ⚡
+                </button>
+              </div>
+            )}
+
             {/* Amount Selection / Display */}
             <div className="rounded-2xl border border-[#E4E7EC] dark:border-[#232C36] bg-[#FFFFFF] dark:bg-[#141A21] p-5 shadow-sm space-y-4">
               <div className="flex items-center justify-between">
@@ -546,6 +587,35 @@ function PaymentContent() {
                 </>
               )}
             </button>
+
+            {/* 💬 WhatsApp Instant Support & Manual Transfer Alternative */}
+            <div className="p-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 dark:bg-emerald-500/10 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-right">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">💬</span>
+                <div>
+                  <p className="text-xs sm:text-sm font-bold text-emerald-950 dark:text-emerald-200">
+                    تفضل الدفع اليدوي أو عبر إنستاباي / التحويل المباشر؟
+                  </p>
+                  <p className="text-[11px] sm:text-xs text-[#667085] dark:text-[#98A2B3]">
+                    تواصل مباشرة مع الدعم الفني لتفعيل حسابك ومشترياتك فوراً
+                  </p>
+                </div>
+              </div>
+              <a
+                href={`https://wa.me/${(process.env.NEXT_PUBLIC_PAYMENT_ACCESS_PASSWORD || "+201285353604").replace(/\D/g, "")}?text=${encodeURIComponent(
+                  `مرحباً، أود المساعدة في الدفع وشحن الحساب على منصة Code-UP.\n` +
+                  `👤 اسم الطالب: ${user?.name || "طالب"}\n` +
+                  `💰 المبلغ: ${taxCalculation.totalAmount} جنيه\n` +
+                  (verifiedItemName || planLabelParam || contextParam ? `📚 المحتوى: ${verifiedItemName || planLabelParam || contextParam}\n` : "") +
+                  `طريقة الدفع المفضلة: ${selectedMethod.label}`
+                )}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="shrink-0 px-4 py-2.5 rounded-xl bg-[#25D366] hover:bg-[#1EBE5D] text-white text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5 no-underline"
+              >
+                <span>تواصل عبر واتساب 💬</span>
+              </a>
+            </div>
 
           </div>
         )}

@@ -8,6 +8,7 @@ import {
   sha7nawyRefNote,
 } from "@/lib/sha7nawy";
 import { prisma } from "@/lib/prisma";
+import { fulfillPendingItemPurchase } from "@/lib/fulfillment";
 
 export async function POST(req: NextRequest) {
   const session = await getSession();
@@ -79,6 +80,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Atomic claim: only one confirm or webhook delivery wins
+    let fulfillmentRes: any = null;
     const processed = await prisma.$transaction(async (tx) => {
       const claim = await tx.balanceTransaction.updateMany({
         where: { id: pendingTx.id, type: SHA7NAWY_PENDING_TYPE },
@@ -97,18 +99,27 @@ export async function POST(req: NextRequest) {
         data: { balance: { increment: pendingTx.amount } },
       });
 
+      fulfillmentRes = await fulfillPendingItemPurchase({
+        userId: session.id,
+        note: pendingTx.note,
+        tx,
+      });
+
       return true;
     });
 
     if (processed) {
-      console.log(`[Sha7nawy Confirm] Credited ${pendingTx.amount} EGP to user ${session.id} (ref ${reference})`);
+      console.log(`[Sha7nawy Confirm] Credited ${pendingTx.amount} EGP to user ${session.id} (ref ${reference}). Fulfillment:`, fulfillmentRes);
     }
+
+    const customMessage = fulfillmentRes?.message || (processed ? "تم التأكيد وتفعيل طلبك بنجاح! 🎉" : "تم التأكيد مسبقاً.");
 
     return NextResponse.json({
       success: true,
       paid: true,
       status: "completed",
-      message: processed ? "تم التأكيد وشحن الرصيد بنجاح!" : "تم التأكيد مسبقاً.",
+      message: customMessage,
+      fulfillment: fulfillmentRes,
       data: verifiedData,
     });
   } catch (error: any) {

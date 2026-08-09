@@ -7,6 +7,7 @@ import {
   SHA7NAWY_PAID_STATUSES,
   sha7nawyRefNote,
 } from "@/lib/sha7nawy";
+import { fulfillPendingItemPurchase } from "@/lib/fulfillment";
 
 export async function POST(req: NextRequest) {
   try {
@@ -161,6 +162,7 @@ export async function POST(req: NextRequest) {
 
     // Atomically claim the pending entry and credit the balance. updateMany on
     // targetType guarantees only one concurrent webhook wins.
+    let fulfillmentRes: any = null;
     const processed = await prisma.$transaction(async (tx) => {
       const claim = await tx.balanceTransaction.updateMany({
         where: { id: pendingTx!.id, type: targetType },
@@ -179,6 +181,13 @@ export async function POST(req: NextRequest) {
         data: { balance: { increment: pendingTx!.amount } },
       });
 
+      // Auto-fulfill item purchase if item metadata exists in note
+      fulfillmentRes = await fulfillPendingItemPurchase({
+        userId: pendingTx!.userId,
+        note: pendingTx!.note,
+        tx,
+      });
+
       return true;
     });
 
@@ -186,8 +195,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, processed: false, reason: "Already credited" }, { status: 200 });
     }
 
-    console.log(`[Sha7nawy Webhook] Credited ${pendingTx.amount} EGP to user ${pendingTx.userId} (ref ${reference})${isLatePayment ? " [LATE_PAYMENT_CREDITED]" : ""}`);
-    return NextResponse.json({ success: true, credited: pendingTx.amount, reference }, { status: 200 });
+    console.log(`[Sha7nawy Webhook] Credited ${pendingTx.amount} EGP to user ${pendingTx.userId} (ref ${reference})${isLatePayment ? " [LATE_PAYMENT_CREDITED]" : ""}. Fulfillment:`, fulfillmentRes);
+    return NextResponse.json({ success: true, credited: pendingTx.amount, reference, fulfillment: fulfillmentRes }, { status: 200 });
   } catch (error: any) {
     console.error("[Sha7nawy Webhook] Error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

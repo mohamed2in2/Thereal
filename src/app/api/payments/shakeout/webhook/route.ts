@@ -7,6 +7,7 @@ import {
   SHAKEOUT_PAID_STATUSES,
   shakeOutRefNote,
 } from "@/lib/shakeout";
+import { fulfillPendingItemPurchase } from "@/lib/fulfillment";
 
 export async function POST(req: NextRequest) {
   try {
@@ -156,6 +157,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Amount mismatch" }, { status: 400 });
     }
 
+    let fulfillmentRes: any = null;
     const processed = await prisma.$transaction(async (tx) => {
       const claim = await tx.balanceTransaction.updateMany({
         where: { id: pendingTx!.id, type: targetType },
@@ -174,6 +176,12 @@ export async function POST(req: NextRequest) {
         data: { balance: { increment: pendingTx!.amount } },
       });
 
+      fulfillmentRes = await fulfillPendingItemPurchase({
+        userId: pendingTx!.userId,
+        note: pendingTx!.note,
+        tx,
+      });
+
       return true;
     });
 
@@ -181,8 +189,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, processed: false, reason: "Already credited" }, { status: 200 });
     }
 
-    console.log(`[Shake-Out Webhook] Credited ${pendingTx.amount} EGP to user ${pendingTx.userId} (ref ${reference})${isLatePayment ? " [LATE_PAYMENT_CREDITED]" : ""}`);
-    return NextResponse.json({ success: true, credited: pendingTx.amount, reference }, { status: 200 });
+    console.log(`[Shake-Out Webhook] Credited ${pendingTx.amount} EGP to user ${pendingTx.userId} (ref ${reference})${isLatePayment ? " [LATE_PAYMENT_CREDITED]" : ""}. Fulfillment:`, fulfillmentRes);
+    return NextResponse.json({ success: true, credited: pendingTx.amount, reference, fulfillment: fulfillmentRes }, { status: 200 });
   } catch (error: any) {
     console.error("[Shake-Out Webhook] Error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
