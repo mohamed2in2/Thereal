@@ -185,6 +185,42 @@ export function SecurePlayer({
 
   const isDirectVideo = embedUrl.startsWith("/api/") || embedUrl.includes(".mp4") || embedUrl.includes(".webm") || embedUrl.includes(".mov");
 
+  const [screenCaptured, setScreenCaptured] = useState(false);
+
+  // Screen capture & keypress deterrence listeners
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // PrintScreen key or Alt+PrintScreen or Meta+Shift+S (Windows Snipping Tool)
+      if (
+        e.key === "PrintScreen" ||
+        (e.altKey && e.key === "PrintScreen") ||
+        (e.metaKey && e.shiftKey && (e.key === "s" || e.key === "S"))
+      ) {
+        setScreenCaptured(true);
+        setTimeout(() => setScreenCaptured(false), 3000);
+      }
+    };
+
+    const handleBlur = () => {
+      // Blur player when window loses focus (e.g. user Alt-Tabs or opens screen recorder control)
+      setScreenCaptured(true);
+    };
+
+    const handleFocus = () => {
+      setScreenCaptured(false);
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("blur", handleBlur);
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("blur", handleBlur);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, []);
+
   return (
     <div
       ref={wrapRef}
@@ -198,6 +234,20 @@ export function SecurePlayer({
       }
       onContextMenu={(e) => e.preventDefault()}
     >
+      {/* Screen capture / loss-of-focus protection black screen overlay */}
+      {screenCaptured && (
+        <div className="absolute inset-0 z-50 bg-black flex flex-col items-center justify-center p-6 text-center text-white backdrop-blur-3xl">
+          <div className="w-12 h-12 rounded-full bg-rose-500/20 text-rose-500 flex items-center justify-center mb-3">
+            <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+          </div>
+          <h3 className="text-base font-bold mb-1 text-white">🔒 محتوى محمي ضد تسجيل والتقاط الشاشة</h3>
+          <p className="text-xs text-slate-400 max-w-sm">
+            تم إيقاف عرض الفيديو مؤقتاً لحماية حقوق النشر والملكية الفكرية. يُرجى العودة للنافذة لمتابعة المشاهدة.
+          </p>
+        </div>
+      )}
       {isDirectVideo ? (
         <video
           src={embedUrl}
