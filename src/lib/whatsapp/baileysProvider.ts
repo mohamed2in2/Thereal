@@ -1,6 +1,9 @@
 import { WhatsAppProvider, ProviderId, SendMessageParams, SendResult, ProviderHealth, ProviderStatus } from "./providerInterface";
 import { whatsappClient } from "./client";
+import { fallbackClient } from "./fallbackClient";
 import { messageQueue } from "./queue";
+import { sendRawWhatsAppMessage as sendViaBaileys } from "./sender";
+import { logger } from "./logger";
 
 class BaileysProvider implements WhatsAppProvider {
   public id: ProviderId = "BAILEYS";
@@ -13,45 +16,64 @@ class BaileysProvider implements WhatsAppProvider {
   public async sendMessage(params: SendMessageParams): Promise<SendResult> {
     const startTime = Date.now();
     try {
-      if (!whatsappClient.isConnected()) {
-        const err = "Baileys socket is disconnected or not paired";
-        this.lastFailedSend = new Date().toISOString();
-        return {
-          success: false,
-          provider: this.id,
-          error: err,
-        };
+      // Try primary Baileys first
+      if (whatsappClient.isConnected()) {
+        const estimatedWaitMs = messageQueue.getEstimatedWaitTimeMs(params.messageType === "OTP");
+        if (estimatedWaitMs <= 10000) {
+          await messageQueue.enqueue(
+            params.recipient,
+            params.content,
+            params.messageType === "OTP"
+          );
+
+          const latency = Date.now() - startTime;
+          this.recordLatency(latency);
+          this.lastSuccessfulSend = new Date().toISOString();
+
+          return {
+            success: true,
+            provider: this.id,
+            messageId: `baileys-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+            deliveryTimeMs: latency,
+          };
+        }
       }
 
-      // Check if Baileys queue wait time exceeds 10 seconds (10,000 ms)
-      const estimatedWaitMs = messageQueue.getEstimatedWaitTimeMs(params.messageType === "OTP");
-      if (estimatedWaitMs > 10000) {
-        const waitSec = Math.round(estimatedWaitMs / 1000);
-        const err = `Baileys queue wait time is ${waitSec}s (> 10s threshold). Failing over to Official Meta API.`;
-        this.lastFailedSend = new Date().toISOString();
-        return {
-          success: false,
-          provider: this.id,
-          deliveryTimeMs: Date.now() - startTime,
-          error: err,
-        };
+      // Primary failed or disconnected — try fallback Baileys number
+      if (fallbackClient.isConnected()) {
+        logger.info("Primary Baileys unavailable, trying fallback number", {
+          recipient: params.recipient,
+          messageType: params.messageType,
+        });
+
+        const fbSocket = fallbackClient.getSocket();
+        if (fbSocket) {
+          const phone = params.recipient.replace(/[^\d]/g, "");
+          const jid = `${phone}@s.whatsapp.net`;
+
+          await sendViaBaileys(fbSocket, jid, params.content);
+
+          const latency = Date.now() - startTime;
+          this.recordLatency(latency);
+          this.lastSuccessfulSend = new Date().toISOString();
+
+          return {
+            success: true,
+            provider: this.id,
+            messageId: `baileys-fb-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+            deliveryTimeMs: latency,
+          };
+        }
       }
 
-      await messageQueue.enqueue(
-        params.recipient,
-        params.content,
-        params.messageType === "OTP"
-      );
-
-      const latency = Date.now() - startTime;
-      this.recordLatency(latency);
-      this.lastSuccessfulSend = new Date().toISOString();
-
+      // Both primary and fallback unavailable
+      const err = "Baileys primary and fallback numbers are both disconnected";
+      this.lastFailedSend = new Date().toISOString();
       return {
-        success: true,
+        success: false,
         provider: this.id,
-        messageId: `baileys-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-        deliveryTimeMs: latency,
+        deliveryTimeMs: Date.now() - startTime,
+        error: err,
       };
     } catch (err: any) {
       const latency = Date.now() - startTime;

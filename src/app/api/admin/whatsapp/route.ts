@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { whatsappOrchestrator } from "@/lib/whatsapp/orchestrator";
 import { baileysProvider } from "@/lib/whatsapp/baileysProvider";
 import { whatsappClient } from "@/lib/whatsapp/client";
+import { fallbackClient } from "@/lib/whatsapp/fallbackClient";
 import { regenerateParentToken, getAppBaseUrl } from "@/lib/whatsapp/parentToken";
 
 export async function GET(req: NextRequest) {
@@ -64,9 +65,19 @@ export async function GET(req: NextRequest) {
       take: 30,
     });
 
+    // Fallback Baileys number status
+    const fbStatus = fallbackClient.getStatus();
+
     return NextResponse.json({
       success: true,
       ...overallStatus,
+      fallbackBaileys: {
+        connected: fbStatus.connected,
+        state: fbStatus.state,
+        user: fbStatus.user,
+        qrCodeDataUrl: fbStatus.qrCodeDataUrl,
+        uptimeSeconds: fbStatus.uptimeSeconds,
+      },
       logs,
       configLogs,
     });
@@ -147,6 +158,19 @@ export async function POST(req: NextRequest) {
       await whatsappClient.logout();
       await logConfigChange(session.id, session.name, "baileysSession", "ACTIVE", "LOGGED_OUT");
       return NextResponse.json({ success: true, message: "تم تسجيل الخروج ومسح بيانات الجلسة" });
+    }
+
+    // 5b. Reconnect Fallback Baileys Number
+    if (action === "fallback-reconnect") {
+      await fallbackClient.forceReconnect();
+      return NextResponse.json({ success: true, message: "جاري إعادة اتصال الرقم الاحتياطي..." });
+    }
+
+    // 5c. Logout Fallback Baileys Number
+    if (action === "fallback-logout") {
+      await fallbackClient.logout();
+      await logConfigChange(session.id, session.name, "fallbackBaileysSession", "ACTIVE", "LOGGED_OUT");
+      return NextResponse.json({ success: true, message: "تم تسجيل خروج الرقم الاحتياطي" });
     }
 
     // 5. Send Parent Portal Link manually

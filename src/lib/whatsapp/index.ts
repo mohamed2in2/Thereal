@@ -1,4 +1,5 @@
 import { whatsappClient, type WhatsAppClientStatus } from "./client";
+import { fallbackClient } from "./fallbackClient";
 import { messageQueue } from "./queue";
 import { logger } from "./logger";
 
@@ -17,6 +18,9 @@ class WhatsAppService {
   private async initAutoStart(): Promise<void> {
     try {
       await whatsappClient.initialize();
+      if (fallbackClient.hasSavedSession()) {
+        await fallbackClient.initialize();
+      }
     } catch (err: any) {
       logger.error("Auto-start initialization error", { error: err.message });
     }

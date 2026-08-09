@@ -118,8 +118,11 @@ export function WhatsAppSection() {
     }
   };
 
-  const handleAction = async (action: "reconnect" | "logout") => {
-    if (action === "logout" && !confirm("هل أنت تأكد من تسجيل الخروج ومسح جلسة Baileys؟ ستضطر لمسح الـ QR مجدداً.")) {
+  const handleAction = async (action: "reconnect" | "logout" | "fallback-reconnect" | "fallback-logout") => {
+    if (action === "logout" && !confirm("هل أنت متأكد من تسجيل الخروج ومسح جلسة Baileys الأساسي؟ ستضطر لمسح الـ QR مجدداً.")) {
+      return;
+    }
+    if (action === "fallback-logout" && !confirm("هل أنت متأكد من تسجيل الخروج ومسح جلسة الرقم الاحتياطي؟ ستضطر لمسح الـ QR مجدداً.")) {
       return;
     }
     try {
@@ -129,13 +132,11 @@ export function WhatsAppSection() {
         body: JSON.stringify({ action }),
       });
       const json = await res.json();
-      if (action === "logout") {
+      if (action === "logout" || action === "fallback-logout") {
         alert(json.message || "تم تنفيذ الإجراء");
       }
-      // For reconnect, don't show alert — the QR code will appear automatically
-      // Fetch immediately to show QR code faster
+      // For reconnect actions, don't show alert — the QR code will appear automatically
       fetchStatus();
-      // Fetch again after a short delay to catch the QR code generation
       setTimeout(fetchStatus, 2000);
       setTimeout(fetchStatus, 4000);
     } catch {
@@ -161,6 +162,7 @@ export function WhatsAppSection() {
   }
 
   const baileys = data?.providers?.baileys;
+  const fallbackBaileys = data?.fallbackBaileys;
   const meta = data?.providers?.officialApi;
   const daily = data?.dailyUsage;
   const logs = data?.logs || [];
@@ -236,194 +238,299 @@ export function WhatsAppSection() {
       {/* TAB 1: PROVIDERS & DELIVERY STRATEGY */}
       {activeTab === "providers" && (
         <div className="space-y-6">
-          {/* Dual Providers Status Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            {/* Provider 1: Baileys Card */}
-            <div className="bg-slate-900/90 rounded-2xl p-5 border border-slate-800 space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-xl">
-                    🟢
+          {/* Providers Status Grid - 3 Column Layout */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {/* Provider 1: Primary Baileys Card */}
+            <div className="bg-slate-900/90 rounded-2xl p-5 border border-slate-800 space-y-4 flex flex-col justify-between">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-xl">
+                      🟢
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-white text-base">الرقم الأساسي (Baileys)</h3>
+                      <p className="text-xs text-slate-400">محرك الإرسال المباشر الرئيسي</p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="font-bold text-white text-base">مزود 1: Baileys Socket Engine</h3>
-                    <p className="text-xs text-slate-400">محرك إرسال مباشر وسريع عبر واتساب ويب</p>
+                  <span className={`text-xs px-3 py-1 rounded-full font-bold border flex items-center gap-1.5 ${
+                    baileys?.connected
+                      ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-400"
+                      : "bg-rose-500/15 border-rose-500/30 text-rose-400"
+                  }`}>
+                    <span>{baileys?.connected ? "🟢 متصل" : "🔴 غير متصل"}</span>
+                  </span>
+                </div>
+
+                {/* Baileys Health Metrics */}
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80">
+                    <p className="text-[11px] text-slate-400">إجمالي اليوم</p>
+                    <p className="text-base font-bold text-white mt-0.5">{daily?.baileys?.totalCount || 0}</p>
+                  </div>
+                  <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80">
+                    <p className="text-[11px] text-slate-400">تم التسليم</p>
+                    <p className="text-base font-bold text-emerald-400 mt-0.5">{daily?.baileys?.deliveredCount || 0}</p>
+                  </div>
+                  <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80">
+                    <p className="text-[11px] text-slate-400">أكواد OTP</p>
+                    <p className="text-base font-bold text-sky-400 mt-0.5">{daily?.baileys?.otpCount || 0}</p>
+                  </div>
+                  <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80">
+                    <p className="text-[11px] text-slate-400">فشل الإرسال</p>
+                    <p className="text-base font-bold text-rose-400 mt-0.5">{daily?.baileys?.failedCount || 0}</p>
                   </div>
                 </div>
-                <span className={`text-xs px-3 py-1 rounded-full font-bold border flex items-center gap-1.5 ${
-                  baileys?.connected
-                    ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-400"
-                    : "bg-rose-500/15 border-rose-500/30 text-rose-400"
-                }`}>
-                  <span>{baileys?.connected ? "🟢 Healthy" : "🔴 Offline"}</span>
-                  <span className="text-[11px] text-slate-300">({baileys?.statusText || "جاري التقييم..."})</span>
-                </span>
-              </div>
 
-              {/* Baileys Health Metrics */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2">
-                <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800/80">
-                  <p className="text-[11px] text-slate-400">إجمالي اليوم</p>
-                  <p className="text-lg font-bold text-white mt-0.5">{daily?.baileys?.totalCount || 0}</p>
+                {/* Telemetry */}
+                <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800 text-xs space-y-1.5">
+                  <div className="flex items-center justify-between text-slate-300">
+                    <span>⏱️ سرعة الاستجابة:</span>
+                    <span className="font-mono text-emerald-400 font-bold">{baileys?.health?.avgResponseLatencyMs || 120}ms</span>
+                  </div>
+                  <div className="flex items-center justify-between text-slate-300">
+                    <span>📦 طابور الانتظار:</span>
+                    <span className="font-mono text-sky-400 font-bold">{baileys?.health?.queueDepth || 0} رسالة</span>
+                  </div>
                 </div>
-                <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800/80">
-                  <p className="text-[11px] text-slate-400">تم التسليم</p>
-                  <p className="text-lg font-bold text-emerald-400 mt-0.5">{daily?.baileys?.deliveredCount || 0}</p>
-                </div>
-                <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800/80">
-                  <p className="text-[11px] text-slate-400">أكواد OTP اليوم</p>
-                  <p className="text-lg font-bold text-sky-400 mt-0.5">{daily?.baileys?.otpCount || 0}</p>
-                </div>
-                <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800/80">
-                  <p className="text-[11px] text-slate-400">فشل الإرسال</p>
-                  <p className="text-lg font-bold text-rose-400 mt-0.5">{daily?.baileys?.failedCount || 0}</p>
-                </div>
-              </div>
 
-              {/* Detailed Health Telemetry */}
-              <div className="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800 text-xs space-y-1.5">
-                <div className="flex items-center justify-between text-slate-300">
-                  <span>⏱️ متوسط زمن الاستجابة (Latency):</span>
-                  <span className="font-mono text-emerald-400 font-bold">{baileys?.health?.avgResponseLatencyMs || 120}ms</span>
-                </div>
-                <div className="flex items-center justify-between text-slate-300">
-                  <span>📦 طابور الانتظار (Queue):</span>
-                  <span className="font-mono text-sky-400 font-bold">{baileys?.health?.queueDepth || 0} رسالة</span>
-                </div>
-                <div className="flex items-center justify-between text-slate-400 text-[11px] pt-1 border-t border-slate-800/80">
-                  <span>آخر إرسال ناجح:</span>
-                  <span>{baileys?.health?.lastSuccessfulSend ? new Date(baileys.health.lastSuccessfulSend).toLocaleTimeString("ar-EG") : "لا يوجد مؤخراً"}</span>
-                </div>
-              </div>
-
-              {/* QR Code Display Area — Visible when disconnected/pairing */}
-              {!baileys?.connected && (
-                <div className="bg-slate-950/80 p-4 rounded-xl border border-slate-800 space-y-3">
-                  {baileys?.state === "PAIRING" && baileys?.qrCodeDataUrl ? (
-                    <>
-                      <div className="flex items-center gap-2 text-xs font-bold text-emerald-400">
-                        <span className="relative flex h-2.5 w-2.5">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
-                        </span>
-                        📱 QR Code جاهز — امسح الكود بواتساب الآن
-                      </div>
-                      <div className="flex justify-center">
-                        <div className="bg-white p-3 rounded-2xl shadow-lg shadow-emerald-500/10">
-                          <img
-                            src={baileys.qrCodeDataUrl}
-                            alt="WhatsApp QR Code"
-                            className="w-48 h-48 sm:w-56 sm:h-56"
-                          />
+                {/* QR Code Area */}
+                {!baileys?.connected && (
+                  <div className="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800 space-y-2.5">
+                    {baileys?.state === "PAIRING" && baileys?.qrCodeDataUrl ? (
+                      <>
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-400">
+                          <span className="relative flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                          </span>
+                          📱 QR الأساسي جاهز — امسح الآن
                         </div>
+                        <div className="flex justify-center">
+                          <div className="bg-white p-2 rounded-xl shadow-lg shadow-emerald-500/10">
+                            <img
+                              src={baileys.qrCodeDataUrl}
+                              alt="WhatsApp Primary QR Code"
+                              className="w-40 h-40"
+                            />
+                          </div>
+                        </div>
+                        <p className="text-[10px] text-slate-400 text-center">
+                          الأجهزة المرتبطة → ربط جهاز → امسح الكود
+                        </p>
+                      </>
+                    ) : baileys?.state === "CONNECTING" ? (
+                      <div className="flex items-center justify-center gap-2 py-4">
+                        <div className="w-5 h-5 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
+                        <span className="text-xs font-bold text-sky-400">⏳ جاري الاتصال...</span>
                       </div>
-                      <p className="text-[11px] text-slate-400 text-center">
-                        افتح واتساب على هاتفك → الأجهزة المرتبطة → ربط جهاز → امسح الكود
-                      </p>
-                    </>
-                  ) : baileys?.state === "CONNECTING" ? (
-                    <div className="flex items-center justify-center gap-3 py-4">
-                      <div className="w-6 h-6 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
-                      <span className="text-xs font-bold text-sky-400">⏳ جاري الاتصال بخوادم واتساب...</span>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center gap-3 py-4">
-                      <div className="w-12 h-12 rounded-full bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-xl">
-                        📵
+                    ) : (
+                      <div className="flex flex-col items-center gap-2 py-3 text-center">
+                        <div className="w-10 h-10 rounded-full bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-lg">
+                          📵
+                        </div>
+                        <p className="text-xs font-bold text-rose-400">غير متصل — اضغط لتوليد QR</p>
                       </div>
-                      <p className="text-xs font-bold text-rose-400">غير متصل — اضغط &quot;إعادة الاتصال&quot; لتوليد QR Code جديد</p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Connected User Info */}
-              {baileys?.connected && baileys?.user && (
-                <div className="bg-emerald-500/10 p-3 rounded-xl border border-emerald-500/30 flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-emerald-500/20 flex items-center justify-center text-lg">✅</div>
-                  <div>
-                    <p className="text-xs font-bold text-emerald-400">متصل بنجاح</p>
-                    <p className="text-[11px] text-slate-300 font-mono dir-ltr">
-                      {baileys.user.phone || baileys.user.name || baileys.user.jid}
-                    </p>
+                    )}
                   </div>
-                </div>
-              )}
+                )}
+
+                {/* Connected User Info */}
+                {baileys?.connected && baileys?.user && (
+                  <div className="bg-emerald-500/10 p-2.5 rounded-xl border border-emerald-500/30 flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center text-base">✅</div>
+                    <div className="overflow-hidden">
+                      <p className="text-xs font-bold text-emerald-400">متصل (الأساسي)</p>
+                      <p className="text-[11px] text-slate-300 font-mono dir-ltr truncate">
+                        {baileys.user.phone || baileys.user.name || baileys.user.jid}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {/* Action Buttons */}
-              <div className="flex items-center gap-2 pt-1">
+              <div className="flex items-center gap-2 pt-2 border-t border-slate-800/80">
                 <button
                   onClick={() => handleAction("reconnect")}
-                  className="flex-1 py-2.5 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 text-xs font-bold border border-sky-500/30 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                  className="flex-1 py-2 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 text-xs font-bold border border-sky-500/30 transition-all cursor-pointer flex items-center justify-center gap-1"
                 >
-                  🔄 {baileys?.connected ? "إعادة الاتصال" : "توليد QR Code جديد"}
+                  🔄 {baileys?.connected ? "إعادة الاتصال" : "توليد QR جديد"}
                 </button>
                 <button
                   onClick={() => handleAction("logout")}
-                  className="px-4 py-2.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-xs font-bold border border-rose-500/30 transition-all cursor-pointer"
+                  className="px-3.5 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-xs font-bold border border-rose-500/30 transition-all cursor-pointer"
                 >
                   🚪 خروج
                 </button>
               </div>
             </div>
 
-            {/* Provider 2: Official Meta API Card */}
-            <div className="bg-slate-900/90 rounded-2xl p-5 border border-slate-800 space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-10 h-10 rounded-xl bg-sky-500/15 border border-sky-500/30 flex items-center justify-center text-xl">
-                    🌐
+            {/* Provider 2: Optional Fallback Baileys Card */}
+            <div className="bg-slate-900/90 rounded-2xl p-5 border border-slate-800 space-y-4 flex flex-col justify-between">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-10 h-10 rounded-xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-xl">
+                      🔁
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-white text-base">الرقم الاحتياطي (اختياري)</h3>
+                      <p className="text-xs text-slate-400">بديل تلقائي عند انقطاع الأساسي</p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="font-bold text-white text-base">مزود 2: Official Meta WhatsApp Business API</h3>
-                    <p className="text-xs text-slate-400">واجهة ميتا الرسمية لإرسال القوالب والأكواد الموثوقة</p>
+                  <span className={`text-xs px-2.5 py-1 rounded-full font-bold border flex items-center gap-1.5 ${
+                    fallbackBaileys?.connected
+                      ? "bg-purple-500/15 border-purple-500/30 text-purple-400"
+                      : fallbackBaileys?.state === "PAIRING"
+                      ? "bg-amber-500/15 border-amber-500/30 text-amber-400"
+                      : "bg-slate-800 border-slate-700 text-slate-400"
+                  }`}>
+                    <span>{fallbackBaileys?.connected ? "🟢 متصل (احتياطي)" : fallbackBaileys?.state === "PAIRING" ? "📱 جاهز للمسح" : "⚪ غير مربوط"}</span>
+                  </span>
+                </div>
+
+                {/* Fallback Explanatory Info */}
+                <div className="bg-purple-500/5 p-3 rounded-xl border border-purple-500/20 text-xs space-y-1.5 text-slate-300">
+                  <p className="text-[11px] leading-relaxed text-purple-200">
+                    💡 يمكنك إضافة رقم واتساب ثانٍ ليعمل كـ Fallback تلقائي. إذا انقطع الرقم الأساسي، يتم الإرسال فوراً من هذا الرقم بدون توقف الخدمة.
+                  </p>
+                </div>
+
+                {/* QR Code Area for Fallback */}
+                {!fallbackBaileys?.connected && (
+                  <div className="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800 space-y-2.5">
+                    {fallbackBaileys?.state === "PAIRING" && fallbackBaileys?.qrCodeDataUrl ? (
+                      <>
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-purple-400">
+                          <span className="relative flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75" />
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-purple-500" />
+                          </span>
+                          📱 QR الرقم الاحتياطي جاهز — امسح الآن
+                        </div>
+                        <div className="flex justify-center">
+                          <div className="bg-white p-2 rounded-xl shadow-lg shadow-purple-500/10">
+                            <img
+                              src={fallbackBaileys.qrCodeDataUrl}
+                              alt="WhatsApp Fallback QR Code"
+                              className="w-40 h-40"
+                            />
+                          </div>
+                        </div>
+                        <p className="text-[10px] text-slate-400 text-center">
+                          امسح الكود من هاتفك الثاني لربط الرقم الاحتياطي
+                        </p>
+                      </>
+                    ) : fallbackBaileys?.state === "CONNECTING" ? (
+                      <div className="flex items-center justify-center gap-2 py-4">
+                        <div className="w-5 h-5 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+                        <span className="text-xs font-bold text-purple-400">⏳ جاري الاتصال بالرقم الاحتياطي...</span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-2 py-3 text-center">
+                        <div className="w-10 h-10 rounded-full bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-lg">
+                          ➕
+                        </div>
+                        <p className="text-xs font-bold text-slate-300">الرقم الاحتياطي غير مفعّل</p>
+                        <p className="text-[11px] text-slate-400">اضغط الزر أدناه لتوليد QR وربط رقم ثانٍ في أي وقت</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Connected User Info for Fallback */}
+                {fallbackBaileys?.connected && fallbackBaileys?.user && (
+                  <div className="bg-purple-500/10 p-2.5 rounded-xl border border-purple-500/30 flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center text-base">🔁</div>
+                    <div className="overflow-hidden">
+                      <p className="text-xs font-bold text-purple-400">متصل (الرقم الاحتياطي)</p>
+                      <p className="text-[11px] text-slate-300 font-mono dir-ltr truncate">
+                        {fallbackBaileys.user.phone || fallbackBaileys.user.name || fallbackBaileys.user.jid}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons for Fallback */}
+              <div className="flex items-center gap-2 pt-2 border-t border-slate-800/80">
+                <button
+                  onClick={() => handleAction("fallback-reconnect")}
+                  className="flex-1 py-2 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 text-xs font-bold border border-purple-500/30 transition-all cursor-pointer flex items-center justify-center gap-1"
+                >
+                  🔄 {fallbackBaileys?.connected ? "إعادة اتصال الاحتياطي" : "ربط رقم احتياطي (QR)"}
+                </button>
+                {fallbackBaileys?.connected && (
+                  <button
+                    onClick={() => handleAction("fallback-logout")}
+                    className="px-3.5 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-xs font-bold border border-rose-500/30 transition-all cursor-pointer"
+                  >
+                    🚪 إلغاء
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Provider 3: Official Meta API Card */}
+            <div className="bg-slate-900/90 rounded-2xl p-5 border border-slate-800 space-y-4 flex flex-col justify-between">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-10 h-10 rounded-xl bg-sky-500/15 border border-sky-500/30 flex items-center justify-center text-xl">
+                      🌐
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-white text-base">Meta Business API</h3>
+                      <p className="text-xs text-slate-400">واجهة ميتا الرسمية لأكواد الـ OTP</p>
+                    </div>
+                  </div>
+                  <span className={`text-xs px-2.5 py-1 rounded-full font-bold border flex items-center gap-1.5 ${
+                    meta?.connected
+                      ? "bg-sky-500/15 border-sky-500/30 text-sky-400"
+                      : "bg-amber-500/15 border-amber-500/30 text-amber-400"
+                  }`}>
+                    <span>{meta?.connected ? "🟢 مفعل" : "🟡 اختياري (.env)"}</span>
+                  </span>
+                </div>
+
+                {/* Daily Quota Progress Bar */}
+                <div className="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800 space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-slate-300">📊 استهلاك الكوتا اليومية</span>
+                    <span className="font-mono font-bold text-sky-400">{metaTotalToday} / {metaLimit}</span>
+                  </div>
+                  <div className="w-full h-2.5 rounded-full bg-slate-800 overflow-hidden">
+                    <div
+                      className={`h-full transition-all duration-500 ${progressColor}`}
+                      style={{ width: `${metaPercent}%` }}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] text-slate-400">
+                    <span>المتبقي: {metaLimit - metaTotalToday}</span>
+                    <span className="dir-ltr">{metaPercent}% used</span>
                   </div>
                 </div>
-                <span className={`text-xs px-3 py-1 rounded-full font-bold border flex items-center gap-1.5 ${
-                  meta?.connected
-                    ? "bg-sky-500/15 border-sky-500/30 text-sky-400"
-                    : "bg-amber-500/15 border-amber-500/30 text-amber-400"
-                }`}>
-                  <span>{meta?.connected ? "🟢 Healthy" : "🔴 Pending Credentials (.env)"}</span>
-                </span>
-              </div>
 
-              {/* Daily Quota Progress Bar */}
-              <div className="bg-slate-950/80 p-4 rounded-xl border border-slate-800 space-y-2">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-slate-300">📊 استهلاك الكوتا اليومية (Meta Daily Limit)</span>
-                  <span className="font-mono font-bold text-sky-400">{metaTotalToday} / {metaLimit}</span>
+                {/* Official Meta Message Categories Breakdown */}
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="bg-slate-950/60 p-2 rounded-xl border border-slate-800/80 text-center">
+                    <p className="text-[10px] text-slate-400">OTP Auth</p>
+                    <p className="text-sm font-bold text-sky-400 mt-0.5">{daily?.officialApi?.authCount || 0}</p>
+                  </div>
+                  <div className="bg-slate-950/60 p-2 rounded-xl border border-slate-800/80 text-center">
+                    <p className="text-[10px] text-slate-400">Utility</p>
+                    <p className="text-sm font-bold text-emerald-400 mt-0.5">{daily?.officialApi?.utilityCount || 0}</p>
+                  </div>
+                  <div className="bg-slate-950/60 p-2 rounded-xl border border-slate-800/80 text-center">
+                    <p className="text-[10px] text-slate-400">Marketing</p>
+                    <p className="text-sm font-bold text-purple-400 mt-0.5">{daily?.officialApi?.marketingCount || 0}</p>
+                  </div>
                 </div>
-                <div className="w-full h-3 rounded-full bg-slate-800 overflow-hidden">
-                  <div
-                    className={`h-full transition-all duration-500 ${progressColor}`}
-                    style={{ width: `${metaPercent}%` }}
-                  />
-                </div>
-                <div className="flex items-center justify-between text-[11px] text-slate-400">
-                  <span>المتبقي اليوم: {metaLimit - metaTotalToday} رسالة</span>
-                  <span className="dir-ltr">{metaPercent}% used today</span>
-                </div>
-              </div>
 
-              {/* Official Meta Message Categories Breakdown */}
-              <div className="grid grid-cols-3 gap-2.5">
-                <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800/80">
-                  <p className="text-[11px] text-slate-400">Authentication</p>
-                  <p className="text-base font-bold text-sky-400 mt-0.5">{daily?.officialApi?.authCount || 0}</p>
+                <div className="text-[11px] text-slate-400 bg-slate-950/40 p-2.5 rounded-lg border border-slate-800/60">
+                  🔒 مفاتيح Meta API في ملف <code className="text-amber-300 font-mono">.env</code> (مخصصة لقوالب الـ OTP الرسمية).
                 </div>
-                <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800/80">
-                  <p className="text-[11px] text-slate-400">Utility Messages</p>
-                  <p className="text-base font-bold text-emerald-400 mt-0.5">{daily?.officialApi?.utilityCount || 0}</p>
-                </div>
-                <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800/80">
-                  <p className="text-[11px] text-slate-400">Marketing</p>
-                  <p className="text-base font-bold text-purple-400 mt-0.5">{daily?.officialApi?.marketingCount || 0}</p>
-                </div>
-              </div>
-
-              <div className="text-[11px] text-slate-400 bg-slate-950/40 p-2.5 rounded-lg border border-slate-800/60">
-                🔒 يتم حفظ رموز مفاتيح Meta API بأمان داخل ملف <code className="text-amber-300 font-mono">.env</code> على السيرفر (META_WHATSAPP_TOKEN, META_PHONE_NUMBER_ID).
               </div>
             </div>
           </div>
