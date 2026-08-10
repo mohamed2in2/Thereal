@@ -44,19 +44,19 @@ export async function register() {
         console.error("❌ Failed to perform initial leaderboard cache check/refresh:", err);
       }
 
-      // 2. Setup the daily midnight scheduled cron (00:00 Africa/Cairo timezone)
+      // 2. Setup the daily scheduled cron (03:00 AM Africa/Cairo timezone)
       // Guard for PM2 cluster mode: only schedule on NODE_APP_INSTANCE = 0 or undefined
       const isMainInstance = process.env.NODE_APP_INSTANCE === undefined || process.env.NODE_APP_INSTANCE === "0";
       if (isMainInstance) {
-        console.log("⏰ Main instance detected. Scheduling daily leaderboard refresh at 00:00 Cairo time.");
+        console.log("⏰ Main instance detected. Scheduling daily 24H leaderboard refresh at 03:00 AM Cairo time.");
         cron.schedule(
-          "0 0 * * *",
+          "0 3 * * *",
           async () => {
-            console.log("⏰ Triggering daily scheduled leaderboard refresh...");
+            console.log("⏰ [03:00 AM Cairo] Triggering daily scheduled 24H leaderboard refresh & rollover...");
             try {
               await refreshLeaderboard();
             } catch (err) {
-              console.error("❌ Scheduled leaderboard refresh failed:", err);
+              console.error("❌ Scheduled 03:00 AM Cairo leaderboard refresh failed:", err);
             }
           },
           {

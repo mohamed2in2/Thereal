@@ -88,7 +88,7 @@ export async function verifyAuthoritativePrice(params: {
     const langMonthsMap: Record<string, number> = { monthly: 1, termly: 5, yearly: 10 };
     const langMonths = langMonthsMap[planType] || 1;
 
-    const langRate = isLanguages ? (profile.priceLanguagesMonthly ?? 50) : 0;
+    const langRate = isLanguages ? (profile.priceLanguagesMonthly ?? 0) : 0;
     const languageSurcharge = langRate * langMonths;
 
     const expectedPrice = Math.max(planPrice + languageSurcharge, 1);

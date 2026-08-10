@@ -40,7 +40,7 @@ export async function GET() {
           priceTermly: 750,
           priceYearly: 1200,
           enableLanguagesTrack: true,
-          priceLanguagesMonthly: 50,
+          priceLanguagesMonthly: 0,
         },
       });
     } else {
@@ -50,7 +50,7 @@ export async function GET() {
       if (profile.priceTermly == null) updates.priceTermly = 750;
       if (profile.priceYearly == null) updates.priceYearly = 1200;
       if (profile.enableLanguagesTrack == null) updates.enableLanguagesTrack = true;
-      if (profile.priceLanguagesMonthly == null) updates.priceLanguagesMonthly = 50;
+      if (profile.priceLanguagesMonthly == null) updates.priceLanguagesMonthly = 0;
 
       if (Object.keys(updates).length > 0) {
         profile = await prisma.teacherProfile.update({

@@ -13,6 +13,7 @@ import { DeletedTeachersSection } from "@/components/admin/superadmin/DeletedTea
 import { StaffAccountsSection } from "@/components/admin/superadmin/StaffAccountsSection";
 import { ErrorMonitorSection } from "@/components/admin/superadmin/ErrorMonitorSection";
 import { DailyExamsSection } from "@/components/admin/superadmin/DailyExamsSection";
+import { LeaderboardPrizesSection } from "@/components/admin/superadmin/LeaderboardPrizesSection";
 import { DangerZoneSection } from "@/components/admin/superadmin/DangerZoneSection";
 import { InstanceControlSection } from "@/components/admin/superadmin/InstanceControlSection";
 import { SiteTextSection } from "@/components/admin/superadmin/SiteTextSection";
@@ -114,6 +115,7 @@ const SECTION_TITLES: Record<string, string> = {
   "teacher-referrals": "برامج إحالة المعلمين",
   create: "إنشاء حساب مدرس",
   "daily-exams": "امتحانات لوحة الشرف",
+  "leaderboard-prizes": "جوائز لوحة الشرف اليومية (24 ساعة)",
   "staff-accounts": "المشرفون والموظفون",
   "site-text": "نصوص الموقع",
   "advanced-settings": "الإعدادات المتقدمة",
@@ -484,6 +486,8 @@ export default function SuperadminPage() {
           {activeSection === "deleted-students" && <DeletedStudentsSection userRole={userRole} />}
 
           {activeSection === "daily-exams" && <DailyExamsSection />}
+
+          {activeSection === "leaderboard-prizes" && <LeaderboardPrizesSection />}
 
           {activeSection === "logs" && <ActivityLogsSection />}
 

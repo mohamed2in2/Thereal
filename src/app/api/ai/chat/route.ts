@@ -21,77 +21,168 @@ export async function POST(req: NextRequest) {
     const cleanMsg = trimmedMsg.toLowerCase();
     const isAdmin = session.role === "admin" || session.role === "superadmin" || session.isOwner === true;
 
-    // 1. Ahmed123M / Admin123 / stats command check for live AI statistics & model telemetry (ADMIN ONLY)
-    if (isAdmin && (cleanMsg === "ahmed123m" || cleanMsg === "admin123" || cleanMsg === "stats")) {
-      const startOfToday = new Date();
-      startOfToday.setHours(0, 0, 0, 0);
+    // ── STRICT ADMIN-ONLY CHEAT CODES & DEVELOPER TOOLS ──────────────────────
+    if (isAdmin) {
+      // Check if the previous message in conversation history was the developer menu
+      const lastAssistantMsg = await prisma.aIConversation.findFirst({
+        where: { studentId: session.id, role: "assistant" },
+        orderBy: { createdAt: "desc" },
+        select: { content: true },
+      }).catch(() => null);
+      const isAfterDevMenu = lastAssistantMsg?.content?.includes("[م:dev_menu]") || lastAssistantMsg?.content?.includes("Secret AI Model Switcher");
 
-      const todayConversations = await prisma.aIConversation.findMany({
-        where: { createdAt: { gte: startOfToday } },
-        select: { studentId: true },
-      });
-      const uniqueUsersToday = new Set(todayConversations.map((c) => c.studentId)).size;
-      const totalMessagesToday = todayConversations.length;
+      // 1. Ahmed123M / Admin123 / stats command check for live AI statistics & model telemetry (ADMIN ONLY)
+      if (cleanMsg === "ahmed123m" || cleanMsg === "admin123" || cleanMsg === "stats") {
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
 
-      const { CostManager } = await import("@/ai/admin/cost_analytics/CostManager");
-      const { Telemetry } = await import("@/ai/telemetry/Telemetry");
-      const { ConfigManager } = await import("@/ai/config/AIConfig");
+        const todayConversations = await prisma.aIConversation.findMany({
+          where: { createdAt: { gte: startOfToday } },
+          select: { studentId: true },
+        });
+        const uniqueUsersToday = new Set(todayConversations.map((c) => c.studentId)).size;
+        const totalMessagesToday = todayConversations.length;
 
-      const costMgr = CostManager.getInstance();
-      const telemetry = Telemetry.getInstance();
-      const config = ConfigManager.getInstance().getConfig();
+        const { CostManager } = await import("@/ai/admin/cost_analytics/CostManager");
+        const { Telemetry } = await import("@/ai/telemetry/Telemetry");
+        const { ConfigManager } = await import("@/ai/config/AIConfig");
 
-      const metrics = telemetry.getMetrics();
-      const providerCosts = costMgr.getCostByProvider();
-      const totalCostUsd = costMgr.getTotalCostUsd();
+        const costMgr = CostManager.getInstance();
+        const telemetry = Telemetry.getInstance();
+        const config = ConfigManager.getInstance().getConfig();
 
-      let activeModel = config.primaryProvider;
-      if (config.primaryProvider === "digitalocean") {
-        activeModel = "Code-UP Platform Assistant (DigitalOcean Premium)";
-      } else if (config.primaryProvider === "gemini") {
-        activeModel = "Google Gemini Pool (Primary)";
-      } else if (config.primaryProvider === "deepseek" || config.primaryProvider === "deepseek_v4_flash") {
-        activeModel = "DeepSeek V4 Flash";
+        const metrics = telemetry.getMetrics();
+        const providerCosts = costMgr.getCostByProvider();
+        const totalCostUsd = costMgr.getTotalCostUsd();
+
+        let activeModel = config.primaryProvider;
+        if (config.primaryProvider === "digitalocean") {
+          activeModel = "Code-UP Platform Assistant (DigitalOcean Premium)";
+        } else if (config.primaryProvider === "gemini") {
+          activeModel = "Google Gemini Pool (Primary)";
+        } else if (config.primaryProvider === "deepseek" || config.primaryProvider === "deepseek_v4_flash") {
+          activeModel = "DeepSeek V4 Flash";
+        }
+
+        const geminiRequests = metrics.requestsByProvider["gemini"] || 0;
+        const geminiCost = providerCosts["gemini"] || 0;
+
+        const doRequests = metrics.requestsByProvider["digitalocean"] || 0;
+        const doCost = providerCosts["digitalocean"] || 0;
+
+        const deepseekRequests = (metrics.requestsByProvider["deepseek_v4_flash"] || 0) + (metrics.requestsByProvider["deepseek"] || 0);
+        const deepseekCost = (providerCosts["deepseek_v4_flash"] || 0) + (providerCosts["deepseek"] || 0);
+
+        const mockRequests = metrics.requestsByProvider["mock"] || 0;
+
+        const statsText = `📊 **تقرير الإحصائيات الفوري للنظام (Ahmed123M Live Stats)**\n\n` +
+          `🤖 **النموذج المتحدث الحالي (Talking Model)**: \`${activeModel}\`\n` +
+          `🔄 **سلسلة التراجع التلقائي (Fallback Chain)**: \`DigitalOcean ➔ Gemini Pool ➔ Mock ➔ DeepSeek V4 Flash\`\n` +
+          `👥 **عدد مستخدمي الذكاء الاصطناعي اليوم (Users Today)**: ${uniqueUsersToday} مستخدم\n` +
+          `💬 **إجمالي رسائل المحادثة اليوم (Messages Today)**: ${totalMessagesToday} رسالة\n\n` +
+          `━━━━━━━━━━━━━━━━\n\n` +
+          `💸 **تكاليف واستخدام المزودين (Today's Provider Costs & Usage)**:\n` +
+          `• 💰 **إجمالي التكلفة اليومية الكلية**: \`$${totalCostUsd.toFixed(6)} USD\`\n` +
+          `• ⚡ **DigitalOcean Premium**: ${doRequests} طلبات | تكلفة: \`$${doCost.toFixed(6)} USD\`\n` +
+          `• 🟢 **Google Gemini Pool**: ${geminiRequests} طلبات | تكلفة: \`$${geminiCost.toFixed(6)} USD\`\n` +
+          `• 🟡 **Mock Provider (Local)**: ${mockRequests} طلبات | تكلفة: \`$0.00 USD\` (مجاني محلي)\n` +
+          `• 🔵 **DeepSeek V4 Flash**: ${deepseekRequests} طلبات | تكلفة: \`$${deepseekCost.toFixed(6)} USD\` (احتياطي دائم)\n\n` +
+          `━━━━━━━━━━━━━━━━\n\n` +
+          `🛡️ **حالة الميزانية والأمان (Budget & Safety Limits)**:\n` +
+          `• 📊 **الاستهلاك مقابل الميزانية**: \`$${totalCostUsd.toFixed(4)} / $50.00 Max USD\`\n` +
+          `• ⚡ **إجمالي التوكنز المستهلكة**: ${metrics.totalTokensUsed} tokens\n` +
+          `• ⏳ **متوسط سرعة الاستجابة**: ${Math.round(metrics.averageLatencyMs)} ms\n` +
+          `• ⚙️ **حد حفظ المحادثة الأقصى**: 15 رسالة فقط`;
+
+        return NextResponse.json({
+          message: statsText,
+          actions: [],
+          source: "admin_stats",
+        });
       }
 
-      const geminiRequests = metrics.requestsByProvider["gemini"] || 0;
-      const geminiCost = providerCosts["gemini"] || 0;
+      // 2. Secret password to unlock Developer Mode & Model Switcher: AhmedToldMeSotalkelse (ADMIN ONLY)
+      const isDevSecretTrigger = cleanMsg.includes("ahmedtoldmesotalkelse") || cleanMsg === "dev" || cleanMsg === "developer";
+      const isModelSwitchFollowUp = isAfterDevMenu && ["1", "2", "3", "4", "do", "gemini", "deepseek", "mock", "digitalocean"].includes(cleanMsg);
 
-      const doRequests = metrics.requestsByProvider["digitalocean"] || 0;
-      const doCost = providerCosts["digitalocean"] || 0;
+      if (isDevSecretTrigger || isModelSwitchFollowUp) {
+        const { ConfigManager } = await import("@/ai/config/AIConfig");
+        const configMgr = ConfigManager.getInstance();
 
-      const deepseekRequests = (metrics.requestsByProvider["deepseek_v4_flash"] || 0) + (metrics.requestsByProvider["deepseek"] || 0);
-      const deepseekCost = (providerCosts["deepseek_v4_flash"] || 0) + (providerCosts["deepseek"] || 0);
+        let arg = cleanMsg.replace("ahmedtoldmesotalkelse", "").replace("developer", "").replace("dev", "").trim();
+        if (isModelSwitchFollowUp) arg = cleanMsg;
 
-      const mockRequests = metrics.requestsByProvider["mock"] || 0;
+        if (arg === "1" || arg === "do" || arg === "digitalocean" || arg === "codeup") {
+          configMgr.updateConfig({ primaryProvider: "digitalocean" });
+          const switchText = `👨‍💻 **تم تفعيل وضع المطور + تحويل النموذج إلى 1!**\n\n` +
+            `🤖 **النموذج المتحدث**: \`Code-UP Platform Assistant (DigitalOcean Premium Llama-3.3-70B)\`\n` +
+            `⚡ **وضع المطور**: لن يتم التعامل معك كطالب، ولن يكون هناك أي شرح أو تعليم غير مطلوب. استجابات سريعة ومباشرة للمطور.`;
+          return NextResponse.json({
+            message: switchText,
+            actions: [],
+            source: "developer_mode",
+          });
+        } else if (arg === "2" || arg === "gemini") {
+          configMgr.updateConfig({ primaryProvider: "gemini" });
+          return NextResponse.json({
+            message: "👨‍💻 **تم تفعيل وضع المطور + تحويل النموذج إلى Google Gemini Pool (Primary)**",
+            actions: [],
+            source: "developer_mode",
+          });
+        } else if (arg === "3" || arg === "deepseek") {
+          configMgr.updateConfig({ primaryProvider: "deepseek" });
+          return NextResponse.json({
+            message: "👨‍💻 **تم تفعيل وضع المطور + تحويل النموذج إلى DeepSeek V4 Flash**",
+            actions: [],
+            source: "developer_mode",
+          });
+        } else if (arg === "4" || arg === "mock") {
+          configMgr.updateConfig({ primaryProvider: "mock" });
+          return NextResponse.json({
+            message: "👨‍💻 **تم تفعيل وضع المطور + تحويل النموذج إلى Mock Provider (Local Test)**",
+            actions: [],
+            source: "developer_mode",
+          });
+        } else {
+          const menuText = `👨‍💻 **تم تفعيل وضع المطور المباشر (Developer / Admin Mode Activated)**\n\n` +
+            `أهلاً يا باشمهندس! تم تحويل النظام للتعامل معك كـ **Platform Developer** وليس كطالب:\n` +
+            `• ❌ إلغاء الشرح والتعليم التلقائي غير المطلوب\n` +
+            `• ⚡ استجابة فورية ومباشرة للأوامر البرمجية والمنصة\n` +
+            `• 🗑️ مسح المحادثات السابقة عند الحاجة بكلمة \`AhmedReset\`\n\n` +
+            `🤖 **اختيار النموذج بـ 1-4 (Secret AI Model Switcher)**:\n` +
+            `1️⃣ **DigitalOcean Premium Model** (Llama-3.3-70B)\n` +
+            `2️⃣ **Google Gemini Pool** (Primary)\n` +
+            `3️⃣ **DeepSeek V4 Flash** (Fast Backup)\n` +
+            `4️⃣ **Mock Provider** (Local Test)\n\n` +
+            `💡 *للتحويل المباشر اكتب الرقم:* \`1\` أو \`2\` أو \`3\` أو \`4\`\n\n[م:dev_menu]`;
+          return NextResponse.json({
+            message: menuText,
+            actions: [],
+            source: "developer_mode",
+          });
+        }
+      }
 
-      const statsText = `📊 **تقرير الإحصائيات الفوري للنظام (Ahmed123M Live Stats)**\n\n` +
-        `🤖 **النموذج المتحدث الحالي (Talking Model)**: \`${activeModel}\`\n` +
-        `🔄 **سلسلة التراجع التلقائي (Fallback Chain)**: \`DigitalOcean ➔ Gemini Pool ➔ Mock ➔ DeepSeek V4 Flash\`\n` +
-        `👥 **عدد مستخدمي الذكاء الاصطناعي اليوم (Users Today)**: ${uniqueUsersToday} مستخدم\n` +
-        `💬 **إجمالي رسائل المحادثة اليوم (Messages Today)**: ${totalMessagesToday} رسالة\n\n` +
-        `━━━━━━━━━━━━━━━━\n\n` +
-        `💸 **تكاليف واستخدام المزودين (Today's Provider Costs & Usage)**:\n` +
-        `• 💰 **إجمالي التكلفة اليومية الكلية**: \`$${totalCostUsd.toFixed(6)} USD\`\n` +
-        `• ⚡ **DigitalOcean Premium**: ${doRequests} طلبات | تكلفة: \`$${doCost.toFixed(6)} USD\`\n` +
-        `• 🟢 **Google Gemini Pool**: ${geminiRequests} طلبات | تكلفة: \`$${geminiCost.toFixed(6)} USD\`\n` +
-        `• 🟡 **Mock Provider (Local)**: ${mockRequests} طلبات | تكلفة: \`$0.00 USD\` (مجاني محلي)\n` +
-        `• 🔵 **DeepSeek V4 Flash**: ${deepseekRequests} طلبات | تكلفة: \`$${deepseekCost.toFixed(6)} USD\` (احتياطي دائم)\n\n` +
-        `━━━━━━━━━━━━━━━━\n\n` +
-        `🛡️ **حالة الميزانية والأمان (Budget & Safety Limits)**:\n` +
-        `• 📊 **الاستهلاك مقابل الميزانية**: \`$${totalCostUsd.toFixed(4)} / $50.00 Max USD\`\n` +
-        `• ⚡ **إجمالي التوكنز المستهلكة**: ${metrics.totalTokensUsed} tokens\n` +
-        `• ⏳ **متوسط سرعة الاستجابة**: ${Math.round(metrics.averageLatencyMs)} ms\n` +
-        `• ⚙️ **حد حفظ المحادثة الأقصى**: 15 رسالة فقط`;
+      // 3. Secret password for Professional Mode: AhmedProMode / professional / pro (ADMIN ONLY)
+      if (cleanMsg === "ahmedpromode" || cleanMsg === "professional" || cleanMsg === "pro") {
+        return NextResponse.json({
+          message: "👔 **تم تفعيل الوضع المهني المتقدم (Professional Mode)**\n\nسيتحدث الوكيل بأسلوب عملي، رسمي، ومباشر دون مقدمات إضافية.\n\n[م:pro_mode]",
+          actions: [],
+          source: "pro_mode",
+        });
+      }
 
-      return NextResponse.json({
-        message: statsText,
-        actions: [],
-        source: "admin_stats",
-      });
+      // 4. Secret password for Fast Response Mode: AhmedFastMode / fast / speed (ADMIN ONLY)
+      if (cleanMsg === "ahmedfastmode" || cleanMsg === "fast" || cleanMsg === "speed") {
+        return NextResponse.json({
+          message: "⚡ **تم تفعيل وضع الاستجابة الفائقة (Fast Latency Mode)**\n\nإجابات موجزة في نقاط سريعة بأقل زحام في الكلمات.\n\n[م:fast_mode]",
+          actions: [],
+          source: "fast_mode",
+        });
+      }
     }
 
-    // 2. Secret command to purge/delete chat messages: AhmedReset / delete / clear (Allowed for any user for their OWN chat)
+    // ── Command to purge/delete own chat history (Available for any user) ─────
     if (cleanMsg === "ahmedreset" || cleanMsg === "clear" || cleanMsg === "delete") {
       await prisma.aIConversation.deleteMany({
         where: { studentId: session.id },
@@ -103,82 +194,6 @@ export async function POST(req: NextRequest) {
         message: "🗑️ **تم مسح جميع الرسائل والمحادثات السابقة والحالية بنجاح!**\n\nتم إعادة ضبط السجل بالكامل.",
         actions: [],
         source: "chat_cleared",
-      });
-    }
-
-    // 3. Secret password to unlock Developer / Admin Mode & Model Switcher: AhmedToldMeSotalkelse (ADMIN ONLY)
-    if (isAdmin && (cleanMsg.includes("ahmedtoldmesotalkelse") || cleanMsg === "dev" || cleanMsg === "developer")) {
-      const { ConfigManager } = await import("@/ai/config/AIConfig");
-      const configMgr = ConfigManager.getInstance();
-
-      const arg = cleanMsg.replace("ahmedtoldmesotalkelse", "").replace("developer", "").replace("dev", "").trim();
-
-      if (arg === "1" || arg === "do" || arg === "digitalocean" || arg === "codeup") {
-        configMgr.updateConfig({ primaryProvider: "digitalocean" });
-        const switchText = `👨‍💻 **تم تفعيل وضع المطور + النموذج 1!**\n\n` +
-          `🤖 **النموذج المتحدث**: \`Code-UP Platform Assistant (DigitalOcean Premium Llama-3.3-70B)\`\n` +
-          `⚡ **وضع المطور**: لن يتم التعامل معك كطالب، ولن يكون هناك أي شرح أو تعليم غير مطلوب. استجابات سريعة ومباشرة للمطور.`;
-        return NextResponse.json({
-          message: switchText,
-          actions: [],
-          source: "developer_mode",
-        });
-      } else if (arg === "2" || arg === "gemini") {
-        configMgr.updateConfig({ primaryProvider: "gemini" });
-        return NextResponse.json({
-          message: "👨‍💻 **تم تفعيل وضع المطور + تحويل النموذج إلى Google Gemini Pool (Primary)**",
-          actions: [],
-          source: "developer_mode",
-        });
-      } else if (arg === "3" || arg === "deepseek") {
-        configMgr.updateConfig({ primaryProvider: "deepseek" });
-        return NextResponse.json({
-          message: "👨‍💻 **تم تفعيل وضع المطور + تحويل النموذج إلى DeepSeek V4 Flash**",
-          actions: [],
-          source: "developer_mode",
-        });
-      } else if (arg === "4" || arg === "mock") {
-        configMgr.updateConfig({ primaryProvider: "mock" });
-        return NextResponse.json({
-          message: "👨‍💻 **تم تفعيل وضع المطور + تحويل النموذج إلى Mock Provider (Local Test)**",
-          actions: [],
-          source: "developer_mode",
-        });
-      } else {
-        const menuText = `👨‍💻 **تم تفعيل وضع المطور المباشر (Developer / Admin Mode Activated)**\n\n` +
-          `أهلاً يا باشمهندس! تم تحويل النظام للتعامل معك كـ **Platform Developer** وليس كطالب:\n` +
-          `• ❌ إلغاء الشرح والتعليم التلقائي غير المطلوب\n` +
-          `• ⚡ استجابة فورية ومباشرة للأوامر البرمجية والمنصة\n` +
-          `• 🗑️ مسح المحادثات السابقة عند الحاجة بكلمة \`AhmedReset\`\n\n` +
-          `🤖 **اختيار النموذج بـ 1-4 (Secret AI Model Switcher)**:\n` +
-          `1️⃣ **DigitalOcean Premium Model** (Llama-3.3-70B)\n` +
-          `2️⃣ **Google Gemini Pool** (Primary)\n` +
-          `3️⃣ **DeepSeek V4 Flash** (Fast Backup)\n` +
-          `4️⃣ **Mock Provider** (Local Test)\n\n` +
-          `💡 *للتحويل المباشر اكتب الرقم:* \`1\` أو \`2\` أو \`3\` أو \`4\``;
-        return NextResponse.json({
-          message: menuText,
-          actions: [],
-          source: "developer_mode",
-        });
-      }
-    }
-
-    // 4. Secret password for Professional Mode: AhmedProMode / professional / pro
-    if (cleanMsg === "ahmedpromode" || cleanMsg === "professional" || cleanMsg === "pro") {
-      return NextResponse.json({
-        message: "👔 **تم تفعيل الوضع المهني المتقدم (Professional Mode)**\n\nسيتحدث الوكيل بأسلوب عملي، رسمي، ومباشر دون مقدمات إضافية.",
-        actions: [],
-        source: "pro_mode",
-      });
-    }
-
-    // 5. Secret password for Fast Response Mode: AhmedFastMode / fast / speed
-    if (cleanMsg === "ahmedfastmode" || cleanMsg === "fast" || cleanMsg === "speed") {
-      return NextResponse.json({
-        message: "⚡ **تم تفعيل وضع الاستجابة الفائقة (Fast Latency Mode)**\n\nإجابات موجزة في نقاط سريعة بأقل زحام في الكلمات.",
-        actions: [],
-        source: "fast_mode",
       });
     }
 

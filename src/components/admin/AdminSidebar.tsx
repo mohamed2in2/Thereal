@@ -28,6 +28,7 @@ const superadminSections = [
   { id: "create",              label: "إضافة مدرس" },
   { id: "wallet",              label: "💰 إدارة الرصيد" },
   { id: "daily-exams",         label: "امتحانات لوحة الشرف" },
+  { id: "leaderboard-prizes",  label: "🏆 جوائز لوحة الشرف (24 ساعة)" },
   { id: "logs",                label: "سجلات النشاط" },
   { id: "staff-accounts",      label: "المشرفون والموظفون" },
   { id: "site-text",           label: "نصوص الموقع" },

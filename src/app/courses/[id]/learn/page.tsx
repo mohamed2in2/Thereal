@@ -26,6 +26,15 @@ type MaterialItem = { id: string; title: string; url: string; type: string };
 
 type QuizItem = { id: string; title: string; timeLimitMinutes: number };
 
+type HomeworkItem = {
+  id: string;
+  title: string;
+  type: string;
+  isPublished?: boolean;
+  timeLimitMinutes?: number;
+  mySubmission?: { id: string; status: string; score?: number; totalQ?: number } | null;
+};
+
 type FolderItem = {
   id: string;
   name: string;
@@ -33,6 +42,7 @@ type FolderItem = {
   videos: VideoItem[];
   materials: MaterialItem[];
   quizzes: QuizItem[];
+  homeworks?: HomeworkItem[];
 };
 
 type CourseData = {
@@ -822,6 +832,31 @@ export default function CourseLearningPage() {
                             <span className="text-[10px] text-[var(--ink-muted)] shrink-0" dir="ltr">{quiz.timeLimitMinutes}د</span>
                           </button>
                         ))}
+
+                        {/* Homeworks */}
+                        {(folder.homeworks || []).map((hw) => {
+                          const isPassed = hw.mySubmission?.status === "passed";
+                          const isPending = hw.mySubmission?.status === "pending" || hw.mySubmission?.status === "review_requested";
+                          return (
+                            <button
+                              key={hw.id}
+                              onClick={() => router.push(`/homeworks/${hw.id}`)}
+                              className="w-full flex items-center gap-2.5 px-4 py-2 text-right hover:bg-[var(--border)] transition-colors group"
+                            >
+                              <span className={`shrink-0 w-5 h-5 rounded-full flex items-center justify-center ${isPassed ? "bg-emerald-500/20 text-emerald-400" : isPending ? "bg-amber-500/20 text-amber-400" : "bg-amber-500/10 text-amber-400"}`}>
+                                <span className="text-[11px]">📝</span>
+                              </span>
+                              <span className="text-xs text-[var(--ink-muted)] group-hover:text-[var(--ink)] flex-1 truncate">{hw.title}</span>
+                              {isPassed ? (
+                                <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded font-bold">تم الحل ✅</span>
+                              ) : isPending ? (
+                                <span className="text-[10px] text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded font-bold">قيد المراجعة</span>
+                              ) : (
+                                <span className="text-[10px] text-amber-500/80 bg-amber-500/10 px-1.5 py-0.5 rounded font-bold">واجب</span>
+                              )}
+                            </button>
+                          );
+                        })}
 
                         {/* Materials */}
                         {folder.materials.map((m) => (

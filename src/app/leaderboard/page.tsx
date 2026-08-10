@@ -5,6 +5,7 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { Clock, Flame } from "lucide-react";
+import { DEFAULT_LEADERBOARD_PRIZES, type LeaderboardPrize } from "@/lib/leaderboard-refresh";
 
 export const revalidate = 86400; // Cache page for 24 hours (Next.js ISR)
 
@@ -137,12 +138,17 @@ export default async function LeaderboardPage({
     return       { bg: "var(--surface-2)", color: "var(--ink-3)" };
   };
 
-  const prizes = [
-    { rank: "١",    label: "المركز الأول",    prize: "حقيبة ظهر + سماعات + تيشيرت المنصة", gold: true  },
-    { rank: "٢",    label: "المركز الثاني",   prize: "باور بانك + تيشيرت المنصة",          gold: false },
-    { rank: "٣",    label: "المركز الثالث",   prize: "مج حراري + تيشيرت المنصة",           gold: false },
-    { rank: "٤-١٠", label: "المركز ٤ إلى ١٠", prize: "تيشيرت المنصة",                       gold: false },
-  ];
+  const dynamicPrizes: LeaderboardPrize[] = Array.isArray(cache?.prizes) && cache.prizes.length > 0
+    ? cache.prizes
+    : DEFAULT_LEADERBOARD_PRIZES;
+
+  const prizeBadge = (rank: number, highlight?: boolean) => {
+    if (rank === 1) return { bg: "var(--gold-2)", color: "#3a2a06" };
+    if (rank === 2) return { bg: "#C0C5CE", color: "#3a3f48" };
+    if (rank === 3) return { bg: "#C98A4B", color: "#fff" };
+    if (highlight) return { bg: "var(--gold-soft)", color: "var(--gold-2)" };
+    return { bg: "var(--surface-2)", color: "var(--ink-2)" };
+  };
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "var(--bg)", fontFamily: "var(--font-body)" }}>
@@ -430,27 +436,39 @@ export default async function LeaderboardPage({
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--gold-2)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M20 12v10H4V12M2 7h20v5H2zM12 22V7M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7zM12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/>
                 </svg>
-                <h3 style={{ fontFamily: "var(--font-head)", fontWeight: 800, fontSize: 18, margin: 0, color: "var(--ink)" }}>نظام الجوائز</h3>
+                <div className="text-right">
+                  <h3 style={{ fontFamily: "var(--font-head)", fontWeight: 800, fontSize: 18, margin: 0, color: "var(--ink)" }}>جوائز الـ 24 ساعة</h3>
+                  <p style={{ fontSize: 11, color: "var(--ink-3)", margin: "2px 0 0" }}>المراكز العشرة الأولى (تحديث يومي 3:00 ص)</p>
+                </div>
               </div>
-              <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 10 }}>
-                {prizes.map(({ rank, label, prize, gold }) => (
-                  <div key={rank} className="flex items-center gap-[13px]"
-                    style={{ padding: "13px 15px", borderRadius: 12, border: "1px solid var(--border)", background: gold ? "var(--gold-soft)" : "var(--surface-2)" }}>
-                    <span className="flex items-center justify-center shrink-0 font-black text-[13px]"
-                      style={{
-                        width: 30, height: 30, borderRadius: 8,
-                        background: gold ? "var(--gold-2)" : rank === "٢" ? "#C0C5CE" : rank === "٣" ? "#C98A4B" : "var(--brand-soft)",
-                        color:      gold ? "#3a2a06"     : rank === "٢" ? "#3a3f48" : rank === "٣" ? "#fff"    : "var(--brand)",
-                        fontFamily: "var(--font-head)",
-                      }}>
-                      {rank}
-                    </span>
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: 14.5, color: "var(--ink)" }}>{label}</div>
-                      <div style={{ fontSize: 12.5, color: "var(--ink-2)" }}>{prize}</div>
+              <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 8, maxHeight: "560px", overflowY: "auto" }}>
+                {dynamicPrizes.map((p) => {
+                  const isTop3 = p.rank <= 3;
+                  const isGold = p.highlight || isTop3;
+                  const b = prizeBadge(p.rank, p.highlight);
+                  const arabicRank = ["١","٢","٣","٤","٥","٦","٧","٨","٩","١٠"][p.rank - 1] ?? p.rank;
+                  return (
+                    <div key={p.rank} className="flex items-center gap-[11px]"
+                      style={{ padding: "10px 12px", borderRadius: 12, border: `1px solid ${isGold ? "var(--gold-2)" : "var(--border)"}`, background: isGold ? "var(--gold-soft)" : "var(--surface-2)" }}>
+                      <span className="flex items-center justify-center shrink-0 font-black text-[12.5px]"
+                        style={{
+                          width: 30, height: 30, borderRadius: 8,
+                          background: b.bg,
+                          color: b.color,
+                          fontFamily: "var(--font-head)",
+                        }}>
+                        {arabicRank}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5" style={{ fontWeight: 700, fontSize: 13.5, color: "var(--ink)" }}>
+                          <span>{p.icon || "🎁"}</span>
+                          <span className="truncate">{p.title || p.rankLabel || `المركز ${p.rank}`}</span>
+                        </div>
+                        <div className="truncate" style={{ fontSize: 11.5, color: "var(--ink-2)", marginTop: 2 }}>{p.prize}</div>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 

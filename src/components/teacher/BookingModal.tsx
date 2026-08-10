@@ -190,7 +190,7 @@ export function BookingButton({
   const baseTermly = stageConfig.priceTermly > 0 ? stageConfig.priceTermly : 750;
   const baseYearly = stageConfig.priceYearly > 0 ? stageConfig.priceYearly : 1200;
 
-  const langRate = priceLanguagesMonthly ?? 50;
+  const langRate = priceLanguagesMonthly ?? 0;
   const isLanguages = languageTrack === "languages";
 
   const monthlyPrice = baseMonthly + (isLanguages ? 1 * langRate : 0);
@@ -201,7 +201,7 @@ export function BookingButton({
     createPlan(
       "monthly",
       `اشتراك شهر واحد ${isLanguages ? "(لغات)" : "(عربي)"}`,
-      isLanguages ? `يشمل رسوم اللغات (+${langRate}ج)` : "شهر واحد فقط",
+      "شهر واحد فقط",
       monthlyPrice,
       null,
       "📅",
@@ -211,7 +211,7 @@ export function BookingButton({
     createPlan(
       "termly",
       `اشتراك الترم ${isLanguages ? "(لغات)" : "(عربي)"}`,
-      isLanguages ? `يشمل رسوم اللغات 5 شهور (+${langRate * 5}ج)` : "ترم دراسي كامل",
+      "ترم دراسي كامل",
       termlyPrice,
       null,
       "📚",
@@ -221,7 +221,7 @@ export function BookingButton({
     createPlan(
       "yearly",
       `اشتراك سنة كاملة ${isLanguages ? "(لغات)" : "(عربي)"}`,
-      isLanguages ? `يشمل رسوم اللغات 10 شهور (+${langRate * 10}ج)` : "سنة دراسية كاملة",
+      "سنة دراسية كاملة",
       yearlyPrice,
       null,
       "🎓",

@@ -132,7 +132,7 @@ export async function checkVideoAccess(userId: string, role: string, videoId: st
  * Checks if a user has access to homework.
  * - Admin/Superadmin: full access.
  * - Teacher: access if they created the homework.
- * - Student: access if they are enrolled in the course the homework belongs to.
+ * - Student: access if they are subscribed to teacher, enrolled in course, purchased folder/video, or if content is free.
  */
 export async function checkHomeworkAccess(userId: string, role: string, homeworkId: string): Promise<boolean> {
   if (role === "superadmin" || role === "admin") return true;
@@ -142,6 +142,7 @@ export async function checkHomeworkAccess(userId: string, role: string, homework
     select: {
       teacherId: true,
       courseId: true,
+      folderId: true,
       videoId: true,
     }
   });
@@ -154,18 +155,88 @@ export async function checkHomeworkAccess(userId: string, role: string, homework
 
   if (role !== "student") return false;
 
+  // 1. Teacher subscription access
+  const now = new Date();
+  const activeSub = await prisma.teacherSubscription.findFirst({
+    where: {
+      studentId: userId,
+      teacherId: hw.teacherId,
+      status: "active",
+      expiresAt: { gt: now },
+    },
+    select: { id: true },
+  });
+  if (activeSub) return true;
+
+  // 2. Demo bypass check
+  if (await canBypassPayment(role, hw.teacherId)) return true;
+
+  // 3. Resolve courseId / folderId
   let courseId = hw.courseId;
-  if (!courseId && hw.videoId) {
+  let folderId = hw.folderId;
+
+  if (hw.videoId) {
     const video = await prisma.video.findUnique({
       where: { id: hw.videoId },
-      include: { folder: { select: { courseId: true } } }
+      include: { folder: { select: { id: true, courseId: true } } }
     });
     if (video) {
-      courseId = video.folder.courseId;
+      if (!folderId) folderId = video.folder.id;
+      if (!courseId) courseId = video.folder.courseId;
+      // Check video access directly
+      const hasVideoAccess = await checkVideoAccess(userId, role, hw.videoId);
+      if (hasVideoAccess) return true;
     }
   }
 
-  if (!courseId) return false;
+  if (folderId && !courseId) {
+    const folder = await prisma.folder.findUnique({
+      where: { id: folderId },
+      select: { courseId: true },
+    });
+    if (folder) courseId = folder.courseId;
+  }
 
-  return await checkCourseEnrollment(userId, courseId, role);
+  // 4. Folder-level purchase or access code
+  if (folderId) {
+    const hasFolderCode = await prisma.accessCode.findFirst({
+      where: { folderId, studentId: userId, accessType: "FOLDER", isActive: true },
+      select: { id: true },
+    });
+    if (hasFolderCode) return true;
+
+    const hasFolderPurchase = await prisma.folderPurchase.findUnique({
+      where: { studentId_folderId: { studentId: userId, folderId } },
+      select: { id: true },
+    });
+    if (hasFolderPurchase) return true;
+  }
+
+  // 5. Course enrollment & free course check
+  if (courseId) {
+    const course = await prisma.course.findUnique({
+      where: { id: courseId },
+      select: { isPaid: true, price: true },
+    });
+    if (course && (!course.isPaid || course.price === 0)) return true;
+
+    const isEnrolled = await checkCourseEnrollment(userId, courseId, role);
+    if (isEnrolled) return true;
+  }
+
+  // If homework is teacher-level with no course/folder restriction
+  if (!courseId && !folderId && !hw.videoId) {
+    // Accessible if student is enrolled in any active course of the teacher
+    const anyCourseCode = await prisma.accessCode.findFirst({
+      where: {
+        studentId: userId,
+        isActive: true,
+        course: { teacherId: hw.teacherId },
+      },
+      select: { id: true },
+    });
+    if (anyCourseCode) return true;
+  }
+
+  return false;
 }

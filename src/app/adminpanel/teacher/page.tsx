@@ -799,6 +799,21 @@ export default function TeacherDashboardPage() {
     }
   };
 
+  const deleteQuiz = async (quizId: string) => {
+    if (!(await askConfirm({ title: "حذف الاختبار", message: "سيتم حذف هذا الاختبار وجميع نتائج وإجابات الطلاب المرتبطة به نهائياً.", confirmLabel: "حذف الاختبار" }))) return;
+    const res = await fetch(`/api/admin/teacher/exam-dashboard?quizId=${quizId}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    const data = await readJson<{ error?: string; success?: boolean }>(res);
+    if (res.ok) {
+      if (selectedCourse) fetchFolders(selectedCourse.id);
+      notify("success", "تم حذف الاختبار بنجاح");
+    } else {
+      notify("error", data?.error || "تعذر حذف الاختبار");
+    }
+  };
+
   const addMaterial = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMaterial.folderId) return;
@@ -1610,12 +1625,15 @@ export default function TeacherDashboardPage() {
                                   );
                                 })}
                                  {f.quizzes?.map((qz) => (
-                                   <div key={qz.id} className="flex items-center gap-2 rounded-xl border border-sky-500/20 bg-sky-500/5 px-3 py-2.5">
-                                     <span className="shrink-0 text-sky-500"><IconClipboard className="w-4 h-4" /></span>
-                                     <p className="text-sm text-[var(--ink)] font-bold truncate flex-1 min-w-0">{qz.title || "اختبار المحاضرة"}</p>
-                                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-500">اختبار</span>
-                                   </div>
-                                 ))}
+                                    <div key={qz.id} className="flex items-center gap-2 rounded-xl border border-sky-500/20 bg-sky-500/5 px-3 py-2.5">
+                                      <span className="shrink-0 text-sky-500"><IconClipboard className="w-4 h-4" /></span>
+                                      <p className="text-sm text-[var(--ink)] font-bold truncate flex-1 min-w-0">{qz.title || "اختبار المحاضرة"}</p>
+                                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-500">اختبار</span>
+                                      <button onClick={() => deleteQuiz(qz.id)} aria-label="حذف الاختبار" className="shrink-0 w-7 h-7 rounded-lg flex items-center justify-center text-[var(--error)] hover:bg-[var(--error)]/10 transition-colors">
+                                        <IconTrash className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  ))}
                                  {f.homeworks?.map((hw) => (
                                    <div key={hw.id} className="flex items-center gap-2 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2.5">
                                      <span className="shrink-0 text-amber-500"><IconBook className="w-4 h-4" /></span>

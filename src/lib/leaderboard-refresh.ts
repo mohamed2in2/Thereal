@@ -26,6 +26,79 @@ interface AdminRow {
   age: number | null;
 }
 
+export interface LeaderboardPrize {
+  rank: number;
+  rankLabel: string;
+  title: string;
+  prize: string;
+  icon?: string;
+  highlight?: boolean;
+}
+
+export const DEFAULT_LEADERBOARD_PRIZES: LeaderboardPrize[] = [
+  { rank: 1, rankLabel: "المركز الأول", title: "بطل المنصة", prize: "حقيبة ظهر فاخرة + سماعات لاسلكية + تيشيرت المنصة + 1000 نقطة", icon: "🥇", highlight: true },
+  { rank: 2, rankLabel: "المركز الثاني", title: "الوصيف الأول", prize: "باور بانك سريع + تيشيرت المنصة + 750 نقطة", icon: "🥈", highlight: true },
+  { rank: 3, rankLabel: "المركز الثالث", title: "المركز الثالث", prize: "مج حراري ذكي + تيشيرت المنصة + 500 نقطة", icon: "🥉", highlight: true },
+  { rank: 4, rankLabel: "المركز الرابع", title: "المركز الرابع", prize: "تيشيرت المنصة + ميدالية تفوق + 350 نقطة", icon: "🎖️", highlight: false },
+  { rank: 5, rankLabel: "المركز الخامس", title: "المركز الخامس", prize: "تيشيرت المنصة + دفتر كود-أب + 300 نقطة", icon: "⭐", highlight: false },
+  { rank: 6, rankLabel: "المركز السادس", title: "المركز السادس", prize: "اشتراك مجاني شهر بكورس اختياري + 250 نقطة", icon: "🎁", highlight: false },
+  { rank: 7, rankLabel: "المركز السابع", title: "المركز السابع", prize: "كوبون خصم 50% + 200 نقطة", icon: "🏷️", highlight: false },
+  { rank: 8, rankLabel: "المركز الثامن", title: "المركز الثامن", prize: "كوبون خصم 30% + 150 نقطة", icon: "✨", highlight: false },
+  { rank: 9, rankLabel: "المركز التاسع", title: "المركز التاسع", prize: "شارة تفوق رقمية + 100 نقطة", icon: "💫", highlight: false },
+  { rank: 10, rankLabel: "المركز العاشر", title: "المركز العاشر", prize: "شارة تفوق رقمية + 50 نقطة", icon: "🌟", highlight: false },
+];
+
+export async function getLeaderboardPrizes(): Promise<LeaderboardPrize[]> {
+  try {
+    const row = await prisma.leaderboardCache.findUnique({
+      where: { key: "leaderboard_prizes" },
+    });
+    if (row?.data) {
+      const parsed = JSON.parse(row.data);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (err) {
+    console.error("Failed to load custom leaderboard prizes, falling back to defaults:", err);
+  }
+  return DEFAULT_LEADERBOARD_PRIZES;
+}
+
+export async function saveLeaderboardPrizes(prizes: LeaderboardPrize[]): Promise<void> {
+  await prisma.leaderboardCache.upsert({
+    where: { key: "leaderboard_prizes" },
+    update: {
+      data: JSON.stringify(prizes),
+      updatedAt: new Date(),
+    },
+    create: {
+      key: "leaderboard_prizes",
+      data: JSON.stringify(prizes),
+      updatedAt: new Date(),
+    },
+  });
+
+  // Also update active cache snapshot with new prizes without full DB recompute
+  try {
+    const mainCache = await prisma.leaderboardCache.findUnique({
+      where: { key: "leaderboard_data" },
+    });
+    if (mainCache?.data) {
+      const parsed = JSON.parse(mainCache.data);
+      parsed.prizes = prizes;
+      parsed.updatedAt = new Date().toISOString();
+      await prisma.leaderboardCache.update({
+        where: { key: "leaderboard_data" },
+        data: {
+          data: JSON.stringify(parsed),
+          updatedAt: new Date(),
+        },
+      });
+    }
+  } catch (err) {
+    console.error("Failed to update prizes in main cache:", err);
+  }
+}
+
 export function getCompetitionTier(stage: string | null): string[] {
   if (!stage) return [];
   if (stage.startsWith("primary")) return ["primary_4", "primary_5", "primary_6"];
@@ -201,6 +274,8 @@ export async function refreshLeaderboard(force = false) {
       userRanks[u.id] = { pointsRank, streakRank };
     }
 
+    const prizes = await getLeaderboardPrizes();
+
     const computedData = {
       topStudents: {
         admin: topStudentsAdmin,
@@ -217,6 +292,7 @@ export async function refreshLeaderboard(force = false) {
         student_sec: topStreakersSec,
       },
       userRanks,
+      prizes,
       updatedAt: new Date().toISOString(),
     };
 

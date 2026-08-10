@@ -98,8 +98,13 @@ export default async function TeacherHomeworkHubPage({ params }: Props) {
       studentCodes.filter(c => c.accessType === "VIDEO" && c.videoId).map(c => c.videoId!)
     );
 
-    // Also check FolderPurchase, VideoPurchase, and Free Courses
-    const [folderPurchases, videoPurchases, freeCourses] = await Promise.all([
+    // Also check active TeacherSubscription, FolderPurchase, VideoPurchase, and Free Courses
+    const now = new Date();
+    const [teacherSub, folderPurchases, videoPurchases, freeCourses] = await Promise.all([
+      prisma.teacherSubscription.findFirst({
+        where: { studentId, teacherId, status: "active", expiresAt: { gt: now } },
+        select: { id: true },
+      }),
       prisma.folderPurchase.findMany({ where: { studentId }, select: { folderId: true } }),
       prisma.videoPurchase.findMany({ where: { studentId }, select: { videoId: true } }),
       prisma.course.findMany({ where: { teacherId, isPaid: false }, select: { id: true } }),
@@ -107,15 +112,28 @@ export default async function TeacherHomeworkHubPage({ params }: Props) {
     folderPurchases.forEach(fp => folderAccessIds.add(fp.folderId));
     videoPurchases.forEach(vp => videoAccessIds.add(vp.videoId));
 
+    const isSubscribed = !!teacherSub;
     const freeCourseIds = new Set(freeCourses.map(c => c.id));
 
     for (const hw of rawHomeworks) {
+      // If student is subscribed to teacher, they have full access to all published homeworks
+      if (isSubscribed) {
+        accessibleHomeworkIds.add(hw.id);
+        continue;
+      }
+
       // Free course check
       if (hw.courseId && freeCourseIds.has(hw.courseId)) {
         accessibleHomeworkIds.add(hw.id);
         continue;
       }
       if (hw.video?.folder?.courseId && freeCourseIds.has(hw.video.folder.courseId)) {
+        accessibleHomeworkIds.add(hw.id);
+        continue;
+      }
+
+      // Folder-level check
+      if (hw.folderId && folderAccessIds.has(hw.folderId)) {
         accessibleHomeworkIds.add(hw.id);
         continue;
       }
@@ -128,10 +146,10 @@ export default async function TeacherHomeworkHubPage({ params }: Props) {
       } else {
         const video = hw.video;
         const folderId = video.folderId;
-        const courseId = video.folder.courseId;
+        const courseId = video.folder?.courseId;
 
-        if (termCourseIds.has(courseId)) { accessibleHomeworkIds.add(hw.id); continue; }
-        if (folderAccessIds.has(folderId)) { accessibleHomeworkIds.add(hw.id); continue; }
+        if (courseId && termCourseIds.has(courseId)) { accessibleHomeworkIds.add(hw.id); continue; }
+        if (folderId && folderAccessIds.has(folderId)) { accessibleHomeworkIds.add(hw.id); continue; }
         if (videoAccessIds.has(video.id)) { accessibleHomeworkIds.add(hw.id); continue; }
       }
     }
@@ -154,7 +172,7 @@ export default async function TeacherHomeworkHubPage({ params }: Props) {
   const homeworks: HomeworkItem[] = rawHomeworks
     .filter(hw => accessibleHomeworkIds.has(hw.id))
     .map(hw => {
-      const sub = subMap.get(hw.id);
+      const sub = subMap.get(hw.id) as any;
       return {
         id:              hw.id,
         title:           hw.title,

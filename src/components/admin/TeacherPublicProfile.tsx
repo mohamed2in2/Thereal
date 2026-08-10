@@ -379,7 +379,7 @@ export function TeacherPublicProfile() {
         {(() => {
           const currentP = getStagePricing(activeStage);
           const stageName = activeStage === "sec_1" ? "أولى بكالوريا" : "ثانية بكالوريا";
-          const langRate = p.priceLanguagesMonthly ?? 50;
+          const langRate = p.priceLanguagesMonthly ?? 0;
 
           const monthlyAr = currentP.priceMonthly ?? 180;
           const termlyAr = currentP.priceTermly ?? 750;
@@ -403,22 +403,22 @@ export function TeacherPublicProfile() {
                     <span>🇬🇧</span> رسوم مسار اللغات / إنجليزي (إضافة شهرياً)
                   </h4>
                   <span className="text-xs font-mono text-indigo-400 bg-indigo-500/10 px-2.5 py-1 rounded-full border border-indigo-500/20 font-bold">
-                    +{langRate} جنيه / شهرياً
+                    {langRate > 0 ? `+${langRate} جنيه / شهرياً` : "0 جنيه (بدون زيادة)"}
                   </span>
                 </div>
                 <div>
-                  <label className={label}>المبلغ المضاف لطلاب اللغات شهرياً (افتراضي 50 جنيه):</label>
+                  <label className={label}>المبلغ المضاف لطلاب اللغات شهرياً (افتراضي 0 جنيه):</label>
                   <input
                     type="number"
                     min="0"
                     step="1"
                     className={input}
-                    value={p.priceLanguagesMonthly ?? 50}
+                    value={p.priceLanguagesMonthly ?? 0}
                     onChange={(e) => set("priceLanguagesMonthly", e.target.value ? Number(e.target.value) : 0)}
-                    placeholder="50"
+                    placeholder="0"
                   />
                   <p className="text-[11px] text-[var(--ink-muted)] mt-1.5">
-                    يتم ضرب هذه الإضافة تلقائياً: 1 شهر للشهري (+{langRate}ج)، 5 شهور للترم (+{langRate * 5}ج)، و10 شهور للسنة الكاملة (+{langRate * 10}ج).
+                    تُضاف هذه القيمة تلقائياً إلى سعر خطة اللغات (1 شهر للشهري، 5 شهور للترم، و10 شهور للسنة) دون إظهار تفاصيل الزيادة أو رسوم إضافية للطالب.
                   </p>
                 </div>
               </div>
@@ -459,7 +459,7 @@ export function TeacherPublicProfile() {
                       عربي: {termlyAr}ج
                     </span>
                     <span className="text-xs font-mono text-indigo-400 bg-indigo-500/10 px-2.5 py-1 rounded-full border border-indigo-500/20">
-                      لغات: {termlyEn}ج (+{langRate * 5}ج)
+                      لغات: {termlyEn}ج {langRate > 0 ? `(+${langRate * 5}ج)` : ""}
                     </span>
                   </div>
                 </h4>
@@ -486,7 +486,7 @@ export function TeacherPublicProfile() {
                       عربي: {yearlyAr}ج
                     </span>
                     <span className="text-xs font-mono text-indigo-400 bg-indigo-500/10 px-2.5 py-1 rounded-full border border-indigo-500/20">
-                      لغات: {yearlyEn}ج (+{langRate * 10}ج)
+                      لغات: {yearlyEn}ج {langRate > 0 ? `(+${langRate * 10}ج)` : ""}
                     </span>
                   </div>
                 </h4>
@@ -518,9 +518,9 @@ export function TeacherPublicProfile() {
                   </div>
                   <div className="p-3 rounded-xl bg-[var(--surface)] border border-[var(--border)] space-y-1">
                     <span className="font-bold text-indigo-400 block">🇬🇧 مسار اللغات / إنجليزي:</span>
-                    <p className="text-[11px] text-[var(--ink-muted)]">📅 شهري: <strong className="text-[var(--ink)]">{monthlyEn} جنيه</strong> (+{langRate}ج)</p>
-                    <p className="text-[11px] text-[var(--ink-muted)]">📚 ترم كامل: <strong className="text-[var(--ink)]">{termlyEn} جنيه</strong> (+{langRate * 5}ج)</p>
-                    <p className="text-[11px] text-[var(--ink-muted)]">🎓 سنة كاملة: <strong className="text-[var(--ink)]">{yearlyEn} جنيه</strong> (+{langRate * 10}ج)</p>
+                    <p className="text-[11px] text-[var(--ink-muted)]">📅 شهري: <strong className="text-[var(--ink)]">{monthlyEn} جنيه</strong> {langRate > 0 ? `(+${langRate}ج)` : ""}</p>
+                    <p className="text-[11px] text-[var(--ink-muted)]">📚 ترم كامل: <strong className="text-[var(--ink)]">{termlyEn} جنيه</strong> {langRate > 0 ? `(+${langRate * 5}ج)` : ""}</p>
+                    <p className="text-[11px] text-[var(--ink-muted)]">🎓 سنة كاملة: <strong className="text-[var(--ink)]">{yearlyEn} جنيه</strong> {langRate > 0 ? `(+${langRate * 10}ج)` : ""}</p>
                   </div>
                 </div>
               </div>

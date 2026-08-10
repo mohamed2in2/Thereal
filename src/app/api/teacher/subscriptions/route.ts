@@ -136,7 +136,7 @@ export async function POST(req: NextRequest) {
 
     const isLanguages = languageTrack === "languages" || languageTrack === "english";
     const langMonthsMap: Record<string, number> = { monthly: 1, termly: 5, yearly: 10 };
-    const langRate = isLanguages ? (profile?.priceLanguagesMonthly ?? 50) : 0;
+    const langRate = isLanguages ? (profile?.priceLanguagesMonthly ?? 0) : 0;
     const languageSurcharge = langRate * (langMonthsMap[planType] || 1);
     subPrice += languageSurcharge;
 

@@ -252,8 +252,8 @@ model TeacherProfile {
   /// Toggle to enable or disable English/Languages track booking for this teacher
   enableLanguagesTrack Boolean @default(true)
 
-  /// Extra monthly surcharge for English / Languages track (default: 50 EGP/month)
-  priceLanguagesMonthly Float? @default(50)
+  /// Extra monthly surcharge for English / Languages track (default: 0 EGP/month)
+  priceLanguagesMonthly Float? @default(0)
 
   /// Custom payment instructions or Vodafone Cash number
   paymentNotes      String?

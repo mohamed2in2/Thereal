@@ -148,6 +148,33 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
                 questions: { orderBy: { order: "asc" } },
               } as any),
             },
+            homeworks: {
+              where: role === "student" ? { isPublished: true } : undefined,
+              orderBy: { createdAt: "asc" },
+              select: {
+                id: true,
+                title: true,
+                description: true,
+                type: true,
+                linkUrl: true,
+                dueAt: true,
+                timeLimitMinutes: true,
+                isPublished: true,
+                videoId: true,
+                allowedFileTypes: true,
+                submissions: {
+                  where: { studentId: session.id },
+                  select: {
+                    id: true,
+                    status: true,
+                    score: true,
+                    totalQ: true,
+                    completedAt: true,
+                  },
+                  take: 1,
+                },
+              },
+            },
           },
         },
       },
@@ -195,6 +222,19 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
             questions: (q.questions ?? []).map((question) => ({ ...question, correctAnswer: undefined })),
           };
         }),
+        homeworks: (folder.homeworks || []).map((hw: any) => ({
+          id: hw.id,
+          title: hw.title,
+          description: hw.description,
+          type: hw.type,
+          linkUrl: hw.linkUrl,
+          dueAt: hw.dueAt,
+          timeLimitMinutes: hw.timeLimitMinutes,
+          isPublished: hw.isPublished,
+          videoId: hw.videoId,
+          allowedFileTypes: hw.allowedFileTypes,
+          mySubmission: hw.submissions?.[0] || null,
+        })),
       })),
     };
 
