@@ -128,14 +128,55 @@ export function AIAssistant() {
       });
       const data = await res.json().catch(() => ({}));
       const replyMessage = data?.message || data?.error || "أهلاً بيك! أنا مرشدك الذكي 🌟 قولي إيه اللي محتاجه وسيتم مساعدتك فوراً!";
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content: replyMessage,
-          actions: data?.actions ? JSON.stringify(data.actions) : null,
-        },
-      ]);
+      const actionsStr = data?.actions ? JSON.stringify(data.actions) : null;
+
+      // Smooth fast stream rendering for instant perceived response
+      if (replyMessage.length <= 80) {
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: replyMessage, actions: actionsStr },
+        ]);
+      } else {
+        const words = replyMessage.split(" ");
+        let currentWords = "";
+        let wordIdx = 0;
+
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: "", actions: actionsStr },
+        ]);
+
+        const streamInterval = setInterval(() => {
+          const chunk = words.slice(wordIdx, wordIdx + 3).join(" ");
+          currentWords += (currentWords ? " " : "") + chunk;
+          wordIdx += 3;
+
+          setMessages((prev) => {
+            const updated = [...prev];
+            if (updated.length > 0 && updated[updated.length - 1].role === "assistant") {
+              updated[updated.length - 1] = {
+                ...updated[updated.length - 1],
+                content: currentWords,
+              };
+            }
+            return updated;
+          });
+
+          if (wordIdx >= words.length) {
+            clearInterval(streamInterval);
+            setMessages((prev) => {
+              const updated = [...prev];
+              if (updated.length > 0 && updated[updated.length - 1].role === "assistant") {
+                updated[updated.length - 1] = {
+                  ...updated[updated.length - 1],
+                  content: replyMessage,
+                };
+              }
+              return updated;
+            });
+          }
+        }, 20);
+      }
     } catch {
       setMessages((prev) => [
         ...prev,

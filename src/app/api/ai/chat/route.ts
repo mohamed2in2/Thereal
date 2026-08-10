@@ -331,37 +331,56 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Build full student context
-    let context;
-    try {
-      context = await buildStudentContext(session.id);
-    } catch (ctxErr) {
-      console.error("[chat/route] buildStudentContext failed:", ctxErr);
-      context = {
-        profile: {
-          id: session.id,
-          name: session.name || "الطالب",
-          email: session.email || "",
-          age: null,
-          educationalStage: null,
-          phone: null,
+    // Parallelize pre-flight context & history queries (<15ms)
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const [context, history, notifData] = await Promise.all([
+      buildStudentContext(session.id).catch((ctxErr) => {
+        console.error("[chat/route] buildStudentContext failed:", ctxErr);
+        return {
+          profile: {
+            id: session.id,
+            name: session.name || "الطالب",
+            email: session.email || "",
+            age: null,
+            educationalStage: null,
+            phone: null,
+          },
+          courses: [],
+          overallStats: { totalCourses: 0, averageScore: 0, totalQuizzesTaken: 0, totalVideosWatched: 0 },
+          weakAreas: [],
+          aiInsights: [],
+          recentFeedback: [],
+          libraryProgress: [],
+        };
+      }),
+      prisma.aIConversation.findMany({
+        where: { studentId: session.id },
+        orderBy: { createdAt: "desc" },
+        take: 8,
+        select: { id: true, role: true, content: true },
+      }).catch(() => []),
+      Promise.all([
+        prisma.gradeAdjustmentRequest.findMany({
+          where: { studentId: session.id, status: { in: ["approved", "rejected"] }, reviewedAt: { gte: sevenDaysAgo } },
+          include: { quiz: { select: { title: true } } },
+          orderBy: { reviewedAt: "desc" },
+          take: 2,
+        }).catch(() => []),
+        prisma.supportTicket.findMany({
+          where: { studentId: session.id, status: { in: ["resolved", "closed"] }, updatedAt: { gte: sevenDaysAgo } },
+          orderBy: { updatedAt: "desc" },
+          take: 2,
+        }).catch(() => []),
+      ]).catch(() => [[], []]),
+      // Non-blocking fire-and-forget save of user message
+      prisma.aIConversation.create({
+        data: {
+          studentId: session.id,
+          role: "user",
+          content: message,
         },
-        courses: [],
-        overallStats: { totalCourses: 0, averageScore: 0, totalQuizzesTaken: 0, totalVideosWatched: 0 },
-        weakAreas: [],
-        aiInsights: [],
-        recentFeedback: [],
-        libraryProgress: [],
-      };
-    }
-
-    // Get conversation history (last 15 messages)
-    const history = await prisma.aIConversation.findMany({
-      where: { studentId: session.id },
-      orderBy: { createdAt: "desc" },
-      take: 15,
-      select: { id: true, role: true, content: true },
-    }).catch(() => []);
+      }).catch(() => null),
+    ]);
 
     const chatHistory: ChatMessage[] = history
       .reverse()
@@ -370,40 +389,17 @@ export async function POST(req: NextRequest) {
         content: h.content,
       }));
 
-    // Build notifications from recently resolved requests
+    // Build notifications
     const notifItems: string[] = [];
-    try {
-      const recentGrades = await prisma.gradeAdjustmentRequest.findMany({
-        where: { studentId: session.id, status: { in: ["approved", "rejected"] }, reviewedAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
-        include: { quiz: { select: { title: true } } },
-        orderBy: { reviewedAt: "desc" },
-        take: 3,
-      });
-      const recentTickets = await prisma.supportTicket.findMany({
-        where: { studentId: session.id, status: { in: ["resolved", "closed"] }, updatedAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
-        orderBy: { updatedAt: "desc" },
-        take: 3,
-      });
-      for (const r of recentGrades) {
-        notifItems.push(`تعديل درجة "${r.quiz.title}": ${r.status === "approved" ? "مقبول ✅" : "مرفوض ❌"}${r.teacherNotes ? ` - ${r.teacherNotes}` : ""}`);
-      }
-      for (const t of recentTickets) {
-        notifItems.push(`"${t.title}": ${t.status === "resolved" ? "تم الحل ✅" : "مغلق"}${t.resolution ? ` - ${t.resolution}` : ""}`);
-      }
-    } catch { /* ignore notification errors */ }
+    const [recentGrades, recentTickets] = (notifData || [[], []]) as [any[], any[]];
+    for (const r of recentGrades) {
+      notifItems.push(`تعديل درجة "${r.quiz?.title || "كويز"}": ${r.status === "approved" ? "مقبول ✅" : "مرفوض ❌"}${r.teacherNotes ? ` - ${r.teacherNotes}` : ""}`);
+    }
+    for (const t of recentTickets) {
+      notifItems.push(`"${t.title}": ${t.status === "resolved" ? "تم الحل ✅" : "مغلق"}${t.resolution ? ` - ${t.resolution}` : ""}`);
+    }
 
     const notifications = notifItems.length > 0 ? `تحديثات طلباتك:\n${notifItems.map((n) => `• ${n}`).join("\n")}` : undefined;
-
-    // Save user message
-    try {
-      await prisma.aIConversation.create({
-        data: {
-          studentId: session.id,
-          role: "user",
-          content: message,
-        },
-      });
-    } catch { /* ignore save failure */ }
 
     // Get AI response — try chatWithAI first (runs Gemini -> Anthropic/DeepSeek -> smart fallbackResponse)
     let result;

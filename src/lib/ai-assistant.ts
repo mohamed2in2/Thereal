@@ -177,7 +177,7 @@ async function callXKiro(messages: ChatMessage[]): Promise<AIChatResult | null> 
         max_tokens: 1200,
         temperature: 0.5,
       }),
-      signal: AbortSignal.timeout(10000),
+      signal: AbortSignal.timeout(3500),
     });
     if (!res.ok) {
       const errData = await res.json().catch(() => ({}));
@@ -214,7 +214,7 @@ async function callGroq(messages: ChatMessage[]): Promise<AIChatResult | null> {
         max_tokens: 600,
         temperature: 0.3,
       }),
-      signal: AbortSignal.timeout(7000),
+      signal: AbortSignal.timeout(3000),
     });
     if (!res.ok) {
       const errData = await res.json().catch(() => ({}));
@@ -252,7 +252,7 @@ async function callPrimary(messages: ChatMessage[]): Promise<AIChatResult | null
         max_tokens: 600,
         temperature: 0.5,
       }),
-      signal: AbortSignal.timeout(7000),
+      signal: AbortSignal.timeout(3500),
     });
     if (!res.ok) throw new Error(`Primary API: ${res.status}`);
     const data = (await res.json()) as { choices: Array<{ message: { content: string } }> };
@@ -285,7 +285,7 @@ async function callBackup(messages: ChatMessage[]): Promise<AIChatResult | null>
           contents: [{ parts: [{ text: promptText }] }],
           generationConfig: { maxOutputTokens: 600, temperature: 0.6 },
         }),
-        signal: AbortSignal.timeout(7000),
+        signal: AbortSignal.timeout(3500),
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
@@ -301,6 +301,55 @@ async function callBackup(messages: ChatMessage[]): Promise<AIChatResult | null>
     }
   }
   return null;
+}
+
+/**
+ * Fast-path hedging: Executes primary caller first.
+ * If not resolved in `hedgeDelayMs` (default 1800ms), triggers secondary in parallel
+ * and accepts the first successful response.
+ */
+async function raceWithHedge(
+  primaryPromise: Promise<AIChatResult | null>,
+  secondaryFn: () => Promise<AIChatResult | null>,
+  hedgeDelayMs = 1800
+): Promise<AIChatResult | null> {
+  let finished = false;
+
+  return new Promise((resolve) => {
+    // 1. Primary execution
+    primaryPromise.then((res) => {
+      if (res?.message && !finished) {
+        finished = true;
+        resolve(res);
+      }
+    }).catch(() => {});
+
+    // 2. Delayed secondary launch if primary is taking too long
+    const timer = setTimeout(() => {
+      if (!finished) {
+        secondaryFn().then((res) => {
+          if (res?.message && !finished) {
+            finished = true;
+            resolve(res);
+          }
+        }).catch(() => {});
+      }
+    }, hedgeDelayMs);
+
+    // 3. Fallback resolution if both complete or fail
+    Promise.allSettled([
+      primaryPromise,
+      new Promise((r) => setTimeout(r, hedgeDelayMs + 3500)),
+    ]).then(() => {
+      clearTimeout(timer);
+      setTimeout(() => {
+        if (!finished) {
+          finished = true;
+          resolve(null);
+        }
+      }, 100);
+    });
+  });
 }
 
 // ── Menu state detection ──
@@ -764,7 +813,7 @@ export async function chatWithAI(
   notifications?: string,
 ): Promise<AIChatResult> {
   const contextSummary = summarizeContext(studentContext);
-  const cleanHistory = history.slice(-10).map((m) => ({
+  const cleanHistory = history.slice(-8).map((m) => ({
     role: m.role,
     content: stripFallbackMarkers(m.content),
   })).filter((m) => m.content.length > 0);
@@ -774,57 +823,57 @@ export async function chatWithAI(
     { role: "user", content: userMessage },
   ];
 
-  // 1. Try XKiro API (DeepSeek v4 Flash) FIRST
-  const xkiroResult = await callXKiro(messages);
-  if (xkiroResult && xkiroResult.message) {
-    xkiroResult.message = stripFallbackMarkers(xkiroResult.message);
-    return xkiroResult;
-  }
-
-  // 2. Try Gemini Key Rotation (Key 1 -> Key 2 -> Key 3)
-  let result = await callBackup(messages);
-  if (result && result.message) {
-    result.message = stripFallbackMarkers(result.message);
-    return result;
-  }
-
-  // 3. Try Groq (llama-3.3-70b-versatile)
-  const groqResult = await callGroq(messages);
-  if (groqResult && groqResult.message) {
-    groqResult.message = stripFallbackMarkers(groqResult.message);
-    return groqResult;
-  }
-
-  // 4. Check DB or ENV resolved providers (Primary & Backup)
+  // 1. Dynamic fast-path routing based on active primary provider
+  let primaryProvider = "gemini";
   try {
-    const { resolvePlanProviders } = await import("./ai-provider");
-    const { primary, backup } = await resolvePlanProviders();
-    if (primary) {
-      const res = await callResolvedProvider(primary as any, messages);
-      if (res && res.message) {
-        res.message = stripFallbackMarkers(res.message);
-        return res;
-      }
-    }
-    if (backup) {
-      const res = await callResolvedProvider(backup as any, messages);
-      if (res && res.message) {
-        res.message = stripFallbackMarkers(res.message);
-        return res;
-      }
-    }
-  } catch (dbErr) {
-    console.warn("[chatWithAI] DB provider resolution skipped:", dbErr);
+    const { ConfigManager } = await import("@/ai/config/AIConfig");
+    primaryProvider = ConfigManager.getInstance().getConfig().primaryProvider || "gemini";
+  } catch {
+    /* fallback to gemini */
   }
 
-  // 5. Try static ENV fallback callPrimary (DeepSeek/OpenAI official)
-  result = await callPrimary(messages);
-  if (result && result.message) {
-    result.message = stripFallbackMarkers(result.message);
-    return result;
+  if (primaryProvider === "mock") {
+    const fb = fallbackResponse(userMessage, studentContext, history, notifications);
+    fb.message = stripFallbackMarkers(fb.message);
+    return fb;
   }
 
-  // 6. Smart menu fallback (runs when all AI providers fail or are unconfigured)
+  // 2. High-speed hedged execution based on configured provider
+  let fastResult: AIChatResult | null = null;
+
+  if (primaryProvider === "deepseek" || primaryProvider === "deepseek_v4_flash") {
+    // DeepSeek prioritized with Gemini hedge
+    fastResult = await raceWithHedge(
+      callXKiro(messages).then((r) => r || callPrimary(messages)),
+      () => callBackup(messages)
+    );
+  } else if (primaryProvider === "digitalocean" || primaryProvider === "groq") {
+    // Groq / DigitalOcean prioritized with Gemini hedge
+    fastResult = await raceWithHedge(
+      callGroq(messages),
+      () => callBackup(messages)
+    );
+  } else {
+    // Default: Gemini Pool prioritized with DeepSeek/Groq hedge
+    fastResult = await raceWithHedge(
+      callBackup(messages),
+      () => callGroq(messages).then((r) => r || callXKiro(messages))
+    );
+  }
+
+  if (fastResult?.message) {
+    fastResult.message = stripFallbackMarkers(fastResult.message);
+    return fastResult;
+  }
+
+  // 3. Fast backup sweep if race didn't resolve
+  const backupSweep = (await callBackup(messages)) || (await callGroq(messages)) || (await callPrimary(messages));
+  if (backupSweep?.message) {
+    backupSweep.message = stripFallbackMarkers(backupSweep.message);
+    return backupSweep;
+  }
+
+  // 4. Instant smart menu fallback (<1ms)
   const fb = fallbackResponse(userMessage, studentContext, history, notifications);
   fb.message = stripFallbackMarkers(fb.message);
   return fb;

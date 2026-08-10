@@ -65,7 +65,26 @@ export interface StudentContext {
   }>;
 }
 
-export async function buildStudentContext(studentId: string): Promise<StudentContext> {
+// In-memory cache for student context to eliminate repeated heavy database queries during active chat
+const contextCache = new Map<string, { data: StudentContext; expiresAt: number }>();
+const CONTEXT_CACHE_TTL_MS = 3 * 60 * 1000; // 3 minutes
+
+export function invalidateStudentContextCache(studentId?: string) {
+  if (studentId) {
+    contextCache.delete(studentId);
+  } else {
+    contextCache.clear();
+  }
+}
+
+export async function buildStudentContext(studentId: string, skipCache = false): Promise<StudentContext> {
+  if (!skipCache) {
+    const cached = contextCache.get(studentId);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.data;
+    }
+  }
+
   const student = await prisma.user.findUnique({
     where: { id: studentId },
     select: {
@@ -230,7 +249,7 @@ export async function buildStudentContext(studentId: string): Promise<StudentCon
     ),
   }));
 
-  return {
+  const result: StudentContext = {
     profile: {
       id: student.id,
       name: student.name,
@@ -256,6 +275,13 @@ export async function buildStudentContext(studentId: string): Promise<StudentCon
     })),
     libraryProgress,
   };
+
+  contextCache.set(studentId, {
+    data: result,
+    expiresAt: Date.now() + CONTEXT_CACHE_TTL_MS,
+  });
+
+  return result;
 }
 
 export interface TeacherContext {
