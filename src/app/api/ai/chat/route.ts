@@ -19,7 +19,141 @@ export async function POST(req: NextRequest) {
 
     const trimmedMsg = message.trim();
     const cleanMsg = trimmedMsg.toLowerCase();
-    const isAdmin = session.role === "admin" || session.role === "superadmin" || session.isOwner === true;
+    const isSuperAdmin = session.role === "superadmin" || session.isOwner === true;
+    const isAdmin = session.role === "admin" || isSuperAdmin;
+
+    // ── SUPERADMIN MASTER AI COMMANDS & GLOBAL CONTROLS ─────────────────────
+    if (isSuperAdmin) {
+      // 1. Superadmin Access & Capabilities Discovery
+      const isAccessInquiry =
+        cleanMsg.includes("صلاحيات") ||
+        cleanMsg.includes("access") ||
+        cleanMsg.includes("powers") ||
+        cleanMsg.includes("تقدر تعمل ايه") ||
+        cleanMsg.includes("تقدر تعمل إيه") ||
+        cleanMsg.includes("أوامرك") ||
+        cleanMsg.includes("اوامرك") ||
+        cleanMsg.includes("الاوامر") ||
+        cleanMsg.includes("الأوامر") ||
+        cleanMsg === "help" ||
+        cleanMsg === "superadmin" ||
+        cleanMsg === "admin";
+
+      if (isAccessInquiry) {
+        const { ConfigManager } = await import("@/ai/config/AIConfig");
+        const currentPrimary = ConfigManager.getInstance().getConfig().primaryProvider;
+
+        let activeName = "Google Gemini Pool (Primary)";
+        if (currentPrimary === "digitalocean") activeName = "DigitalOcean Premium (Llama-3.3-70B)";
+        else if (currentPrimary === "deepseek" || currentPrimary === "deepseek_v4_flash") activeName = "DeepSeek V4 Flash";
+        else if (currentPrimary === "mock") activeName = "Mock Provider (Local)";
+
+        const accessBriefing =
+          `👑 **لوحة تحكم وصلاحيات المشرف العام (Superadmin Master Access Control)**\n\n` +
+          `أهلاً بك يا فندم! بصفتك **المشرف العام (Superadmin)**، لديك الصلاحيات الكاملة للتحكم في كافة محركات ومنظومات الذكاء الاصطناعي على منصة Code-UP مباشرة عبر المحادثة:\n\n` +
+          `━━━━━━━━━━━━━━━━\n\n` +
+          `🌐 **1. التبديل الفوري لنموذج الذكاء الاصطناعي العام لجميع الطلاب (Global Model Switcher)**:\n` +
+          `• النموذج النشط حالياً لجميع الطلاب: \`${activeName}\`\n` +
+          `• يمكنك تغيير المحرك العام لكل طلاب المنصة في أي لحظة بمجرد كتابة أي من الأوامر التالية:\n` +
+          `  - 🔵 *"شغّل ديب سيك للطلاب"* أو \`switch to deepseek\` (لتفعيل DeepSeek V4 Flash)\n` +
+          `  - 🟢 *"شغّل جيميني للطلاب"* أو \`switch to gemini\` (لتفعيل Google Gemini Pool)\n` +
+          `  - ⚡ *"شغّل ديجيتال أوشن للطلاب"* أو \`switch to digitalocean\` (لتفعيل Llama-3.3-70B)\n` +
+          `  - 🟡 *"شغّل mock للطلاب"* أو \`switch to mock\` (للنموذج المحلي التجريبي)\n\n` +
+          `📊 **2. إحصائيات الاستهلاك والتكاليف الفورية (Live Telemetry & Costs)**:\n` +
+          `• اكتب \`Ahmed123M\` أو \`stats\` لعرض تقرير فوري بعدد الطلاب، عدد الرسائل، التكلفة بالدولار، وسرعة الردود.\n\n` +
+          `🏆 **3. التحكم في لوحة الشرف 24H والجوائز (Daily Leaderboard Control)**:\n` +
+          `• التحكم الكامل في جوائز المراكز الـ 10 وإعادة احتساب الكاش اليومي عند 3:00 ص بتوقيت القاهرة.\n\n` +
+          `🛡️ **4. جدار الحماية والأمان للطلاب (AI Firewall & Moderation)**:\n` +
+          `• حماية ضد محاولات الاختراق، فلترة الرسائل، والتحكم في الشكاوى وطلبات تعديل الدرجات.\n\n` +
+          `⚙️ **5. أنماط الأداء الفائقة (Execution Modes)**:\n` +
+          `• \`AhmedToldMeSotalkelse\` : تفعيل وضع المطور المباشر وقائمة النماذج.\n` +
+          `• \`AhmedProMode\` : تفعيل الوضع المهني الرسمي.\n` +
+          `• \`AhmedFastMode\` : وضع الاستجابة فائقة السرعة.\n` +
+          `• \`AhmedReset\` : مسح سجل المحادثات والذاكرة.\n\n` +
+          `💡 *أنا جاهز لتنفيذ أي أمر تريده الآن!*`;
+
+        return NextResponse.json({
+          message: accessBriefing,
+          actions: [],
+          source: "superadmin_access",
+        });
+      }
+
+      // 2. Conversational Global Model Switching for All Students
+      const isSwitchIntent =
+        cleanMsg.includes("غير") ||
+        cleanMsg.includes("حول") ||
+        cleanMsg.includes("خل") ||
+        cleanMsg.includes("شغل") ||
+        cleanMsg.includes("شغّل") ||
+        cleanMsg.includes("استخدم") ||
+        cleanMsg.includes("switch") ||
+        cleanMsg.includes("use") ||
+        cleanMsg.includes("set") ||
+        cleanMsg.includes("talk") ||
+        cleanMsg.includes("طالب") ||
+        cleanMsg.includes("طلاب") ||
+        cleanMsg.includes("student") ||
+        cleanMsg.includes("النموذج") ||
+        cleanMsg.includes("model");
+
+      const wantsDeepSeek = cleanMsg.includes("deepseek") || cleanMsg.includes("ديب سيك") || cleanMsg.includes("ديبسيك");
+      const wantsGemini = cleanMsg.includes("gemini") || cleanMsg.includes("جيميني") || cleanMsg.includes("جيمينى") || cleanMsg.includes("جوجل");
+      const wantsDO = cleanMsg.includes("digitalocean") || cleanMsg.includes("ديجيتال") || cleanMsg.includes("llama") || cleanMsg.includes("codeup");
+      const wantsMock = cleanMsg.includes("mock") || cleanMsg.includes("محاكي") || cleanMsg.includes("تجريبي");
+
+      if (isSwitchIntent && (wantsDeepSeek || wantsGemini || wantsDO || wantsMock)) {
+        const { ConfigManager } = await import("@/ai/config/AIConfig");
+        const configMgr = ConfigManager.getInstance();
+
+        let targetSlug = "gemini";
+        let targetTitle = "Google Gemini Pool (Primary)";
+        let targetDesc = "محرك جوجل السريع والمخصص للشرح الأكاديمي والتحليل الذكي.";
+
+        if (wantsDeepSeek) {
+          targetSlug = "deepseek";
+          targetTitle = "DeepSeek V4 Flash";
+          targetDesc = "محرك DeepSeek عالي الدقة وسريع البديهة في البرمجة والحلول المعقدة.";
+        } else if (wantsDO) {
+          targetSlug = "digitalocean";
+          targetTitle = "Code-UP Platform Assistant (DigitalOcean Premium Llama-3.3-70B)";
+          targetDesc = "نموذج Llama-3.3 المتميز المستضاف على DigitalOcean عالي الأداء.";
+        } else if (wantsMock) {
+          targetSlug = "mock";
+          targetTitle = "Mock Local Provider (Local Test)";
+          targetDesc = "النموذج المحلي التجريبي السريع لاختبار النظام.";
+        }
+
+        // Apply globally to runtime config
+        configMgr.updateConfig({ primaryProvider: targetSlug });
+
+        // Update database AIProvider records if existing
+        try {
+          await prisma.aIProvider.updateMany({
+            data: { isPrimary: false },
+          });
+          await prisma.aIProvider.updateMany({
+            where: { slug: targetSlug },
+            data: { isPrimary: true, isActive: true },
+          });
+        } catch {
+          // In-memory update took effect
+        }
+
+        const confirmText =
+          `👑 **تم تنفيذ أمر المشرف العام بنجاح! (Global AI Model Updated)**\n\n` +
+          `🌐 **النموذج النشط العام للطلاب الآن**: \`${targetTitle}\`\n` +
+          `📝 **الوصف**: ${targetDesc}\n\n` +
+          `⚡ **حالة المنصة**: تم تحويل جميع محادثات الطلاب والوكيل الذكي عبر المنصة فوراً للتحدث والتفاعل باستخدام **${targetTitle}**.\n\n` +
+          `💡 *يمكنك في أي وقت كتابة "صلاحيات" للاطلاع على كامل أدوات التحكم أو تغيير النموذج مجدداً.*`;
+
+        return NextResponse.json({
+          message: confirmText,
+          actions: [],
+          source: "superadmin_model_switch",
+        });
+      }
+    }
 
     // ── STRICT ADMIN-ONLY CHEAT CODES & DEVELOPER TOOLS ──────────────────────
     if (isAdmin) {
