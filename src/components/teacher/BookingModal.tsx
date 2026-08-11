@@ -25,6 +25,8 @@ interface BookingModalProps {
   discountYearly?: number | null;
   stagePricing?: string | null;
   priceLanguagesMonthly?: number | null;
+  priceLanguagesTermly?: number | null;
+  priceLanguagesYearly?: number | null;
   enableLanguagesTrack?: boolean;
   paymentNotes?: string | null;
   courseStartDate: string | null;
@@ -110,6 +112,8 @@ export function BookingButton({
   discountYearly,
   stagePricing,
   priceLanguagesMonthly,
+  priceLanguagesTermly,
+  priceLanguagesYearly,
   enableLanguagesTrack = true,
   paymentNotes,
   courseStartDate,
@@ -164,6 +168,9 @@ export function BookingButton({
     priceMonthly: priceMonthly ?? 180,
     priceTermly: priceTermly ?? 750,
     priceYearly: priceYearly ?? 1200,
+    priceLanguagesMonthly: priceLanguagesMonthly ?? 0,
+    priceLanguagesTermly: priceLanguagesTermly ?? 0,
+    priceLanguagesYearly: priceLanguagesYearly ?? 0,
     discountMonthly: discountMonthly ?? null,
     discountTermly: discountTermly ?? null,
     discountYearly: discountYearly ?? null,
@@ -178,6 +185,9 @@ export function BookingButton({
           priceMonthly: g.priceMonthly ?? priceMonthly ?? 180,
           priceTermly: g.priceTermly ?? priceTermly ?? 750,
           priceYearly: g.priceYearly ?? priceYearly ?? 1200,
+          priceLanguagesMonthly: g.priceLanguagesMonthly ?? priceLanguagesMonthly ?? 0,
+          priceLanguagesTermly: g.priceLanguagesTermly ?? priceLanguagesTermly ?? 0,
+          priceLanguagesYearly: g.priceLanguagesYearly ?? priceLanguagesYearly ?? 0,
           discountMonthly: g.discountMonthly ?? discountMonthly ?? null,
           discountTermly: g.discountTermly ?? discountTermly ?? null,
           discountYearly: g.discountYearly ?? discountYearly ?? null,
@@ -190,12 +200,14 @@ export function BookingButton({
   const baseTermly = stageConfig.priceTermly > 0 ? stageConfig.priceTermly : 750;
   const baseYearly = stageConfig.priceYearly > 0 ? stageConfig.priceYearly : 1200;
 
-  const langRate = priceLanguagesMonthly ?? 0;
   const isLanguages = languageTrack === "languages";
+  const langMonthly = stageConfig.priceLanguagesMonthly ?? 0;
+  const langTermly = stageConfig.priceLanguagesTermly ?? 0;
+  const langYearly = stageConfig.priceLanguagesYearly ?? 0;
 
-  const monthlyPrice = baseMonthly + (isLanguages ? 1 * langRate : 0);
-  const termlyPrice = baseTermly + (isLanguages ? 5 * langRate : 0);
-  const yearlyPrice = baseYearly + (isLanguages ? 10 * langRate : 0);
+  const monthlyPrice = baseMonthly + (isLanguages ? langMonthly : 0);
+  const termlyPrice = baseTermly + (isLanguages ? langTermly : 0);
+  const yearlyPrice = baseYearly + (isLanguages ? langYearly : 0);
 
   const plans: BookingPlan[] = [
     createPlan(

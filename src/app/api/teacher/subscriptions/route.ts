@@ -104,7 +104,7 @@ export async function POST(req: NextRequest) {
 
     const profile = await prisma.teacherProfile.findUnique({
       where: { teacherId: session.id },
-      select: { priceMonthly: true, priceTermly: true, priceYearly: true, stagePricing: true, priceLanguagesMonthly: true },
+      select: { priceMonthly: true, priceTermly: true, priceYearly: true, stagePricing: true, priceLanguagesMonthly: true, priceLanguagesTermly: true, priceLanguagesYearly: true },
     });
 
     const monthsMap: Record<string, number> = {
@@ -121,16 +121,18 @@ export async function POST(req: NextRequest) {
 
     // Stage pricing override if applicable
     const targetStage = educationalStage || student.educationalStage;
+    let stageConfig: any = null;
     if (profile?.stagePricing && targetStage) {
       try {
         const parsed = JSON.parse(profile.stagePricing);
         if (parsed && parsed[targetStage]) {
+          stageConfig = parsed[targetStage];
           const keyMap: Record<string, string> = {
             monthly: "priceMonthly",
             termly: "priceTermly",
             yearly: "priceYearly",
           };
-          const stageVal = parsed[targetStage][keyMap[planType]];
+          const stageVal = stageConfig[keyMap[planType]];
           if (typeof stageVal === "number" && stageVal > 0) {
             subPrice = stageVal;
           }
@@ -139,9 +141,16 @@ export async function POST(req: NextRequest) {
     }
 
     const isLanguages = languageTrack === "languages" || languageTrack === "english";
-    const langMonthsMap: Record<string, number> = { monthly: 1, termly: 5, yearly: 10 };
-    const langRate = isLanguages ? (profile?.priceLanguagesMonthly ?? 0) : 0;
-    const languageSurcharge = langRate * (langMonthsMap[planType] || 1);
+    let languageSurcharge = 0;
+    if (isLanguages) {
+      let langMonthly = stageConfig && typeof stageConfig.priceLanguagesMonthly === "number" ? stageConfig.priceLanguagesMonthly : (profile?.priceLanguagesMonthly ?? 0);
+      let langTermly = stageConfig && typeof stageConfig.priceLanguagesTermly === "number" ? stageConfig.priceLanguagesTermly : (profile?.priceLanguagesTermly ?? 0);
+      let langYearly = stageConfig && typeof stageConfig.priceLanguagesYearly === "number" ? stageConfig.priceLanguagesYearly : (profile?.priceLanguagesYearly ?? 0);
+
+      if (planType === "monthly") languageSurcharge = langMonthly;
+      else if (planType === "termly") languageSurcharge = langTermly;
+      else if (planType === "yearly") languageSurcharge = langYearly;
+    }
     subPrice += languageSurcharge;
 
     const trackedLang = isLanguages ? "languages" : "arabic";

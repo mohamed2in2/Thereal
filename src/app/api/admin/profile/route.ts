@@ -20,7 +20,7 @@ async function uniqueSlug(name: string, teacherId: string): Promise<string> {
   }
 }
 
-const EDITABLE = ["displayName", "bio", "photoUrl", "bannerUrl", "navColor", "accentColor", "socials", "featuredCourseId", "priceMonthly", "priceTermly", "priceYearly", "discountMonthly", "discountTermly", "discountYearly", "courseStartDate", "bookingContactUrl", "priceLanguagesMonthly", "paymentNotes", "enableLanguagesTrack", "stagePricing"] as const;
+const EDITABLE = ["displayName", "bio", "photoUrl", "bannerUrl", "navColor", "accentColor", "socials", "featuredCourseId", "priceMonthly", "priceTermly", "priceYearly", "discountMonthly", "discountTermly", "discountYearly", "courseStartDate", "bookingContactUrl", "priceLanguagesMonthly", "priceLanguagesTermly", "priceLanguagesYearly", "paymentNotes", "enableLanguagesTrack", "stagePricing"] as const;
 
 export async function GET() {
   try {
@@ -41,6 +41,8 @@ export async function GET() {
           priceYearly: 1200,
           enableLanguagesTrack: true,
           priceLanguagesMonthly: 0,
+          priceLanguagesTermly: 0,
+          priceLanguagesYearly: 0,
         },
       });
     } else {
@@ -51,6 +53,8 @@ export async function GET() {
       if (profile.priceYearly == null) updates.priceYearly = 1200;
       if (profile.enableLanguagesTrack == null) updates.enableLanguagesTrack = true;
       if (profile.priceLanguagesMonthly == null) updates.priceLanguagesMonthly = 0;
+      if (profile.priceLanguagesTermly == null) updates.priceLanguagesTermly = 0;
+      if (profile.priceLanguagesYearly == null) updates.priceLanguagesYearly = 0;
 
       if (Object.keys(updates).length > 0) {
         profile = await prisma.teacherProfile.update({

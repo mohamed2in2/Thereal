@@ -107,11 +107,28 @@ export async function verifyAuthoritativePrice(params: {
     }
 
     const isLanguages = languageTrack === "languages" || languageTrack === "english";
-    const langMonthsMap: Record<string, number> = { monthly: 1, termly: 5, yearly: 10 };
-    const langMonths = langMonthsMap[planType] || 1;
+    let languageSurcharge = 0;
+    if (isLanguages) {
+      let langMonthly = profile.priceLanguagesMonthly ?? 0;
+      let langTermly = profile.priceLanguagesTermly ?? 0;
+      let langYearly = profile.priceLanguagesYearly ?? 0;
 
-    const langRate = isLanguages ? (profile.priceLanguagesMonthly ?? 0) : 0;
-    const languageSurcharge = langRate * langMonths;
+      if (profile.stagePricing && grade) {
+        try {
+          const parsedMap = JSON.parse(profile.stagePricing);
+          if (parsedMap && parsedMap[grade]) {
+            const g = parsedMap[grade];
+            if (typeof g.priceLanguagesMonthly === "number") langMonthly = g.priceLanguagesMonthly;
+            if (typeof g.priceLanguagesTermly === "number") langTermly = g.priceLanguagesTermly;
+            if (typeof g.priceLanguagesYearly === "number") langYearly = g.priceLanguagesYearly;
+          }
+        } catch {}
+      }
+
+      if (planType === "monthly") languageSurcharge = langMonthly;
+      else if (planType === "termly") languageSurcharge = langTermly;
+      else if (planType === "yearly") languageSurcharge = langYearly;
+    }
 
     basePrice = Math.max(planPrice + languageSurcharge, 1);
     const teacherName = profile.displayName || teacher.name;

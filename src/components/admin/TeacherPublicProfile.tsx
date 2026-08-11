@@ -23,6 +23,8 @@ type Profile = {
   discountYearly: number | null;
   stagePricing: string | null;
   priceLanguagesMonthly: number | null;
+  priceLanguagesTermly: number | null;
+  priceLanguagesYearly: number | null;
   enableLanguagesTrack?: boolean;
   paymentNotes: string | null;
   courseStartDate: string | null;
@@ -89,6 +91,9 @@ export function TeacherPublicProfile() {
       priceMonthly: typeof stageConfig.priceMonthly === "number" ? stageConfig.priceMonthly : 180,
       priceTermly: typeof stageConfig.priceTermly === "number" ? stageConfig.priceTermly : 750,
       priceYearly: typeof stageConfig.priceYearly === "number" ? stageConfig.priceYearly : 1200,
+      priceLanguagesMonthly: typeof stageConfig.priceLanguagesMonthly === "number" ? stageConfig.priceLanguagesMonthly : (p?.priceLanguagesMonthly ?? 0),
+      priceLanguagesTermly: typeof stageConfig.priceLanguagesTermly === "number" ? stageConfig.priceLanguagesTermly : (p?.priceLanguagesTermly ?? 0),
+      priceLanguagesYearly: typeof stageConfig.priceLanguagesYearly === "number" ? stageConfig.priceLanguagesYearly : (p?.priceLanguagesYearly ?? 0),
       discountMonthly: typeof stageConfig.discountMonthly === "number" ? stageConfig.discountMonthly : null,
       discountTermly: typeof stageConfig.discountTermly === "number" ? stageConfig.discountTermly : null,
       discountYearly: typeof stageConfig.discountYearly === "number" ? stageConfig.discountYearly : null,
@@ -379,15 +384,18 @@ export function TeacherPublicProfile() {
         {(() => {
           const currentP = getStagePricing(activeStage);
           const stageName = activeStage === "sec_1" ? "أولى بكالوريا" : "ثانية بكالوريا";
-          const langRate = p.priceLanguagesMonthly ?? 0;
-
+          
           const monthlyAr = currentP.priceMonthly ?? 180;
           const termlyAr = currentP.priceTermly ?? 750;
           const yearlyAr = currentP.priceYearly ?? 1200;
 
-          const monthlyEn = monthlyAr + (1 * langRate);
-          const termlyEn = termlyAr + (5 * langRate);
-          const yearlyEn = yearlyAr + (10 * langRate);
+          const langMonthly = currentP.priceLanguagesMonthly ?? 0;
+          const langTermly = currentP.priceLanguagesTermly ?? 0;
+          const langYearly = currentP.priceLanguagesYearly ?? 0;
+
+          const monthlyEn = monthlyAr + langMonthly;
+          const termlyEn = termlyAr + langTermly;
+          const yearlyEn = yearlyAr + langYearly;
 
           return (
             <div className="space-y-4">
@@ -396,30 +404,57 @@ export function TeacherPublicProfile() {
                 <span className="text-[10px] text-[var(--ink-muted)]">التعديلات أدناه تنطبق على طلاب {stageName} فقط</span>
               </div>
 
-              {/* Languages Track Surcharge Config */}
-              <div className="p-4 rounded-xl border border-indigo-500/30 bg-indigo-500/5 space-y-3">
+              {/* Languages Track (GB 🇬🇧) Custom Pricing Config */}
+              <div className="p-4 rounded-xl border border-indigo-500/30 bg-indigo-500/5 space-y-4">
                 <div className="flex items-center justify-between">
                   <h4 className="font-bold text-sm text-[var(--ink)] flex items-center gap-2">
-                    <span>🇬🇧</span> رسوم مسار اللغات / إنجليزي (إضافة شهرياً)
+                    <span>🇬🇧</span> رسوم مسار اللغات / إنجليزي (GB) لكل اشتراك (مخصص وغير آلي)
                   </h4>
                   <span className="text-xs font-mono text-indigo-400 bg-indigo-500/10 px-2.5 py-1 rounded-full border border-indigo-500/20 font-bold">
-                    {langRate > 0 ? `+${langRate} جنيه / شهرياً` : "0 جنيه (بدون زيادة)"}
+                    تحديد مخصص لكل باقة
                   </span>
                 </div>
-                <div>
-                  <label className={label}>المبلغ المضاف لطلاب اللغات شهرياً (افتراضي 0 جنيه):</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    className={input}
-                    value={p.priceLanguagesMonthly ?? 0}
-                    onChange={(e) => set("priceLanguagesMonthly", e.target.value ? Number(e.target.value) : 0)}
-                    placeholder="0"
-                  />
-                  <p className="text-[11px] text-[var(--ink-muted)] mt-1.5">
-                    تُضاف هذه القيمة تلقائياً إلى سعر خطة اللغات (1 شهر للشهري، 5 شهور للترم، و10 شهور للسنة) دون إظهار تفاصيل الزيادة أو رسوم إضافية للطالب.
-                  </p>
+                <p className="text-[11px] text-[var(--ink-muted)]">
+                  يمكنك تحديد مبلغ إضافي مخصص لمسار اللغات لكل اشتراك (شهري / ترم / سنة) دون الحساب الآلي التلقائي.
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className={label}>📅 زيادة GB شهرياً (جنيه):</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      className={input}
+                      value={currentP.priceLanguagesMonthly ?? ""}
+                      onChange={(e) => updateStageField("priceLanguagesMonthly", e.target.value ? Number(e.target.value) : 0)}
+                      placeholder="مثال: 20"
+                    />
+                  </div>
+                  <div>
+                    <label className={label}>📚 زيادة GB للترم (جنيه):</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      className={input}
+                      value={currentP.priceLanguagesTermly ?? ""}
+                      onChange={(e) => updateStageField("priceLanguagesTermly", e.target.value ? Number(e.target.value) : 0)}
+                      placeholder="مثال: 100"
+                    />
+                  </div>
+                  <div>
+                    <label className={label}>🎓 زيادة GB للسنة (جنيه):</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      className={input}
+                      value={currentP.priceLanguagesYearly ?? ""}
+                      onChange={(e) => updateStageField("priceLanguagesYearly", e.target.value ? Number(e.target.value) : 0)}
+                      placeholder="مثال: 200"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -432,7 +467,7 @@ export function TeacherPublicProfile() {
                       عربي: {monthlyAr}ج
                     </span>
                     <span className="text-xs font-mono text-indigo-400 bg-indigo-500/10 px-2.5 py-1 rounded-full border border-indigo-500/20">
-                      لغات: {monthlyEn}ج
+                      لغات (GB): {monthlyEn}ج {langMonthly > 0 ? `(+${langMonthly}ج)` : ""}
                     </span>
                   </div>
                 </h4>
@@ -453,13 +488,13 @@ export function TeacherPublicProfile() {
               {/* 3 Months Plan (Term) */}
               <div className="p-4 rounded-xl border border-[var(--border)] bg-[var(--bg)]">
                 <h4 className="font-bold text-sm text-[var(--ink)] mb-3 flex items-center justify-between">
-                  <span className="flex items-center gap-2"><span>📚</span> اشتراك الترم (5 شهور لغات)</span>
+                  <span className="flex items-center gap-2"><span>📚</span> اشتراك الترم</span>
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-mono text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/20">
                       عربي: {termlyAr}ج
                     </span>
                     <span className="text-xs font-mono text-indigo-400 bg-indigo-500/10 px-2.5 py-1 rounded-full border border-indigo-500/20">
-                      لغات: {termlyEn}ج {langRate > 0 ? `(+${langRate * 5}ج)` : ""}
+                      لغات (GB): {termlyEn}ج {langTermly > 0 ? `(+${langTermly}ج)` : ""}
                     </span>
                   </div>
                 </h4>
@@ -480,13 +515,13 @@ export function TeacherPublicProfile() {
               {/* 6 Months Plan (Year) */}
               <div className="p-4 rounded-xl border border-[var(--border)] bg-[var(--bg)]">
                 <h4 className="font-bold text-sm text-[var(--ink)] mb-3 flex items-center justify-between">
-                  <span className="flex items-center gap-2"><span>🎓</span> اشتراك سنة كاملة (10 شهور لغات)</span>
+                  <span className="flex items-center gap-2"><span>🎓</span> اشتراك سنة كاملة</span>
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-mono text-purple-400 bg-purple-500/10 px-2.5 py-1 rounded-full border border-purple-500/20">
                       عربي: {yearlyAr}ج
                     </span>
                     <span className="text-xs font-mono text-indigo-400 bg-indigo-500/10 px-2.5 py-1 rounded-full border border-indigo-500/20">
-                      لغات: {yearlyEn}ج {langRate > 0 ? `(+${langRate * 10}ج)` : ""}
+                      لغات (GB): {yearlyEn}ج {langYearly > 0 ? `(+${langYearly}ج)` : ""}
                     </span>
                   </div>
                 </h4>
@@ -517,10 +552,9 @@ export function TeacherPublicProfile() {
                     <p className="text-[11px] text-[var(--ink-muted)]">🎓 سنة كاملة: <strong className="text-[var(--ink)]">{yearlyAr} جنيه</strong></p>
                   </div>
                   <div className="p-3 rounded-xl bg-[var(--surface)] border border-[var(--border)] space-y-1">
-                    <span className="font-bold text-indigo-400 block">🇬🇧 مسار اللغات / إنجليزي:</span>
-                    <p className="text-[11px] text-[var(--ink-muted)]">📅 شهري: <strong className="text-[var(--ink)]">{monthlyEn} جنيه</strong> {langRate > 0 ? `(+${langRate}ج)` : ""}</p>
-                    <p className="text-[11px] text-[var(--ink-muted)]">📚 ترم كامل: <strong className="text-[var(--ink)]">{termlyEn} جنيه</strong> {langRate > 0 ? `(+${langRate * 5}ج)` : ""}</p>
-                    <p className="text-[11px] text-[var(--ink-muted)]">🎓 سنة كاملة: <strong className="text-[var(--ink)]">{yearlyEn} جنيه</strong> {langRate > 0 ? `(+${langRate * 10}ج)` : ""}</p>
+                    <span className="font-bold text-indigo-400 block">🇬🇧 مسار اللغات / إنجليزي (GB):</span>
+                    <p className="text-[11px] text-[var(--ink-muted)]">📅 شهري: <strong className="text-[var(--ink)]">{monthlyEn} جنيه</strong> {langMonthly > 0 ? `(+${langMonthly}ج مخصص)` : ""}</p>
+                    <p className="text-[11px] text-[var(--ink-muted)]">📚 ترم كامل: <strong className="text-[var(--ink)]">{termlyEn} جنيه</strong> {langTermly > 0 ? `(+${langTermly}ج مخصص)` : ""}</p>
                   </div>
                 </div>
               </div>

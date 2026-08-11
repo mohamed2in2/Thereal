@@ -143,6 +143,8 @@ export default async function TeacherPage({ params }: { params: Promise<{ teache
           discountYearly={p.discountYearly}
           stagePricing={p.stagePricing}
           priceLanguagesMonthly={p.priceLanguagesMonthly}
+          priceLanguagesTermly={p.priceLanguagesTermly}
+          priceLanguagesYearly={p.priceLanguagesYearly}
           enableLanguagesTrack={p.enableLanguagesTrack}
           paymentNotes={p.paymentNotes}
           courseStartDate={p.courseStartDate ? p.courseStartDate.toISOString() : null}
