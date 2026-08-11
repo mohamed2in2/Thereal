@@ -1163,7 +1163,7 @@ export default function AccountPage() {
                       <p className="text-xs sm:text-sm font-medium" style={{ color: "var(--ink-2)" }}>
                         تواصل معنا مباشرة عبر واتسآب لشحن رصيدك عبر InstaPay، التحويلات البنكية، أو الكاش:
                       </p>
-                      <a href={`https://wa.me/${(process.env.NEXT_PUBLIC_PAYMENT_ACCESS_PASSWORD || "+201285353604").replace(/\D/g, "")}?text=${encodeURIComponent(`مرحباً، أريد شحن رصيد بقيمة ${walletAmount || 100} جنيه لحساب الطالب: ${user?.name || "طالب"} (رقم: ${user?.phone || "غير مسجل"}). ما هي طُرق الدفع المتاحة؟`)}`}
+                      <a href={`https://wa.me/${(process.env.NEXT_PUBLIC_PAYMENT_ACCESS_PASSWORD || "+201118802621").replace(/\D/g, "")}?text=${encodeURIComponent(`مرحباً، أريد شحن رصيد بقيمة ${walletAmount || 100} جنيه لحساب الطالب: ${user?.name || "طالب"} (رقم: ${user?.phone || "غير مسجل"}). ما هي طُرق الدفع المتاحة؟`)}`}
                         target="_blank" rel="noopener noreferrer"
                         className="inline-flex items-center justify-center gap-2 w-full py-3 rounded-xl text-white font-bold text-sm no-underline hover:opacity-90 transition-opacity"
                         style={{ background: "#25D366" }}>

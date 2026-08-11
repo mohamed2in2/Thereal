@@ -135,6 +135,7 @@ export default function StudentProfilePage() {
                   <div style={{ fontFamily: "var(--font-head)", fontWeight: 900, fontSize: 20, color: "var(--brand)" }}>{value}</div>
                   <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>{label}</div>
                 </div>
+              ))}
             </div>
           </div>
         </div>

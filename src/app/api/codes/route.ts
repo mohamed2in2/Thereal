@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { PurchaseService } from "@/services/purchase/PurchaseService";
+import { PurchaseType } from "@/services/discount/DiscountService";
 
 const ROLE_MESSAGES: Record<string, string> = {
   teacher: "حساب المعلم لا يمكنه تفعيل أكواد الكورسات — هذا الإجراء مخصص للمتعلمين فقط.",
@@ -23,12 +25,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { code, teacherId, planType, grade, languageTrack, courseId, folderId, planId } = await req.json().catch(() => ({}));
+    const body = await req.json().catch(() => ({}));
+    const { code, teacherId, planType, grade, languageTrack, courseId, folderId, videoId, planId, discountCode, promoCode } = body;
     if (!code) return NextResponse.json({ error: "الكود مطلوب" }, { status: 400 });
 
     const clientIp = req.headers.get("x-forwarded-for")?.split(",")[0] || "127.0.0.1";
     const { AccessCodeGuard } = await import("@/services/security/AccessCodeGuard");
-    const { ReferralService } = await import("@/services/referral/ReferralService");
 
     // Enforce exponential rate limiting
     const rateCheck = await AccessCodeGuard.verifyRateLimit(clientIp, session.id);
@@ -41,8 +43,10 @@ export async function POST(req: NextRequest) {
     }
 
     const normalizedCode = String(code).trim().toUpperCase();
-    
-    // Check Course Access Code
+
+    // ────────────────────────────────────────────────────────────────────────
+    // 1. Check Course / Folder / Video Access Code (Teacher or System Generated)
+    // ────────────────────────────────────────────────────────────────────────
     const accessCode = await prisma.accessCode.findUnique({
       where: { code: normalizedCode },
       include: {
@@ -72,7 +76,7 @@ export async function POST(req: NextRequest) {
       }
 
       try {
-        const result = await prisma.$transaction(async (tx) => {
+        const result = await prisma.$transaction(async (tx: any) => {
           const alreadyEnrolled = await tx.accessCode.findFirst({
             where: { courseId: accessCode.courseId, studentId: session.id },
           });
@@ -121,7 +125,7 @@ export async function POST(req: NextRequest) {
           type: "course",
           courseId: result.courseId,
           courseTitle: result.courseTitle,
-          message: "تم تفعيل الكود وإضافة الكورس إلى مكتبتك",
+          message: "تم تفعيل كود الوصول وإضافة المحتوى إلى مكتبتك بنجاح!",
         });
       } catch (err: any) {
         await AccessCodeGuard.logAttempt({ ip: clientIp, userId: session.id, codeAttempted: normalizedCode, success: false });
@@ -132,7 +136,9 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Check Plan Access Code
+    // ────────────────────────────────────────────────────────────────────────
+    // 2. Check Plan Access Code
+    // ────────────────────────────────────────────────────────────────────────
     const planCode = await prisma.planAccessCode.findUnique({ where: { code: normalizedCode } });
     if (planCode) {
       if (planCode.usedById) {
@@ -143,15 +149,15 @@ export async function POST(req: NextRequest) {
       }
 
       try {
-        const result = await prisma.$transaction(async (tx) => {
+        const result = await prisma.$transaction(async (tx: any) => {
           const student = await tx.user.findUnique({
             where: { id: session.id },
-            select: { educationalStage: true }
+            select: { educationalStage: true },
           });
 
-          const plan = await tx.plan.findUnique({ 
-            where: { id: planCode.planId }, 
-            select: { id: true, title: true, durationDays: true, educationalStage: true } 
+          const plan = await tx.plan.findUnique({
+            where: { id: planCode.planId },
+            select: { id: true, title: true, durationDays: true, educationalStage: true },
           });
 
           if (!plan) throw new Error("PLAN_NOT_FOUND");
@@ -184,7 +190,7 @@ export async function POST(req: NextRequest) {
                   unlockedAt: now,
                   expiresAt: new Date(now.getTime() + durationDays * 24 * 60 * 60 * 1000),
                   pricePaid: 0,
-                }
+                },
               });
 
               return {
@@ -215,7 +221,7 @@ export async function POST(req: NextRequest) {
               studentId: session.id,
               pricePaid: 0,
               expiresAt: new Date(now.getTime() + durationDays * 24 * 60 * 60 * 1000),
-            }
+            },
           });
 
           return {
@@ -258,7 +264,9 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Check Money Code (Prepaid cash recharge card)
+    // ────────────────────────────────────────────────────────────────────────
+    // 3. Check Money Code (Prepaid Recharge Card)
+    // ────────────────────────────────────────────────────────────────────────
     const moneyCode = await prisma.moneyCode.findUnique({ where: { code: normalizedCode } });
     if (moneyCode) {
       if (moneyCode.isUsed) {
@@ -268,158 +276,59 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "هذا الكود منتهي الصلاحية" }, { status: 400 });
       }
 
+      // Determine purchase context if supplied
+      let purchaseType: PurchaseType | undefined = undefined;
+      let targetId: string | undefined = undefined;
+
+      if (courseId) {
+        purchaseType = "COURSE";
+        targetId = courseId;
+      } else if (folderId) {
+        purchaseType = "FOLDER";
+        targetId = folderId;
+      } else if (videoId) {
+        purchaseType = "VIDEO";
+        targetId = videoId;
+      } else if (planId) {
+        purchaseType = "PLAN";
+        targetId = planId;
+      } else if (teacherId && planType) {
+        purchaseType = "TEACHER_SUB";
+        targetId = teacherId;
+      }
+
       try {
-        const creditedAmount = await prisma.$transaction(async (tx) => {
-          const updateResult = await tx.moneyCode.updateMany({
-            where: { id: moneyCode.id, isUsed: false },
-            data: { isUsed: true, usedById: session.id, usedAt: new Date() },
-          });
-
-          if (updateResult.count === 0) {
-            throw new Error("ALREADY_USED");
-          }
-
-          await tx.user.update({
-            where: { id: session.id },
-            data: { balance: { increment: moneyCode.amount } },
-          });
-
-          await tx.balanceTransaction.create({
-            data: {
-              userId: session.id,
-              type: "credit_code",
-              amount: moneyCode.amount,
-              note: `كود: ${normalizedCode}`,
-            },
-          });
-
-          return moneyCode.amount;
+        const combinedResult = await PurchaseService.processCombinedMoneyCodePurchase({
+          studentId: session.id,
+          moneyCode: normalizedCode,
+          purchaseType,
+          targetId,
+          discountCode,
+          planType,
+          studentGrade: grade,
+          languageTrack,
+          promoCodeInput: promoCode,
         });
 
-        void ReferralService.qualifyAndRewardReferral(session.id, `code:${normalizedCode}`).catch(() => {});
+        // Log successful attempt
+        await AccessCodeGuard.logAttempt({ ip: clientIp, userId: session.id, codeAttempted: normalizedCode, success: true });
 
-        // Check if there is an item to purchase with the new balance
-        const hasSpecificItem = Boolean(teacherId || courseId || folderId || planId);
-        if (hasSpecificItem) {
-          const { verifyAuthoritativePrice } = await import("@/lib/price-verifier");
-          const priceCheck = await verifyAuthoritativePrice({
-            amount: 999999,
-            teacherId,
-            planType,
-            grade,
-            languageTrack,
-            courseId,
-            folderId,
-            planId,
-          });
-
-          if (priceCheck.valid && priceCheck.expectedPrice > 0) {
-            const expectedPrice = priceCheck.expectedPrice;
-            const updatedUser = await prisma.user.findUnique({
-              where: { id: session.id },
-              select: { balance: true },
-            });
-            const currentBalance = updatedUser?.balance ?? 0;
-
-            if (currentBalance >= expectedPrice) {
-              const origin = req.nextUrl ? req.nextUrl.origin : "https://code-up.tech";
-              const reqHeaders = {
-                "Content-Type": "application/json",
-                "Cookie": req.headers.get("cookie") || "",
-              };
-
-              let purchaseSuccess = false;
-              let purchaseMessage = "";
-
-              if (teacherId && planType) {
-                const subRes = await fetch(`${origin}/api/teacher/subscribe-balance`, {
-                  method: "POST",
-                  headers: reqHeaders,
-                  body: JSON.stringify({ teacherId, planType, languageTrack, studentGrade: grade }),
-                });
-                const subData = await subRes.json().catch(() => ({}));
-                if (subRes.ok && !subData.error) {
-                  purchaseSuccess = true;
-                  purchaseMessage = subData.message || "تم تفعيل الاشتراك بالرصيد بنجاح!";
-                }
-              } else if (courseId) {
-                const courseRes = await fetch(`${origin}/api/courses/${courseId}/purchase`, {
-                  method: "POST",
-                  headers: reqHeaders,
-                  body: JSON.stringify({}),
-                });
-                const courseData = await courseRes.json().catch(() => ({}));
-                if (courseRes.ok && !courseData.error) {
-                  purchaseSuccess = true;
-                  purchaseMessage = courseData.message || "تم شراء الكورس بنجاح!";
-                }
-              } else if (folderId) {
-                const folderRes = await fetch(`${origin}/api/folders/${folderId}/purchase`, {
-                  method: "POST",
-                  headers: reqHeaders,
-                  body: JSON.stringify({}),
-                });
-                const folderData = await folderRes.json().catch(() => ({}));
-                if (folderRes.ok && !folderData.error) {
-                  purchaseSuccess = true;
-                  purchaseMessage = folderData.message || "تم شراء المحاضرة بنجاح!";
-                }
-              } else if (planId) {
-                const planRes = await fetch(`${origin}/api/plans/${planId}/purchase`, {
-                  method: "POST",
-                  headers: reqHeaders,
-                  body: JSON.stringify({}),
-                });
-                const planData = await planRes.json().catch(() => ({}));
-                if (planRes.ok && !planData.error) {
-                  purchaseSuccess = true;
-                  purchaseMessage = planData.message || "تم تفعيل الخطة بنجاح!";
-                }
-              }
-
-              if (purchaseSuccess) {
-                const finalUser = await prisma.user.findUnique({
-                  where: { id: session.id },
-                  select: { balance: true },
-                });
-                const remaining = finalUser?.balance ?? 0;
-                return NextResponse.json({
-                  success: true,
-                  type: "money_code_purchase",
-                  credited: creditedAmount,
-                  spent: expectedPrice,
-                  remainingBalance: remaining,
-                  message: `تم شحن الكود (${creditedAmount} ج) وتفعيل المحتوى بنجاح! المتبقي في رصيدك: ${remaining} جنيه 🎉`,
-                });
-              }
-            } else {
-              return NextResponse.json({
-                success: true,
-                type: "money_code_recharge",
-                credited: creditedAmount,
-                currentBalance,
-                requiredPrice: expectedPrice,
-                message: `تم إضافة قيمة الكود (${creditedAmount} ج) إلى رصيدك! رصيدك الحالي (${currentBalance} ج) ويلزمك ${expectedPrice - currentBalance} ج إضافية لإتمام الشراء.`,
-              });
-            }
-          }
-        }
-
-        return NextResponse.json({
-          success: true,
-          type: "money_code",
-          credited: creditedAmount,
-          message: `تم شحن رصيدك بـ ${creditedAmount} جنيه بنجاح! 🎉`,
-        });
+        return NextResponse.json(combinedResult);
       } catch (err: any) {
-        if (err.message === "ALREADY_USED") {
+        await AccessCodeGuard.logAttempt({ ip: clientIp, userId: session.id, codeAttempted: normalizedCode, success: false });
+        if (err.message === "MONEY_CODE_ALREADY_USED") {
           return NextResponse.json({ error: "هذا الكود مستخدم بالفعل" }, { status: 400 });
+        }
+        if (err.message === "MONEY_CODE_EXPIRED") {
+          return NextResponse.json({ error: "هذا الكود منتهي الصلاحية" }, { status: 400 });
         }
         throw err;
       }
     }
 
-    // Check Teacher Promo Code
+    // ────────────────────────────────────────────────────────────────────────
+    // 4. Check Teacher Promo Code
+    // ────────────────────────────────────────────────────────────────────────
     const teacher = await prisma.user.findFirst({
       where: {
         role: "teacher",
@@ -437,13 +346,11 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "كود الخصم هذا منتهي الصلاحية" }, { status: 400 });
       }
 
-      // Link student's referredByTeacherId
       await prisma.user.update({
         where: { id: session.id },
         data: { referredByTeacherId: teacher.id },
       });
 
-      // Record initial signup/referral link attribution if not existing
       const existing = await prisma.teacherReferralAttribution.findFirst({
         where: { teacherId: teacher.id, studentId: session.id, purchaseType: "SIGNUP" },
       });
@@ -468,6 +375,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    await AccessCodeGuard.logAttempt({ ip: clientIp, userId: session.id, codeAttempted: normalizedCode, success: false });
     return NextResponse.json({ error: "الكود غير صحيح" }, { status: 404 });
   } catch (error) {
     console.error("[codes] error:", error);

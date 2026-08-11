@@ -80,7 +80,7 @@ export async function getOverloadProtectionState(): Promise<OverloadProtectionSt
       },
     });
 
-    const map = new Map(rows.map((r) => [r.key, r.value]));
+    const map = new Map<string, string>(rows.map((r) => [r.key, r.value]));
 
     const modeVal = map.get(OVERLOAD_MODE_KEY);
     if (modeVal === "on" || modeVal === "off" || modeVal === "auto") {

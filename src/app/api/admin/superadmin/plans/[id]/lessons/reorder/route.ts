@@ -20,7 +20,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     await withDbRetry(async () => {
-      await prisma.$transaction(async (tx) => {
+      await prisma.$transaction(async (tx: any) => {
         // Simple update loop - in SQLite this is natively serialized
         for (let i = 0; i < orderedLessonIds.length; i++) {
           await tx.planLesson.update({

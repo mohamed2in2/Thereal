@@ -435,7 +435,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const isPg = (process.env.DATABASE_URL ?? "").startsWith("postgres");
   try {
     const { used, ws } = await prisma.$transaction(
-      async (tx) => {
+      async (tx: any) => {
         const usedCount = await tx.videoWatchSession.count({
           where: { studentId: session.id, videoId, usedWatchSlot: true },
         });

@@ -12,7 +12,7 @@ export const SITE_TEXT_DEFAULTS = {
   contact_heading: "تواصل معنا",
   contact_subtitle: "نحن هنا للإجابة على أسئلتك في أي وقت",
   contact_email: "contact@code-up.tech",
-  contact_phone: "01285353604",
+  contact_phone: "01118802621",
   cta_heading: "مستعد لبدء رحلتك الدراسية؟",
   cta_subtitle: "انضم إلى آلاف المتعلمين الذين يحققون نتائج استثنائية مع منصتنا",
 } as const;

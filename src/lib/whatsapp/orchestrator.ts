@@ -143,7 +143,7 @@ class WhatsAppOrchestrator {
     otp: string,
     minutes: number = 5,
     school: string = "Code-UP",
-    supportNumber: string = "01012345678"
+    supportNumber: string = "01118802621"
   ): Promise<string> {
     const config = await this.getConfig();
     let template = config.baileysOtpTemplate || DEFAULT_OTP_TEMPLATE;

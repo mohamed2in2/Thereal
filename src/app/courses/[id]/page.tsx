@@ -682,7 +682,7 @@ export default function CourseProductPage() {
                       <div className="space-y-2 text-center">
                         <p className="text-xs text-gray-500 font-medium">تواصل معنا لشراء الكورس عبر InstaPay، التحويل البنكي، أو الكاش:</p>
                         <a href={buildWhatsAppUrl(
-                            process.env.NEXT_PUBLIC_PAYMENT_ACCESS_PASSWORD || "+201285353604",
+                            process.env.NEXT_PUBLIC_PAYMENT_ACCESS_PASSWORD || "+201118802621",
                             [
                               `مرحباً، أريد الاشتراك في كورس "${course.title}"`,
                               `المعلم: ${course.teacher.name}`,

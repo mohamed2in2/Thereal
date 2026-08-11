@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
       }
     });
 
-    const lessonMap = new Map(lessons.map(l => [l.id, l]));
+    const lessonMap = new Map<string, any>(lessons.map(l => [l.id, l]));
 
     // Scoped filtering for teachers
     let filteredSubmissions = submissions.map(sub => {

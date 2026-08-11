@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
   const normalized = code.trim().toUpperCase();
 
   try {
-    const creditedAmount = await prisma.$transaction(async (tx) => {
+    const creditedAmount = await prisma.$transaction(async (tx: any) => {
       const moneyCode = await tx.moneyCode.findUnique({ where: { code: normalized } });
       if (!moneyCode) {
         throw new Error("NOT_FOUND");

@@ -63,7 +63,7 @@ export async function triggerPlanSyncForCourse(courseId: string) {
  */
 export async function syncCourseToPlan(planId: string, courseId: string) {
   return withDbRetry(async () => {
-    return prisma.$transaction(async (tx) => {
+    return prisma.$transaction(async (tx: any) => {
       // 1. Acquire distributed lock to prevent concurrent sync races for this plan
       await acquireAdvisoryLock(`plan-sync-${planId}`, tx);
 

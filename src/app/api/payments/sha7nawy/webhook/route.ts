@@ -163,7 +163,7 @@ export async function POST(req: NextRequest) {
     // Atomically claim the pending entry and credit the balance. updateMany on
     // targetType guarantees only one concurrent webhook wins.
     let fulfillmentRes: any = null;
-    const processed = await prisma.$transaction(async (tx) => {
+    const processed = await prisma.$transaction(async (tx: any) => {
       const claim = await tx.balanceTransaction.updateMany({
         where: { id: pendingTx!.id, type: targetType },
         data: {

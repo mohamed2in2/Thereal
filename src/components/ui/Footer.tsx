@@ -63,6 +63,12 @@ export function Footer() {
           <h4 className="text-xs font-bold mb-4 tracking-wider" style={{ color: "#5E7186" }}>تواصل</h4>
           <ul className="space-y-3">
             <li>
+              <a href="https://wa.me/201118802621" target="_blank" rel="noopener noreferrer" className="text-sm no-underline hover:text-emerald-400 transition-colors flex items-center gap-1.5" style={{ color: "#A8B8C8" }}>
+                <span>💬 واتساب:</span>
+                <span dir="ltr" className="font-mono">01118802621</span>
+              </a>
+            </li>
+            <li>
               <a href="mailto:contact@code-up.tech" className="text-sm no-underline hover:text-white transition-colors break-all" dir="ltr" style={{ color: "#A8B8C8" }}>
                 contact@code-up.tech
               </a>

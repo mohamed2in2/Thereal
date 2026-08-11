@@ -149,7 +149,7 @@ export async function evaluateProjectWithAI(submissionId: string): Promise<void>
     }
 
     // Success: Transactional write to submission + progress + notification
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: any) => {
       await tx.planProjectSubmission.update({
         where: { id: submissionId },
         data: {

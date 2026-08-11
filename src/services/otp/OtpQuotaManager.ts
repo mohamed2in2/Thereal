@@ -32,7 +32,7 @@ export class OtpQuotaManager {
   ): Promise<QuotaCheckResult> {
     const todayStr = this.getCairoTodayStr();
 
-    return await prisma.$transaction(async (tx) => {
+    return await prisma.$transaction(async (tx: any) => {
       // Find or create today's quota record
       let quotaRecord = await tx.otpQuota.findUnique({
         where: { date: todayStr },

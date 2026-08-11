@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@/generated/prisma/client";
 import { POINTS } from "@/lib/points";
 
 export type ReferralStatus = "PENDING" | "QUALIFIED" | "REWARDED" | "INVALID";
@@ -10,15 +11,17 @@ export class ReferralService {
    */
   public static async registerPendingReferral(
     inviterId: string,
-    invitedId: string
+    invitedId: string,
+    tx?: any
   ): Promise<boolean> {
     if (inviterId === invitedId) {
       console.warn(`[ReferralService] Rejected self-referral for user ${inviterId}`);
       return false;
     }
 
+    const client = tx || prisma;
     try {
-      await prisma.referral.create({
+      await client.referral.create({
         data: {
           inviterId,
           invitedId,
@@ -27,7 +30,6 @@ export class ReferralService {
       });
       return true;
     } catch (err) {
-      // Handles UNIQUE(invitedId) constraint if user was already referred
       console.warn(`[ReferralService] User ${invitedId} already has a referral record.`);
       return false;
     }
@@ -37,14 +39,15 @@ export class ReferralService {
    * Qualifies and awards referral rewards (POINTS.REFERRAL to inviter & invited student)
    * upon a valid paid course purchase or access code redemption.
    * 
-   * Atomically transitions status PENDING -> QUALIFIED -> REWARDED inside a transaction.
+   * Atomically transitions status PENDING -> QUALIFIED -> REWARDED.
    */
   public static async qualifyAndRewardReferral(
     invitedStudentId: string,
-    qualifyingPurchaseId: string
+    qualifyingPurchaseId: string,
+    tx?: any
   ): Promise<{ rewarded: boolean; pointsAwarded: number }> {
-    return await prisma.$transaction(async (tx) => {
-      const referral = await tx.referral.findUnique({
+    const execute = async (client: any) => {
+      const referral = await client.referral.findUnique({
         where: { invitedId: invitedStudentId },
       });
 
@@ -58,7 +61,7 @@ export class ReferralService {
       }
 
       // Transition to REWARDED state atomically
-      await tx.referral.update({
+      await client.referral.update({
         where: { id: referral.id },
         data: {
           status: "REWARDED",
@@ -69,18 +72,18 @@ export class ReferralService {
 
       // Award POINTS.REFERRAL (+50 XP) to inviter & invited student
       const rewardPoints = POINTS.REFERRAL ?? 50;
-      await tx.user.update({
+      await client.user.update({
         where: { id: referral.inviterId },
         data: { points: { increment: rewardPoints }, pointsUpdatedAt: new Date() },
       });
 
-      await tx.user.update({
+      await client.user.update({
         where: { id: referral.invitedId },
         data: { points: { increment: rewardPoints }, pointsUpdatedAt: new Date() },
       });
 
       // Audit Log
-      await tx.auditLog.create({
+      await client.auditLog.create({
         data: {
           userId: referral.invitedId,
           action: "REFERRAL_REWARDED",
@@ -97,7 +100,12 @@ export class ReferralService {
       console.log(`[ReferralService] Successfully rewarded ${rewardPoints} XP to inviter ${referral.inviterId} and invited ${referral.invitedId}`);
 
       return { rewarded: true, pointsAwarded: rewardPoints };
-    });
+    };
+
+    if (tx) {
+      return execute(tx);
+    }
+    return prisma.$transaction(execute);
   }
 
   /**

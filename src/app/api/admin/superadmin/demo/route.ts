@@ -551,7 +551,7 @@ export async function DELETE() {
     });
     const courseIds = demoCourses.map((c) => c.id);
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: any) => {
       const pt = await tx.parentToken.deleteMany({ where: { studentId: { in: studentIds } } });
       const pve = await tx.parentVerificationEvent.deleteMany({ where: { studentId: { in: studentIds } } });
       const sub = await tx.homeworkSubmission.deleteMany({ where: { studentId: { in: studentIds } } });

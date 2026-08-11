@@ -91,7 +91,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const oneHourAgo = new Date(now.getTime() - 3600000);
     let studentMsg;
     try {
-      studentMsg = await prisma.$transaction(async (tx) => {
+      studentMsg = await prisma.$transaction(async (tx: any) => {
         // Acquire advisory lock to serialize chat quota checks
         await acquireAdvisoryLock(`chat-limit-${session.id}`, tx);
 

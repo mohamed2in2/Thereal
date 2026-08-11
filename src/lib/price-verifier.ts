@@ -1,15 +1,22 @@
 import { prisma } from "@/lib/prisma";
+import { DiscountService, PurchaseType } from "@/services/discount/DiscountService";
 
 export interface ItemPriceVerificationResult {
   valid: boolean;
   expectedPrice: number;
+  originalPrice?: number;
+  discountAmount?: number;
+  finalPrice?: number;
   itemName: string;
+  itemType?: PurchaseType;
+  targetId?: string;
   error?: string;
 }
 
 /**
  * Authoritatively calculates and verifies the real database price of an item.
  * Guarantees that client-supplied `amount` cannot tamper with or lower the price.
+ * Supports server-authoritative discount code verification.
  */
 export async function verifyAuthoritativePrice(params: {
   amount: number;
@@ -19,7 +26,11 @@ export async function verifyAuthoritativePrice(params: {
   languageTrack?: string | null;
   courseId?: string | null;
   folderId?: string | null;
+  videoId?: string | null;
   planId?: string | null;
+  discountCode?: string | null;
+  studentId?: string | null;
+  paymentMethod?: string | null;
 }): Promise<ItemPriceVerificationResult> {
   const {
     amount,
@@ -29,11 +40,22 @@ export async function verifyAuthoritativePrice(params: {
     languageTrack,
     courseId,
     folderId,
+    videoId,
     planId,
+    discountCode,
+    studentId,
+    paymentMethod,
   } = params;
+
+  let basePrice = 0;
+  let itemName = "شحن رصيد المحفظة";
+  let purchaseType: PurchaseType | undefined = undefined;
+  let targetId: string | undefined = undefined;
 
   // 1. Teacher Subscription Price Verification
   if (teacherId && planType) {
+    purchaseType = "TEACHER_SUB";
+    targetId = teacherId;
     const validPlanTypes = ["monthly", "termly", "yearly"];
     if (!validPlanTypes.includes(planType)) {
       return { valid: false, expectedPrice: 0, itemName: "اشتراك معلم", error: "نوع باقة الاشتراك غير صالح" };
@@ -91,25 +113,14 @@ export async function verifyAuthoritativePrice(params: {
     const langRate = isLanguages ? (profile.priceLanguagesMonthly ?? 0) : 0;
     const languageSurcharge = langRate * langMonths;
 
-    const expectedPrice = Math.max(planPrice + languageSurcharge, 1);
+    basePrice = Math.max(planPrice + languageSurcharge, 1);
     const teacherName = profile.displayName || teacher.name;
-    const itemName = `اشتراك ${planType === "monthly" ? "شهري" : planType === "termly" ? "ترمي" : "سنوي"} (${isLanguages ? "لغات / إنجليزي" : "عربي"}) مع ${teacherName}`;
-
-    // Reject if client amount is lower than expected
-    if (amount < expectedPrice - 0.01) {
-      return {
-        valid: false,
-        expectedPrice,
-        itemName,
-        error: `المبلغ المطلوب (${amount} جنيه) أقل من السعر الفعلي المعتمد للاشتراك (${expectedPrice} جنيه). تم رفض العملية لمنع التلاعب.`,
-      };
-    }
-
-    return { valid: true, expectedPrice, itemName };
+    itemName = `اشتراك ${planType === "monthly" ? "شهري" : planType === "termly" ? "ترمي" : "سنوي"} (${isLanguages ? "لغات / إنجليزي" : "عربي"}) مع ${teacherName}`;
   }
-
   // 2. Course Price Verification
-  if (courseId) {
+  else if (courseId) {
+    purchaseType = "COURSE";
+    targetId = courseId;
     const course = await prisma.course.findUnique({
       where: { id: courseId },
       select: { title: true, price: true, discountPercent: true, discountExpiresAt: true, isPaid: true },
@@ -121,7 +132,7 @@ export async function verifyAuthoritativePrice(params: {
 
     const coursePrice = course.price ?? 0;
     if (!course.isPaid || coursePrice === 0) {
-      return { valid: true, expectedPrice: 0, itemName: course.title };
+      return { valid: true, expectedPrice: 0, originalPrice: 0, finalPrice: 0, itemName: course.title, itemType: "COURSE", targetId: courseId };
     }
 
     let effectivePrice = coursePrice;
@@ -129,21 +140,13 @@ export async function verifyAuthoritativePrice(params: {
     if (course.discountPercent && course.discountExpiresAt && course.discountExpiresAt > now) {
       effectivePrice = Math.round(coursePrice * (1 - course.discountPercent / 100));
     }
-
-    if (amount < effectivePrice - 0.01) {
-      return {
-        valid: false,
-        expectedPrice: effectivePrice,
-        itemName: course.title,
-        error: `المبلغ المطلوب (${amount} جنيه) أقل من السعر المعتمد للكورس (${effectivePrice} جنيه).`,
-      };
-    }
-
-    return { valid: true, expectedPrice: effectivePrice, itemName: course.title };
+    basePrice = effectivePrice;
+    itemName = course.title;
   }
-
   // 3. Folder Price Verification
-  if (folderId) {
+  else if (folderId) {
+    purchaseType = "FOLDER";
+    targetId = folderId;
     const folder = await prisma.folder.findUnique({
       where: { id: folderId },
       select: { name: true, price: true, isPurchasable: true },
@@ -158,25 +161,33 @@ export async function verifyAuthoritativePrice(params: {
         valid: false,
         expectedPrice: 0,
         itemName: folder.name,
-        error: "هذا المجلد غير متاح للشراء منفرداً — يمكنك شراء الكورس كاملاً بكود وصول",
+        error: "هذه المحاضرة غير متاحة للشراء منفرداً — يمكنك شراء الكورس كاملاً",
       };
     }
 
-    const folderPrice = folder.price ?? 0;
-    if (amount < folderPrice - 0.01) {
-      return {
-        valid: false,
-        expectedPrice: folderPrice,
-        itemName: folder.name,
-        error: `المبلغ المطلوب (${amount} جنيه) أقل من سعر المحاضرة المعتمد (${folderPrice} جنيه).`,
-      };
-    }
-
-    return { valid: true, expectedPrice: folderPrice, itemName: folder.name };
+    basePrice = folder.price ?? 0;
+    itemName = folder.name;
   }
+  // 4. Video Price Verification
+  else if (videoId) {
+    purchaseType = "VIDEO";
+    targetId = videoId;
+    const video = await prisma.video.findUnique({
+      where: { id: videoId },
+      select: { title: true, price: true },
+    });
 
-  // 4. Study Plan Price Verification
-  if (planId) {
+    if (!video) {
+      return { valid: false, expectedPrice: 0, itemName: "درس", error: "الدرس المطلوب غير موجود" };
+    }
+
+    basePrice = video.price ?? 0;
+    itemName = video.title;
+  }
+  // 5. Study Plan Price Verification
+  else if (planId) {
+    purchaseType = "PLAN";
+    targetId = planId;
     const plan = await prisma.plan.findUnique({
       where: { id: planId },
       select: { title: true, price: true, discountPrice: true, discountExpiresAt: true, status: true },
@@ -189,20 +200,72 @@ export async function verifyAuthoritativePrice(params: {
     const rawPlanPrice = plan.price ?? 0;
     const now = new Date();
     const hasActiveDiscount = plan.discountPrice && plan.discountPrice > 0 && (!plan.discountExpiresAt || plan.discountExpiresAt > now);
-    const effectivePrice = hasActiveDiscount ? (plan.discountPrice ?? rawPlanPrice) : rawPlanPrice;
+    basePrice = hasActiveDiscount ? (plan.discountPrice ?? rawPlanPrice) : rawPlanPrice;
+    itemName = plan.title;
+  }
+  // 6. General Wallet Top-Up
+  else {
+    return {
+      valid: true,
+      expectedPrice: amount,
+      originalPrice: amount,
+      discountAmount: 0,
+      finalPrice: amount,
+      itemName: "شحن رصيد المحفظة",
+    };
+  }
 
-    if (amount < effectivePrice - 0.01) {
+  // Calculate Discount if discountCode is supplied
+  let finalPrice = basePrice;
+  let discountAmount = 0;
+
+  if (discountCode && purchaseType && targetId) {
+    const discountValidation = await DiscountService.validateDiscountCode({
+      code: discountCode,
+      studentId: studentId || "",
+      purchaseType,
+      targetId,
+      basePrice,
+      paymentMethod: paymentMethod || undefined,
+    });
+
+    if (!discountValidation.valid) {
       return {
         valid: false,
-        expectedPrice: effectivePrice,
-        itemName: plan.title,
-        error: `المبلغ المطلوب (${amount} جنيه) أقل من سعر الخطة المعتمد (${effectivePrice} جنيه).`,
+        expectedPrice: basePrice,
+        originalPrice: basePrice,
+        itemName,
+        error: discountValidation.error,
       };
     }
 
-    return { valid: true, expectedPrice: effectivePrice, itemName: plan.title };
+    discountAmount = discountValidation.pricing?.discountAmount ?? 0;
+    finalPrice = discountValidation.pricing?.finalPrice ?? basePrice;
   }
 
-  // General wallet top-up (amount is checked against min/max limits)
-  return { valid: true, expectedPrice: amount, itemName: "شحن رصيد المحفظة" };
+  // Reject if client amount is lower than expected final price
+  if (amount < finalPrice - 0.01) {
+    return {
+      valid: false,
+      expectedPrice: finalPrice,
+      originalPrice: basePrice,
+      discountAmount,
+      finalPrice,
+      itemName,
+      itemType: purchaseType,
+      targetId,
+      error: `المبلغ المطلوب (${amount} جنيه) أقل من السعر الفعلي المعتمد (${finalPrice} جنيه). تم رفض العملية لمنع التلاعب.`,
+    };
+  }
+
+  return {
+    valid: true,
+    expectedPrice: finalPrice,
+    originalPrice: basePrice,
+    discountAmount,
+    finalPrice,
+    itemName,
+    itemType: purchaseType,
+    targetId,
+  };
 }

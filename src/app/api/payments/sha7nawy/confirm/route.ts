@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
 
     // Atomic claim: only one confirm or webhook delivery wins
     let fulfillmentRes: any = null;
-    const processed = await prisma.$transaction(async (tx) => {
+    const processed = await prisma.$transaction(async (tx: any) => {
       const claim = await tx.balanceTransaction.updateMany({
         where: { id: pendingTx.id, type: SHA7NAWY_PENDING_TYPE },
         data: {

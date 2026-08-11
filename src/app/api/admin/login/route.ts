@@ -180,8 +180,8 @@ export async function POST(req: NextRequest) {
               role: "teacher",
               isDeleted: false,
               OR: [
-                { name: { contains: cleanQuery, mode: "insensitive" } },
-                { teacherProfile: { displayName: { contains: cleanQuery, mode: "insensitive" } } },
+                { name: { contains: cleanQuery } },
+                { teacherProfile: { displayName: { contains: cleanQuery } } },
               ],
             },
           });

@@ -23,6 +23,16 @@ interface PaymentIntent {
   instructions: string;
   transactionId?: string | number;
   paymentPageUrl?: string;
+  walletDeduction?: number;
+}
+
+interface AppliedDiscount {
+  code: string;
+  discountType: "PERCENTAGE" | "FIXED_AMOUNT";
+  discountValue: number;
+  originalPrice: number;
+  discountAmount: number;
+  finalPrice: number;
 }
 
 function PaymentContent() {
@@ -40,6 +50,7 @@ function PaymentContent() {
   const gradeParam = searchParams.get("grade");
   const courseIdParam = searchParams.get("courseId");
   const folderIdParam = searchParams.get("folderId");
+  const videoIdParam = searchParams.get("videoId");
   const planIdParam = searchParams.get("planId");
   const languageTrackParam = searchParams.get("languageTrack");
   const contextParam = searchParams.get("context");
@@ -59,6 +70,14 @@ function PaymentContent() {
   const [intent, setIntent] = useState<PaymentIntent | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
   const [copied, setCopied] = useState(false);
+
+  // 🏷️ Discount Code state
+  const [discountInput, setDiscountInput] = useState("");
+  const [isApplyingDiscount, setIsApplyingDiscount] = useState(false);
+  const [appliedDiscount, setAppliedDiscount] = useState<AppliedDiscount | null>(null);
+
+  // ⚡ Split Payment / Combined Funding state
+  const [useWalletBalance, setUseWalletBalance] = useState<boolean>(true);
 
   // 15-Minute Countdown Timer for Payment Instructions
   const [timeLeftSeconds, setTimeLeftSeconds] = useState<number>(15 * 60);
@@ -87,7 +106,7 @@ function PaymentContent() {
   // ── Authoritative Server-Side Price Lookup on Load ──
   useEffect(() => {
     const fetchAuthoritativePrice = async () => {
-      const hasSpecificItem = teacherIdParam || courseIdParam || folderIdParam || planIdParam;
+      const hasSpecificItem = teacherIdParam || courseIdParam || folderIdParam || videoIdParam || planIdParam;
       if (hasSpecificItem) {
         setIsPriceLocked(true);
         try {
@@ -97,6 +116,7 @@ function PaymentContent() {
           if (gradeParam) query.set("grade", gradeParam);
           if (courseIdParam) query.set("courseId", courseIdParam);
           if (folderIdParam) query.set("folderId", folderIdParam);
+          if (videoIdParam) query.set("videoId", videoIdParam);
           if (planIdParam) query.set("planId", planIdParam);
 
           const res = await fetch(`/api/payments/quote?${query.toString()}`);
@@ -110,7 +130,6 @@ function PaymentContent() {
             }
           }
         } catch {
-          // fallback to param if network fails
           if (amountParam && Number(amountParam) > 0) {
             setBaseAmount(amountParam);
           }
@@ -131,7 +150,66 @@ function PaymentContent() {
         setSelectedMethodId("vf_cash");
       }
     }
-  }, [amountParam, methodParam, teacherIdParam, planTypeParam, gradeParam, courseIdParam, folderIdParam, planIdParam]);
+  }, [amountParam, methodParam, teacherIdParam, planTypeParam, gradeParam, courseIdParam, folderIdParam, videoIdParam, planIdParam]);
+
+  // ── Apply Discount Code Handler ──
+  const handleApplyDiscount = async () => {
+    if (!discountInput.trim()) {
+      toastError("يرجى إدخال كود الخصم أولاً");
+      return;
+    }
+
+    setIsApplyingDiscount(true);
+    try {
+      const res = await fetch("/api/checkout/discount", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code: discountInput.trim(),
+          teacherId: teacherIdParam || undefined,
+          planType: planTypeParam || undefined,
+          grade: gradeParam || undefined,
+          languageTrack: languageTrackParam || undefined,
+          courseId: courseIdParam || undefined,
+          folderId: folderIdParam || undefined,
+          videoId: videoIdParam || undefined,
+          planId: planIdParam || undefined,
+          paymentMethod: selectedMethodId,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        toastError(data.error || "كود الخصم غير صالح");
+        setAppliedDiscount(null);
+      } else {
+        setAppliedDiscount({
+          code: data.code,
+          discountType: data.discountType,
+          discountValue: data.discountValue,
+          originalPrice: data.originalPrice,
+          discountAmount: data.discountAmount,
+          finalPrice: data.finalPrice,
+        });
+        setBaseAmount(String(data.finalPrice));
+        toastSuccess(data.message || "تم تطبيق كود الخصم بنجاح! 🎉");
+      }
+    } catch {
+      toastError("تعذر التحقق من كود الخصم");
+    } finally {
+      setIsApplyingDiscount(false);
+    }
+  };
+
+  const handleRemoveDiscount = () => {
+    setAppliedDiscount(null);
+    setDiscountInput("");
+    if (appliedDiscount) {
+      setBaseAmount(String(appliedDiscount.originalPrice));
+    }
+    toastSuccess("تم إزالة كود الخصم");
+  };
 
   // ── Timer Countdown ──
   useEffect(() => {
@@ -179,6 +257,19 @@ function PaymentContent() {
     return true;
   }, []);
 
+  // ── Price and Split Calculations ──
+  const rawItemPrice = Number(baseAmount) || 0;
+  const studentBalance = user?.balance ?? 0;
+  const hasPartialBalance = studentBalance > 0 && studentBalance < rawItemPrice && selectedMethodId !== "wallet_balance";
+  const effectiveWalletDeduction = (useWalletBalance && hasPartialBalance)
+    ? Math.min(studentBalance, Math.max(0, rawItemPrice - 1))
+    : 0;
+
+  const payableToGateway = Math.max(0, rawItemPrice - effectiveWalletDeduction);
+  const isFawryMinAdjusted = selectedMethodId === "fawry" && payableToGateway > 0 && payableToGateway < 10;
+  const effectiveGatewayBase = selectedMethodId === "fawry" ? Math.max(10, payableToGateway) : payableToGateway;
+  const taxCalculation = calculateAmountWithTax(effectiveGatewayBase, selectedMethodId);
+
   const handleCreatePayment = async () => {
     if (!selectedMethod) return;
 
@@ -186,16 +277,6 @@ function PaymentContent() {
       toastError("يرجى تسجيل الدخول أو إنشاء حساب جديد لإتمام عملية الدفع");
       const redirectTarget = window.location.pathname + window.location.search;
       router.push(`/login?redirect_url=${encodeURIComponent(redirectTarget)}`);
-      return;
-    }
-
-    const amt = Number(baseAmount);
-    if (!amt || amt < selectedMethod.minAmount) {
-      toastError(`الحد الأدنى للشحن هو ${selectedMethod.minAmount} جنيه`);
-      return;
-    }
-    if (amt > selectedMethod.maxAmount) {
-      toastError(`الحد الأقصى للشحن هو ${selectedMethod.maxAmount} جنيه`);
       return;
     }
 
@@ -223,7 +304,9 @@ function PaymentContent() {
             grade: gradeParam || undefined,
             courseId: courseIdParam || undefined,
             folderId: folderIdParam || undefined,
+            videoId: videoIdParam || undefined,
             planId: planIdParam || undefined,
+            discountCode: appliedDiscount?.code,
           }),
         });
         const codeBody = await codeRes.json().catch(() => ({}));
@@ -233,7 +316,7 @@ function PaymentContent() {
           setIsCreating(false);
           return;
         }
-        toastSuccess(codeBody.message || "تم تفعيل كود القسيمة بنجاح! 🎉");
+        toastSuccess(codeBody.message || "تم تفعيل الكود بنجاح! 🎉");
         setStep("success");
         setIsCreating(false);
         return;
@@ -246,7 +329,7 @@ function PaymentContent() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           number: selectedMethod.needsCode ? code.trim() : (normalizedPhone || "01000000000"),
-          amount: effectiveBaseAmount,
+          amount: rawItemPrice,
           method: selectedMethod.id,
           code: selectedMethod.needsCode ? code.trim() : undefined,
           teacherId: teacherIdParam || undefined,
@@ -255,8 +338,11 @@ function PaymentContent() {
           languageTrack: languageTrackParam || undefined,
           courseId: courseIdParam || undefined,
           folderId: folderIdParam || undefined,
+          videoId: videoIdParam || undefined,
           planId: planIdParam || undefined,
           courseTitle: verifiedItemName || planLabelParam || contextParam || undefined,
+          discountCode: appliedDiscount?.code,
+          useWalletBalance: useWalletBalance && hasPartialBalance,
         }),
       });
 
@@ -282,8 +368,9 @@ function PaymentContent() {
         setIntent({
           reference: body.reference || "IPN-DIRECT",
           method: body.method || selectedMethod.id,
-          totalAmount: body.totalAmount || amt,
+          totalAmount: body.totalAmount || effectiveGatewayBase,
           instructions: body.instructions || selectedMethod.shortNote,
+          walletDeduction: body.walletDeduction,
         });
         setTimeLeftSeconds(15 * 60);
         setStep("instructions");
@@ -293,7 +380,7 @@ function PaymentContent() {
 
       const redirectUrl = body.checkoutUrl || body.data?.payment_page_url || body.data?.url;
       if (redirectUrl) {
-        toastSuccess("جاري تحويلك لبوابة دفع فوري (Shake-Out)... 🚀");
+        toastSuccess("جاري تحويلك لبوابة الدفع (Shake-Out)... 🚀");
         window.location.href = redirectUrl;
         return;
       }
@@ -301,13 +388,14 @@ function PaymentContent() {
       setIntent({
         reference: body.reference || "REF-PENDING",
         method: body.method || selectedMethod.id,
-        totalAmount: body.totalAmount || amt,
+        totalAmount: body.totalAmount || taxCalculation.totalAmount,
         instructions: body.instructions || selectedMethod.shortNote,
         transactionId: body.data?.transaction_id ?? body.data?.id,
         paymentPageUrl: body.data?.payment_page_url ?? body.data?.url ?? undefined,
+        walletDeduction: body.walletDeduction,
       });
 
-      setTimeLeftSeconds(15 * 60); // reset 15-minute timer
+      setTimeLeftSeconds(15 * 60);
       setStep("instructions");
     } catch {
       setErrors(["حدث خطأ أثناء الاتصال ببوابة الدفع. يرجى المحاولة مرة أخرى."]);
@@ -326,7 +414,6 @@ function PaymentContent() {
     }
 
     try {
-      // 1. Check status endpoint if transactionId is available
       if (intent.transactionId) {
         const res = await fetch(`/api/payments/sha7nawy/status?transactionId=${encodeURIComponent(String(intent.transactionId))}`);
         if (res.ok) {
@@ -334,13 +421,12 @@ function PaymentContent() {
           const st = String(data.status || "").toLowerCase();
           if (st === "completed" || st === "paid" || st === "success") {
             setStep("success");
-            toastSuccess("تم التحقق من نجاح عملية الدفع وتفعيل الرصيد بنجاح! 🎉");
+            toastSuccess("تم التحقق من نجاح عملية الدفع وتفعيل المحتوى بنجاح! 🎉");
             return;
           }
         }
       }
 
-      // 2. Also try confirmation query by ref_code
       if (intent.reference) {
         const confRes = await fetch("/api/payments/sha7nawy/confirm", {
           method: "POST",
@@ -372,7 +458,7 @@ function PaymentContent() {
     }
   }, [intent, toastSuccess]);
 
-  // ── Non-Intrusive Background Auto-Polling (Keeps UI on Screen) ──
+  // ── Background Auto-Polling ──
   useEffect(() => {
     if (step !== "instructions" || !intent) return;
 
@@ -382,19 +468,6 @@ function PaymentContent() {
 
     return () => clearInterval(interval);
   }, [step, intent, performStatusCheck]);
-
-  const handleRedirectAfterSuccess = useCallback(() => {
-    if (returnHref) {
-      router.push(returnHref);
-    } else {
-      router.push("/account");
-    }
-  }, [returnHref, router]);
-
-  const rawAmt = Number(baseAmount) || 0;
-  const isFawryMinAdjusted = selectedMethodId === "fawry" && rawAmt > 0 && rawAmt < 10;
-  const effectiveBaseAmount = selectedMethodId === "fawry" ? Math.max(10, rawAmt) : rawAmt;
-  const taxCalculation = calculateAmountWithTax(effectiveBaseAmount, selectedMethodId);
 
   return (
     <div dir="rtl" className="min-h-screen bg-[#F8F9FA] dark:bg-[#0B0F19] text-[#101828] dark:text-[#F2F4F7] transition-colors duration-200">
@@ -410,7 +483,7 @@ function PaymentContent() {
                 {verifiedItemName ? `سداد: ${verifiedItemName}` : contextParam || "شحن رصيد المحفظة والدفع"}
               </h1>
               <p className="text-[14px] text-[#667085] dark:text-[#98A2B3] mt-1.5 leading-relaxed">
-                اختر طريقة الدفع المناسبة واستكمل بيانات السداد بأمان وسرعة فائقة.
+                اختر وسيلة الدفع واستكمل بيانات السداد بأمان وسرعة فائقة.
               </p>
             </div>
 
@@ -422,19 +495,75 @@ function PaymentContent() {
                   <span>{verifiedItemName || planLabelParam || contextParam}</span>
                 </div>
                 <span className="px-2.5 py-1 rounded-xl bg-emerald-500 text-white font-mono font-black">
-                  {baseAmount} جنيه
+                  {rawItemPrice} جنيه
                 </span>
               </div>
             )}
 
-            {/* Quick Balance Purchase Callout */}
-            {user?.balance !== undefined && user.balance >= Number(baseAmount) && Number(baseAmount) > 0 && (
+            {/* 🏷️ Discount Code Section */}
+            {(verifiedItemName || isPriceLocked) && (
+              <div className="rounded-2xl border border-[#E4E7EC] dark:border-[#232C36] bg-[#FFFFFF] dark:bg-[#141A21] p-4 shadow-sm space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs sm:text-sm font-bold text-[#101828] dark:text-[#F2F4F7] flex items-center gap-1.5">
+                    <span>🏷️</span>
+                    <span>هل لديك كود خصم؟</span>
+                  </label>
+                  {appliedDiscount && (
+                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+                      ✓ كود الخصم مفعّل
+                    </span>
+                  )}
+                </div>
+
+                {!appliedDiscount ? (
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      dir="ltr"
+                      value={discountInput}
+                      onChange={(e) => setDiscountInput(e.target.value.toUpperCase())}
+                      placeholder="أدخل كود الخصم (مثال: SUMMER2026)"
+                      className="flex-1 h-11 px-3 rounded-xl border border-[#E4E7EC] dark:border-[#232C36] bg-[#F8F9FA] dark:bg-[#0B0F19] text-[#101828] dark:text-[#F2F4F7] font-mono text-sm uppercase focus:outline-none focus:border-emerald-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleApplyDiscount}
+                      disabled={isApplyingDiscount || !discountInput.trim()}
+                      className="px-4 h-11 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs sm:text-sm shadow-sm transition-all disabled:opacity-50 cursor-pointer"
+                    >
+                      {isApplyingDiscount ? "فحص..." : "تطبيق"}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between gap-3 text-xs sm:text-sm">
+                    <div className="space-y-0.5">
+                      <div className="font-bold text-emerald-900 dark:text-emerald-200">
+                        كود: <span className="font-mono font-black">{appliedDiscount.code}</span> ({appliedDiscount.discountType === "PERCENTAGE" ? `${appliedDiscount.discountValue}%` : `${appliedDiscount.discountValue} ج`} خصم)
+                      </div>
+                      <div className="text-xs text-emerald-700 dark:text-emerald-300">
+                        وفرت: <strong>{appliedDiscount.discountAmount} جنيه</strong> (من {appliedDiscount.originalPrice} ج إلى {appliedDiscount.finalPrice} ج)
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleRemoveDiscount}
+                      className="text-xs text-rose-500 hover:text-rose-600 font-bold underline cursor-pointer"
+                    >
+                      إزالة
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Quick 100% Full Balance Purchase Callout */}
+            {user?.balance !== undefined && user.balance >= rawItemPrice && rawItemPrice > 0 && (
               <div className="p-4 rounded-2xl bg-teal-500/15 border border-teal-500/30 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs sm:text-sm">
                 <div className="flex items-center gap-2.5 font-bold text-teal-900 dark:text-teal-200">
                   <span className="text-xl">💰</span>
                   <div>
-                    <p>يتوفر في حسابك رصيد كافٍ ({user.balance} جنيه)!</p>
-                    <p className="text-[11px] font-normal text-teal-700 dark:text-teal-300">يمكنك إتمام الحجز والشراء مباشرة من رصيدك دون أي رسوم إضافية.</p>
+                    <p>يتوفر في محفظتك رصيد كافٍ ({user.balance} جنيه)!</p>
+                    <p className="text-[11px] font-normal text-teal-700 dark:text-teal-300">يمكنك إتمام الحجز والشراء فوراً بالكامل من رصيدك دون أي رسوم إضافية.</p>
                   </div>
                 </div>
                 <button
@@ -451,11 +580,44 @@ function PaymentContent() {
               </div>
             )}
 
-            {/* Amount Selection / Display */}
+            {/* ⚡ Split Payment / Combined Funding Callout */}
+            {hasPartialBalance && (
+              <div className="p-4 rounded-2xl bg-sky-500/10 border border-sky-500/30 space-y-2.5 text-xs sm:text-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-2 font-bold text-sky-950 dark:text-sky-200">
+                    <span className="text-lg">⚡</span>
+                    <div>
+                      <p>دفع مجمّع (Combined Payment)</p>
+                      <p className="text-[11px] font-normal text-sky-700 dark:text-sky-300 mt-0.5">
+                        لديك رصيد متاح في محفظتك بقيمة <strong>{studentBalance} جنيه</strong>. يمكنك استخدامه لتقليل المبلغ المطلوب دفعه عبر وسيلة الدفع الإلكترونية!
+                      </p>
+                    </div>
+                  </div>
+                  <label className="flex items-center gap-2 shrink-0 cursor-pointer font-bold text-xs bg-sky-500/20 px-3 py-1.5 rounded-xl border border-sky-500/40">
+                    <input
+                      type="checkbox"
+                      checked={useWalletBalance}
+                      onChange={(e) => setUseWalletBalance(e.target.checked)}
+                      className="cursor-pointer"
+                    />
+                    <span>تطبيق رصيد المحفظة</span>
+                  </label>
+                </div>
+
+                {useWalletBalance && (
+                  <div className="pt-2 border-t border-sky-500/20 grid grid-cols-2 gap-2 text-xs font-semibold text-sky-900 dark:text-sky-200">
+                    <div>خصم من المحفظة: <span className="font-bold text-emerald-600 dark:text-emerald-400">-{effectiveWalletDeduction} جنيه</span></div>
+                    <div>المتبقي للدفع إلكترونياً: <span className="font-bold text-sky-600 dark:text-sky-400">{payableToGateway} جنيه</span></div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Amount Selection / Breakdown Display */}
             <div className="rounded-2xl border border-[#E4E7EC] dark:border-[#232C36] bg-[#FFFFFF] dark:bg-[#141A21] p-5 shadow-sm space-y-4">
               <div className="flex items-center justify-between">
                 <label className="text-[15px] font-semibold text-[#101828] dark:text-[#F2F4F7]">
-                  المبلغ المطلوب سداده (جنيه مصري)
+                  {useWalletBalance && hasPartialBalance ? "المبلغ المتبقي للسداد الإلكتروني" : "المبلغ المطلوب سداده (جنيه مصري)"}
                 </label>
                 {isPriceLocked && (
                   <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-600 dark:text-amber-400">
@@ -477,7 +639,7 @@ function PaymentContent() {
                   min={selectedMethod.minAmount}
                   max={selectedMethod.maxAmount}
                   disabled={isPriceLocked}
-                  value={baseAmount}
+                  value={effectiveGatewayBase}
                   onChange={(e) => setBaseAmount(e.target.value)}
                   className={`w-full h-14 px-4 rounded-xl border border-[#E4E7EC] dark:border-[#232C36] bg-[#F8F9FA] dark:bg-[#0B0F19] text-[#101828] dark:text-[#F2F4F7] text-[22px] font-bold focus:outline-none focus:border-emerald-500 ${
                     isPriceLocked ? "cursor-not-allowed opacity-90" : ""
@@ -489,17 +651,35 @@ function PaymentContent() {
                 </span>
               </div>
 
-              {/* Tax & Total Summary */}
-              <div className="pt-3 border-t border-[#E4E7EC] dark:border-[#232C36] flex items-center justify-between text-xs sm:text-sm">
-                <span className="text-[#667085] dark:text-[#98A2B3]">
-                  رسوم الخدمة والضرائب ({selectedMethod.feePercentage}%):
-                </span>
-                <span className="font-bold">
-                  {taxCalculation.taxAmount > 0 ? `+${taxCalculation.taxAmount} جنيه` : "بدون رسوم إضافية"}
-                </span>
+              {/* Price Breakdown */}
+              <div className="space-y-1.5 pt-3 border-t border-[#E4E7EC] dark:border-[#232C36] text-xs sm:text-sm">
+                {appliedDiscount && (
+                  <div className="flex items-center justify-between text-[#667085] dark:text-[#98A2B3]">
+                    <span>السعر الأصلي:</span>
+                    <span className="line-through">{appliedDiscount.originalPrice} جنيه</span>
+                  </div>
+                )}
+                {appliedDiscount && (
+                  <div className="flex items-center justify-between text-emerald-600 dark:text-emerald-400 font-bold">
+                    <span>خصم الكود ({appliedDiscount.code}):</span>
+                    <span>-{appliedDiscount.discountAmount} جنيه</span>
+                  </div>
+                )}
+                {useWalletBalance && effectiveWalletDeduction > 0 && (
+                  <div className="flex items-center justify-between text-sky-600 dark:text-sky-400 font-bold">
+                    <span>خصم من رصيد محفظتك:</span>
+                    <span>-{effectiveWalletDeduction} جنيه</span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between text-[#667085] dark:text-[#98A2B3]">
+                  <span>رسوم الخدمة والضرائب ({selectedMethod.feePercentage}%):</span>
+                  <span className="font-bold">
+                    {taxCalculation.taxAmount > 0 ? `+${taxCalculation.taxAmount} جنيه` : "بدون رسوم إضافية"}
+                  </span>
+                </div>
               </div>
 
-              <div className="flex items-center justify-between text-sm sm:text-base font-black text-emerald-600 dark:text-emerald-400 pt-1">
+              <div className="flex items-center justify-between text-sm sm:text-base font-black text-emerald-600 dark:text-emerald-400 pt-2 border-t border-[#E4E7EC] dark:border-[#232C36]">
                 <span>إجمالي المبلغ المطلوب للدفع:</span>
                 <span className="font-mono text-lg sm:text-xl">{taxCalculation.totalAmount} جنيه</span>
               </div>
@@ -602,7 +782,7 @@ function PaymentContent() {
                 </div>
               </div>
               <a
-                href={`https://wa.me/${(process.env.NEXT_PUBLIC_PAYMENT_ACCESS_PASSWORD || "+201285353604").replace(/\D/g, "")}?text=${encodeURIComponent(
+                href={`https://wa.me/${(process.env.NEXT_PUBLIC_PAYMENT_ACCESS_PASSWORD || "+201118802621").replace(/\D/g, "")}?text=${encodeURIComponent(
                   `مرحباً، أود المساعدة في الدفع وشحن الحساب على منصة Code-UP.\n` +
                   `👤 اسم الطالب: ${user?.name || "طالب"}\n` +
                   `💰 المبلغ: ${taxCalculation.totalAmount} جنيه\n` +
@@ -661,9 +841,7 @@ function PaymentContent() {
                     setCopied(true);
                     toastSuccess("تم نسخ الرقم المرجعي للحافظة بنجاح!");
                     setTimeout(() => setCopied(false), 3000);
-                  } catch {
-                    /* fallback */
-                  }
+                  } catch {}
                 }}
                 className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-md active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer shrink-0"
               >
@@ -720,14 +898,12 @@ function PaymentContent() {
                 </li>
               </ol>
 
-              {/* Status Message Feedback */}
               {checkMessage && (
                 <div className="p-3.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-xs sm:text-sm font-semibold">
                   ⚠️ {checkMessage}
                 </div>
               )}
 
-              {/* Manual Check Status Action Button */}
               <div className="pt-3 border-t border-[#E4E7EC] dark:border-[#232C36] space-y-3">
                 <button
                   type="button"
@@ -750,7 +926,6 @@ function PaymentContent() {
                   )}
                 </button>
 
-                {/* Background Auto-Polling Feedback Indicator */}
                 <div className="flex items-center justify-center gap-2 text-xs text-[#667085] dark:text-[#98A2B3]">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
                   <span>يتم الفحص التلقائي والتحديث فور سدادك من الهاتف</span>
@@ -759,7 +934,6 @@ function PaymentContent() {
 
             </div>
 
-            {/* Optional external invoice redirect if provided by gateway */}
             {intent.paymentPageUrl && (
               <div className="text-center">
                 <a
@@ -773,7 +947,6 @@ function PaymentContent() {
               </div>
             )}
 
-            {/* Back Button */}
             <div className="text-center">
               <button
                 type="button"
@@ -795,29 +968,32 @@ function PaymentContent() {
             </div>
             <div>
               <h1 className="text-2xl font-black text-[#101828] dark:text-white">
-                تم شحن رصيدك بنجاح! 🎉
+                تمت العملية بنجاح! 🎉
               </h1>
               <p className="text-sm text-[#667085] dark:text-[#98A2B3] mt-2">
-                تمت إضافة المبلغ وتأكيد العملية بنجاح عبر الرقم المرجعي <code className="font-mono font-bold text-emerald-500">{intent?.reference}</code>.
+                تم استلام الدفعة وتفعيل المحتوى المطلوب في حسابك فوراً.
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={handleRedirectAfterSuccess}
-              className="h-13 w-full rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-base font-bold transition-all shadow-md cursor-pointer"
-            >
-              {returnHref ? "العودة ومتابعة المحتوى ←" : "الذهاب إلى لوحة حسابي ←"}
-            </button>
+            <div className="pt-2 flex justify-center gap-3">
+              <button
+                type="button"
+                onClick={() => router.push(returnHref || "/account")}
+                className="px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-md transition-all cursor-pointer"
+              >
+                الانتقال إلى المحتوى 🚀
+              </button>
+            </div>
           </div>
         )}
 
         {/* Error Step */}
         {step === "error" && (
-          <div className="space-y-4">
-            {errors.map((msg) => (
-              <ErrorState key={msg} message={msg} onRetry={() => setStep("checkout")} />
-            ))}
+          <div className="space-y-4 animate-fadeIn">
+            <ErrorState
+              message={errors[0] || "تعذر إتمام عملية السداد"}
+              onRetry={() => setStep("checkout")}
+            />
           </div>
         )}
 
@@ -829,7 +1005,7 @@ function PaymentContent() {
 
 export default function PaymentPage() {
   return (
-    <Suspense fallback={<LoadingState label="جاري التحميل..." />}>
+    <Suspense fallback={<LoadingState label="جاري تجهيز بوابة السداد الآمنة..." />}>
       <PaymentContent />
     </Suspense>
   );

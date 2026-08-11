@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AccessGate } from "./AccessGate";
 import { useToast } from "@/components/ui/Toast";
 
@@ -8,6 +8,23 @@ interface MoneyCode {
   id: string; code: string; amount: number; isUsed: boolean;
   usedById?: string | null; usedAt?: string | null;
   expiresAt?: string | null; createdAt: string;
+}
+
+interface DiscountCodeItem {
+  id: string;
+  code: string;
+  discountType: "PERCENTAGE" | "FIXED_AMOUNT";
+  discountValue: number;
+  scope: string;
+  targetId?: string | null;
+  isActive: boolean;
+  expiresAt?: string | null;
+  maxTotalUses?: number | null;
+  maxUsesPerStudent: number;
+  allowedPaymentMethods?: string | null;
+  createdAt: string;
+  createdBy?: { id: string; name: string; email: string };
+  _count?: { usages: number };
 }
 
 interface StudentResult {
@@ -19,9 +36,16 @@ interface StudentResult {
 const input = "w-full px-4 py-2.5 rounded-xl outline-none text-sm transition-colors";
 const inputStyle = { border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--ink)", fontFamily: "var(--font-body)" };
 
+const PAYMENT_METHODS_OPTIONS = [
+  { id: "wallet_balance", label: "رصيد المحفظة" },
+  { id: "vf_cash", label: "فودافون كاش (محافظ إلكترونية)" },
+  { id: "fawry", label: "فوري (Fawry Pay)" },
+  { id: "instapay", label: "إنستاباي (InstaPay)" },
+];
+
 export function WalletSection() {
   const { success: toastSuccess, error: toastError } = useToast();
-  const [tab, setTab] = useState<"codes" | "credit">("codes");
+  const [tab, setTab] = useState<"codes" | "credit" | "discounts">("codes");
 
   /* ── Code generator state ── */
   const [amount,    setAmount]    = useState("");
@@ -33,6 +57,20 @@ export function WalletSection() {
   const [allCodes,   setAllCodes]   = useState<MoneyCode[]>([]);
   const [loadingCodes, setLoadingCodes] = useState(false);
   const [codesLoaded,  setCodesLoaded]  = useState(false);
+
+  /* ── Discount codes state ── */
+  const [discountCodes, setDiscountCodes] = useState<DiscountCodeItem[]>([]);
+  const [loadingDiscounts, setLoadingDiscounts] = useState(false);
+  const [creatingDiscount, setCreatingDiscount] = useState(false);
+  const [dCode, setDCode] = useState("");
+  const [dType, setDType] = useState<"PERCENTAGE" | "FIXED_AMOUNT">("PERCENTAGE");
+  const [dValue, setDValue] = useState("");
+  const [dScope, setDScope] = useState("PLATFORM_WIDE");
+  const [dTargetId, setDTargetId] = useState("");
+  const [dExpiresAt, setDExpiresAt] = useState("");
+  const [dMaxTotal, setDMaxTotal] = useState("");
+  const [dMaxPerStudent, setDMaxPerStudent] = useState("1");
+  const [dAllowedMethods, setDAllowedMethods] = useState<string[]>([]);
 
   /* ── Student credit state ── */
   const [searchQ,   setSearchQ]   = useState("");
@@ -69,13 +107,89 @@ export function WalletSection() {
     }
   };
 
-  /* ── Load all codes ── */
+  /* ── Load all money codes ── */
   const loadAllCodes = async () => {
     setLoadingCodes(true);
     const res = await fetch("/api/admin/money-codes", { credentials: "include" });
     const data = await res.json().catch(() => ({}));
     setLoadingCodes(false);
     if (res.ok) { setAllCodes(data.codes ?? []); setCodesLoaded(true); }
+  };
+
+  /* ── Load all discount codes ── */
+  const loadDiscountCodes = async () => {
+    setLoadingDiscounts(true);
+    const res = await fetch("/api/admin/discount-codes", { credentials: "include" });
+    const data = await res.json().catch(() => ({}));
+    setLoadingDiscounts(false);
+    if (res.ok && data.discountCodes) {
+      setDiscountCodes(data.discountCodes);
+    }
+  };
+
+  useEffect(() => {
+    if (tab === "discounts") {
+      loadDiscountCodes();
+    }
+  }, [tab]);
+
+  /* ── Create Discount Code ── */
+  const handleCreateDiscount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const val = parseFloat(dValue);
+    if (!dCode.trim()) return toastError("أدخل كود الخصم");
+    if (!val || val <= 0) return toastError("أدخل قيمة الخصم بشكل صحيح");
+    if (dType === "PERCENTAGE" && val > 100) return toastError("النسبة المئوية لا يمكن أن تتجاوز 100%");
+    if (dScope !== "PLATFORM_WIDE" && !dTargetId.trim()) return toastError("أدخل معرف العنصر المستهدف لنطاق الخصم");
+
+    setCreatingDiscount(true);
+    const res = await fetch("/api/admin/discount-codes", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        code: dCode.trim(),
+        discountType: dType,
+        discountValue: val,
+        scope: dScope,
+        targetId: dScope === "PLATFORM_WIDE" ? null : dTargetId.trim(),
+        expiresAt: dExpiresAt || undefined,
+        maxTotalUses: dMaxTotal ? parseInt(dMaxTotal) : null,
+        maxUsesPerStudent: parseInt(dMaxPerStudent) || 1,
+        allowedPaymentMethods: dAllowedMethods.length > 0 ? dAllowedMethods : undefined,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setCreatingDiscount(false);
+
+    if (res.ok) {
+      toastSuccess(`تم إنشاء كود الخصم (${data.discountCode?.code}) بنجاح! 🎉`);
+      setDCode("");
+      setDValue("");
+      setDTargetId("");
+      setDExpiresAt("");
+      setDMaxTotal("");
+      setDAllowedMethods([]);
+      loadDiscountCodes();
+    } else {
+      toastError(data.error || "تعذر إنشاء كود الخصم");
+    }
+  };
+
+  /* ── Toggle Discount Active State ── */
+  const handleToggleDiscount = async (id: string, currentActive: boolean) => {
+    const res = await fetch("/api/admin/discount-codes", {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, isActive: !currentActive }),
+    });
+    if (res.ok) {
+      setDiscountCodes(prev => prev.map(d => d.id === id ? { ...d, isActive: !currentActive } : d));
+      toastSuccess(!currentActive ? "تم تفعيل كود الخصم" : "تم تعطيل كود الخصم");
+    } else {
+      toastError("تعذر تحديث حالة كود الخصم");
+    }
   };
 
   /* ── Search students ── */
@@ -108,7 +222,6 @@ export function WalletSection() {
 
     if (res.ok) {
       toastSuccess(data.message || "تم تعديل الرصيد بنجاح");
-      // Update local balance display
       setSelected(prev => prev ? { ...prev, balance: data.newBalance } : null);
       setStudents(prev => prev.map(s => s.id === selected.id ? { ...s, balance: data.newBalance } : s));
       setCreditAmt(""); setNote("");
@@ -128,13 +241,14 @@ export function WalletSection() {
   };
 
   return (
-    <AccessGate id="wallet" title="إدارة الرصيد" type="wallet">
+    <AccessGate id="wallet" title="إدارة الرصيد والخصومات" type="wallet">
       <div dir="rtl">
       {/* Tab bar */}
       <div className="flex gap-2 mb-6 p-1 rounded-[14px]" style={{ background: "var(--surface-2)", border: "1px solid var(--border)", width: "fit-content" }}>
         {[
           { id: "codes" as const, label: "🔑 توليد أكواد رصيد" },
           { id: "credit" as const, label: "💳 شحن رصيد طالب" },
+          { id: "discounts" as const, label: "🏷️ أكواد الخصم" },
         ].map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
             className="cursor-pointer border-none rounded-[10px] transition-colors font-bold"
@@ -264,6 +378,192 @@ export function WalletSection() {
                 </table>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ═══ DISCOUNT CODES ═══ */}
+      {tab === "discounts" && (
+        <div className="space-y-6">
+          {/* Create Discount Code Form */}
+          <div className="rounded-[18px] p-6 space-y-4" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }}>
+            <h3 style={{ fontFamily: "var(--font-head)", fontWeight: 800, fontSize: 18, color: "var(--ink)", margin: 0 }}>إنشاء كود خصم جديد (Discount Code)</h3>
+            <p className="text-xs" style={{ color: "var(--ink-3)", marginTop: -4 }}>
+              أكواد الخصم تقلل سعر الشراء فقط ولا تدخل في رصيد محفظة الطالب ولا تمنح قيمة نقدية مباشرة.
+            </p>
+            <form onSubmit={handleCreateDiscount} className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+              <div>
+                <label className="block text-sm font-semibold mb-2" style={{ color: "var(--ink-2)" }}>كود الخصم *</label>
+                <input type="text" required value={dCode} onChange={e => setDCode(e.target.value.toUpperCase())}
+                  placeholder="مثال: SUMMER2026" dir="ltr" className={input} style={inputStyle} />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold mb-2" style={{ color: "var(--ink-2)" }}>نوع الخصم *</label>
+                <select value={dType} onChange={e => setDType(e.target.value as any)} className={input} style={inputStyle}>
+                  <option value="PERCENTAGE">نسبة مئوية (%)</option>
+                  <option value="FIXED_AMOUNT">مبلغ ثابت (جنيه مصري)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold mb-2" style={{ color: "var(--ink-2)" }}>قيمة الخصم *</label>
+                <input type="number" min="0.1" step="0.5" required value={dValue} onChange={e => setDValue(e.target.value)}
+                  placeholder={dType === "PERCENTAGE" ? "مثال: 20 (يعني 20%)" : "مثال: 100 (يعني 100 جنيه)"}
+                  dir="ltr" className={input} style={inputStyle} />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold mb-2" style={{ color: "var(--ink-2)" }}>نطاق الخصم (Scope) *</label>
+                <select value={dScope} onChange={e => setDScope(e.target.value)} className={input} style={inputStyle}>
+                  <option value="PLATFORM_WIDE">شامل المنصة بالكامل (All)</option>
+                  <option value="TEACHER">خاص بمعلم محدد (Teacher)</option>
+                  <option value="COURSE">خاص بكورس محدد (Course)</option>
+                  <option value="FOLDER">خاص بمحاضرة محددة (Folder)</option>
+                  <option value="VIDEO">خاص بدرس محدد (Video)</option>
+                  <option value="PLAN">خاص بخطة دراسية (Plan)</option>
+                </select>
+              </div>
+
+              {dScope !== "PLATFORM_WIDE" && (
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <label className="block text-sm font-semibold mb-2" style={{ color: "var(--ink-2)" }}>
+                    معرف العنصر المستهدف (Target ID) *
+                  </label>
+                  <input type="text" required value={dTargetId} onChange={e => setDTargetId(e.target.value.trim())}
+                    placeholder="أدخل ID المعلم أو الكورس أو المحاضرة..." dir="ltr" className={input} style={inputStyle} />
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-semibold mb-2" style={{ color: "var(--ink-2)" }}>تاريخ الانتهاء (اختياري)</label>
+                <input type="datetime-local" value={dExpiresAt} onChange={e => setDExpiresAt(e.target.value)}
+                  dir="ltr" className={input} style={inputStyle} />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold mb-2" style={{ color: "var(--ink-2)" }}>الحد الأقصى الإجمالي للاستخدام</label>
+                <input type="number" min="1" value={dMaxTotal} onChange={e => setDMaxTotal(e.target.value)}
+                  placeholder="فارغ = غير محدود" dir="ltr" className={input} style={inputStyle} />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold mb-2" style={{ color: "var(--ink-2)" }}>مرات الاستخدام لكل طالب</label>
+                <input type="number" min="1" required value={dMaxPerStudent} onChange={e => setDMaxPerStudent(e.target.value)}
+                  placeholder="1" dir="ltr" className={input} style={inputStyle} />
+              </div>
+
+              {/* Allowed payment methods control */}
+              <div style={{ gridColumn: "1 / -1" }}>
+                <label className="block text-sm font-semibold mb-2" style={{ color: "var(--ink-2)" }}>
+                  طرق الدفع المسموح بها (فارغ = جميع الطرق متاحة):
+                </label>
+                <div className="flex flex-wrap gap-4 p-3 rounded-xl" style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}>
+                  {PAYMENT_METHODS_OPTIONS.map(m => {
+                    const checked = dAllowedMethods.includes(m.id);
+                    return (
+                      <label key={m.id} className="flex items-center gap-2 cursor-pointer text-xs sm:text-sm font-semibold">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={e => {
+                            if (e.target.checked) {
+                              setDAllowedMethods(prev => [...prev, m.id]);
+                            } else {
+                              setDAllowedMethods(prev => prev.filter(x => x !== m.id));
+                            }
+                          }}
+                        />
+                        <span>{m.label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div style={{ gridColumn: "1 / -1" }}>
+                <button type="submit" disabled={creatingDiscount}
+                  className="w-full cursor-pointer border-none rounded-[12px] text-white font-bold transition-opacity hover:opacity-90 disabled:opacity-50"
+                  style={{ padding: "13px", background: "var(--brand)", fontSize: 15, fontFamily: "var(--font-head)", boxShadow: "0 6px 16px -6px var(--brand-shadow)" }}>
+                  {creatingDiscount ? "جارٍ الإنشاء..." : `حفظ ونشر كود الخصم`}
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* Discount Codes Table */}
+          <div className="rounded-[18px] overflow-hidden" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+            <div className="flex items-center justify-between" style={{ padding: "14px 20px", borderBottom: "1px solid var(--border)" }}>
+              <button onClick={loadDiscountCodes} disabled={loadingDiscounts}
+                className="cursor-pointer border-none rounded-[10px] font-bold transition-opacity hover:opacity-80 disabled:opacity-50"
+                style={{ padding: "8px 16px", background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--ink-2)", fontSize: 13 }}>
+                {loadingDiscounts ? "جارٍ التحميل..." : "تحديث القائمة"}
+              </button>
+              <h3 style={{ fontFamily: "var(--font-head)", fontWeight: 800, fontSize: 16, color: "var(--ink)", margin: 0 }}>
+                أكواد الخصم الحالية ({discountCodes.length})
+              </h3>
+            </div>
+
+            <div style={{ overflowX: "auto" }}>
+              <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ background: "var(--bg)", borderBottom: "2px solid var(--border)" }}>
+                    {["الكود", "النوع والقيمة", "النطاق (Scope)", "مرات الاستخدام", "طرق الدفع", "الحالة", "الانتهاء", "إجراءات"].map(h => (
+                      <th key={h} className="text-right" style={{ padding: "10px 14px", fontSize: 11.5, fontWeight: 700, color: "var(--ink-3)", whiteSpace: "nowrap" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {discountCodes.length === 0 ? (
+                    <tr><td colSpan={8} className="text-center py-8" style={{ color: "var(--ink-3)" }}>لا توجد أكواد خصم مسجلة</td></tr>
+                  ) : discountCodes.map(d => (
+                    <tr key={d.id} style={{ borderBottom: "1px solid var(--border)" }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "var(--surface-2)"; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}>
+                      <td style={{ padding: "11px 14px" }}>
+                        <button onClick={() => copyCode(d.code)} className="cursor-pointer border-none bg-transparent font-bold font-mono hover:opacity-70 transition-opacity"
+                          style={{ fontSize: 14, color: d.isActive ? "var(--brand)" : "var(--ink-3)", letterSpacing: 1 }}>
+                          {d.code}
+                        </button>
+                      </td>
+                      <td style={{ padding: "11px 14px", fontWeight: 800, color: "var(--gold-2)" }}>
+                        {d.discountType === "PERCENTAGE" ? `${d.discountValue}%` : `${d.discountValue} ج`}
+                      </td>
+                      <td style={{ padding: "11px 14px", fontSize: 12 }}>
+                        <span className="px-2 py-0.5 rounded-md" style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}>
+                          {d.scope} {d.targetId ? `(${d.targetId.slice(0, 8)}...)` : ""}
+                        </span>
+                      </td>
+                      <td style={{ padding: "11px 14px", fontWeight: 700 }}>
+                        {d._count?.usages ?? 0} {d.maxTotalUses ? `/ ${d.maxTotalUses}` : "(غير محدود)"}
+                      </td>
+                      <td style={{ padding: "11px 14px", fontSize: 11, color: "var(--ink-3)" }}>
+                        {d.allowedPaymentMethods ? `${JSON.parse(d.allowedPaymentMethods).length} طرق محددة` : "الكل"}
+                      </td>
+                      <td style={{ padding: "11px 14px" }}>
+                        <span style={{
+                          padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 700,
+                          background: d.isActive ? "var(--brand-soft)" : "var(--surface-2)",
+                          color: d.isActive ? "var(--brand)" : "var(--ink-3)"
+                        }}>
+                          {d.isActive ? "مفعّل" : "معطّل"}
+                        </span>
+                      </td>
+                      <td style={{ padding: "11px 14px", fontSize: 12, color: "var(--ink-3)" }}>
+                        {d.expiresAt ? new Date(d.expiresAt).toLocaleDateString("ar-EG", { month: "short", day: "numeric" }) : "دائم"}
+                      </td>
+                      <td style={{ padding: "11px 14px" }}>
+                        <button
+                          onClick={() => handleToggleDiscount(d.id, d.isActive)}
+                          className="px-3 py-1 rounded-lg text-xs font-bold cursor-pointer transition-opacity border-none"
+                          style={{
+                            background: d.isActive ? "rgba(239, 68, 68, 0.15)" : "var(--brand-soft)",
+                            color: d.isActive ? "#ef4444" : "var(--brand)",
+                          }}
+                        >
+                          {d.isActive ? "تعطيل ⏸" : "تفعيل ▶"}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}

@@ -9,9 +9,13 @@ export function ContactSection({
   heading  = "تواصل معنا",
   subtitle = "نحن هنا للإجابة على أسئلتك في أي وقت",
   email    = "contact@code-up.tech",
-  phone    = "01285353604",
+  phone    = "01118802621",
 }: ContactSectionProps = {}) {
-  const telHref = `+2${phone.startsWith("0") ? phone.slice(1) : phone}`;
+  const digits = phone.replace(/\D/g, "");
+  const normalizedPhone = digits.startsWith("0") ? "2" + digits : digits.startsWith("2") ? digits : "20" + digits;
+  const telHref = `+${normalizedPhone}`;
+  const waHref = `https://wa.me/${normalizedPhone}?text=${encodeURIComponent("السلام عليكم، أود التواصل مع إدارة ومنصة Code-UP")}`;
+
   return (
     <section
       className="py-20 border-t"
@@ -29,7 +33,7 @@ export function ContactSection({
           <p className="text-sm md:text-base" style={{ color: "var(--ink-2)" }}>{subtitle}</p>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <a
             href={`mailto:${email}`}
             className="group flex items-center gap-4 px-6 py-5 rounded-2xl transition-all"
@@ -48,6 +52,27 @@ export function ContactSection({
             <div>
               <p className="text-xs font-medium mb-0.5" style={{ color: "var(--ink-3)" }}>البريد الإلكتروني</p>
               <p className="text-sm font-semibold break-all" dir="ltr" style={{ color: "var(--ink)" }}>{email}</p>
+            </div>
+          </a>
+
+          <a
+            href={waHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group flex items-center gap-4 px-6 py-5 rounded-2xl transition-all"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "#25D366"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "var(--border)"; }}
+          >
+            <span
+              className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-white font-bold text-lg"
+              style={{ background: "#25D366" }}
+            >
+              💬
+            </span>
+            <div>
+              <p className="text-xs font-medium mb-0.5" style={{ color: "var(--ink-3)" }}>واتساب الدعم المباشر</p>
+              <p className="text-sm font-semibold" dir="ltr" style={{ color: "var(--ink)" }}>{phone}</p>
             </div>
           </a>
 

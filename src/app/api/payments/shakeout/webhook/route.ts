@@ -158,7 +158,7 @@ export async function POST(req: NextRequest) {
     }
 
     let fulfillmentRes: any = null;
-    const processed = await prisma.$transaction(async (tx) => {
+    const processed = await prisma.$transaction(async (tx: any) => {
       const claim = await tx.balanceTransaction.updateMany({
         where: { id: pendingTx!.id, type: targetType },
         data: {

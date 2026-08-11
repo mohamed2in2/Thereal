@@ -1,97 +1,51 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { getStudentSession } from "@/lib/auth";
-import { acquireAdvisoryLock } from "@/lib/distributed-lock";
+import { PurchaseService } from "@/services/purchase/PurchaseService";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = await params;
+    const { id: planId } = await params;
     const session = await getStudentSession();
     if (!session) return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
 
-    const plan = await prisma.plan.findUnique({
-      where: { id },
+    const body = await req.json().catch(() => ({}));
+    const discountCode = body.discountCode || body.discount_code;
+
+    const result = await PurchaseService.purchasePlan({
+      studentId: session.id,
+      planId,
+      discountCode,
+      paymentMethod: "wallet_balance",
     });
 
-    if (!plan || plan.status !== "published") {
-      return NextResponse.json({ error: "الخطة غير متاحة" }, { status: 404 });
-    }
-
-    const planPrice = plan.price ?? 0;
-    let effectivePrice = planPrice;
-    if (plan.discountPrice !== null && plan.discountPrice !== undefined && plan.discountExpiresAt && new Date(plan.discountExpiresAt) > new Date()) {
-      effectivePrice = plan.discountPrice;
-    }
-    effectivePrice = Math.max(0, effectivePrice);
-
-    const student = await prisma.user.findUnique({
-      where: { id: session.id },
-      select: { educationalStage: true, balance: true }
-    });
-
-    if (student?.educationalStage && plan.educationalStage && student.educationalStage !== plan.educationalStage) {
-      return NextResponse.json({ error: "هذه الخطة مخصصة لمرحلة دراسية مختلفة عن مرحلتك" }, { status: 400 });
-    }
-
-    // Run transaction: serialize with spend lock, check enrollment, deduct balance, create enrollment
-    try {
-      await prisma.$transaction(async (tx) => {
-        // 1. Acquire unified advisory lock on student wallet
-        await acquireAdvisoryLock(`spend:${session.id}`, tx);
-
-        // 2. Check already enrolled inside the transaction
-        const alreadyEnrolled = await tx.planEnrollment.findUnique({
-          where: { planId_studentId: { planId: id, studentId: session.id } },
-        });
-        if (alreadyEnrolled) {
-          throw new Error("ALREADY_ENROLLED");
-        }
-
-        // 3. Deduct balance atomically if plan is paid
-        if (effectivePrice > 0) {
-          const claim = await tx.user.updateMany({
-            where: { id: session.id, balance: { gte: effectivePrice } },
-            data: { balance: { decrement: effectivePrice } },
-          });
-
-          if (claim.count === 0) {
-            throw new Error("INSUFFICIENT_FUNDS");
-          }
-
-          await tx.balanceTransaction.create({
-            data: {
-              userId: session.id,
-              type: "debit_purchase",
-              amount: -effectivePrice,
-              note: `شراء الخطة الدراسية: ${plan.title}`,
-            },
-          });
-        }
-
-        const durationDays = plan.durationDays > 0 ? plan.durationDays : 365;
-        await tx.planEnrollment.create({
-          data: {
-            planId: id,
-            studentId: session.id,
-            pricePaid: effectivePrice,
-            expiresAt: new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000),
-          },
-        });
-      });
-
-      return NextResponse.json({ success: true, message: "تم الاشتراك في الخطة بنجاح" });
-    } catch (e: any) {
-      if (e.message === "ALREADY_ENROLLED") {
+    if (!result.success) {
+      if (result.alreadyOwned) {
         return NextResponse.json({ error: "أنت مسجل بالفعل في هذه الخطة" }, { status: 400 });
       }
-      if (e.message === "INSUFFICIENT_FUNDS") {
+      if (result.insufficientFunds) {
         return NextResponse.json(
-          { code: "INSUFFICIENT_FUNDS", error: "الرصيد غير كافٍ لإتمام العملية", effectivePrice },
+          {
+            code: "INSUFFICIENT_FUNDS",
+            error: result.error || "الرصيد غير كافٍ لإتمام العملية",
+            requiredAmount: result.requiredAmount,
+            missingAmount: result.missingAmount,
+          },
           { status: 400 }
         );
       }
-      throw e;
+      return NextResponse.json({ error: result.error || "حدث خطأ أثناء الشراء" }, { status: 400 });
     }
+
+    return NextResponse.json({
+      success: true,
+      planId,
+      planTitle: result.itemTitle,
+      originalPrice: result.originalPrice,
+      discountAmount: result.discountAmount,
+      charged: result.finalPrice,
+      newBalance: result.newBalance,
+      message: result.message || "تم الاشتراك في الخطة بنجاح",
+    });
   } catch (error) {
     console.error("Plan purchase error:", error);
     return NextResponse.json({ error: "حدث خطأ أثناء الشراء" }, { status: 500 });

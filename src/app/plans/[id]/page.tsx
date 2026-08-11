@@ -367,7 +367,7 @@ export default function PlanProductPage() {
                     {payMode === "whatsapp" && (
                       <div className="space-y-2 text-center">
                         <p className="text-xs text-gray-500 font-medium">تواصل معنا لشراء الخطة عبر InstaPay، التحويل البنكي، أو الكاش:</p>
-                        <a href={`https://wa.me/${(process.env.NEXT_PUBLIC_PAYMENT_ACCESS_PASSWORD || "+201285353604").replace(/\D/g, "")}?text=${encodeURIComponent(`مرحباً، أريد الاشتراك في خطة "${plan.title}" بسعر ${plan.effectivePrice} جنيه. اسم الطالب: ${user?.name || "غير مسجل"}`)}`}
+                        <a href={`https://wa.me/${(process.env.NEXT_PUBLIC_PAYMENT_ACCESS_PASSWORD || "+201118802621").replace(/\D/g, "")}?text=${encodeURIComponent(`مرحباً، أريد الاشتراك في خطة "${plan.title}" بسعر ${plan.effectivePrice} جنيه. اسم الطالب: ${user?.name || "غير مسجل"}`)}`}
                           target="_blank" rel="noopener noreferrer"
                           className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-white font-bold text-sm transition-colors hover:opacity-90 no-underline"
                           style={{ background: "#25D366" }}>

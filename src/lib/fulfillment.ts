@@ -1,11 +1,10 @@
-import { Prisma } from "@prisma/client";
-import { processTeacherAttribution } from "@/lib/referral";
-import { ReferralService } from "@/services/referral/ReferralService";
-import { randomBytes } from "crypto";
+import { Prisma } from "@/generated/prisma/client";
+import { PurchaseService } from "@/services/purchase/PurchaseService";
+import { PurchaseType } from "@/services/discount/DiscountService";
 
 export interface FulfillmentResult {
   fulfilled: boolean;
-  itemType?: "teacher_sub" | "course" | "folder" | "plan";
+  itemType?: "teacher_sub" | "course" | "folder" | "video" | "plan";
   itemName?: string;
   message?: string;
   error?: string;
@@ -13,7 +12,7 @@ export interface FulfillmentResult {
 
 /**
  * Parses item metadata stored inside a payment ledger note string.
- * Example note: "sha7nawy_ref:REF123|base:180|total:183.6|itemType:teacher_sub|teacherId:usr_1|planType:monthly|grade:sec_1|lang:arabic"
+ * Example note: "sha7nawy_ref:REF123|base:180|total:183.6|itemType:teacher_sub|teacherId:usr_1|planType:monthly|grade:sec_1|lang:arabic|discount:CODE20|splitWallet:50"
  */
 export function parsePaymentNoteMetadata(note: string | null | undefined): Record<string, string> {
   if (!note) return {};
@@ -33,8 +32,9 @@ export function parsePaymentNoteMetadata(note: string | null | undefined): Recor
 }
 
 /**
- * Fulfills pending purchases (Teacher Subscription, Course, Folder, Study Plan)
- * when a payment transaction is successfully confirmed/credited.
+ * Fulfills pending purchases (Teacher Subscription, Course, Folder, Video, Study Plan)
+ * when a payment transaction is successfully confirmed/credited via gateway webhook.
+ * Seamlessly handles direct gateway payments, discount codes, and split-funding contributions.
  */
 export async function fulfillPendingItemPurchase({
   userId,
@@ -43,7 +43,7 @@ export async function fulfillPendingItemPurchase({
 }: {
   userId: string;
   note: string;
-  tx: Prisma.TransactionClient;
+  tx: any;
 }): Promise<FulfillmentResult> {
   const meta = parsePaymentNoteMetadata(note);
   const itemType = meta.itemType;
@@ -53,142 +53,48 @@ export async function fulfillPendingItemPurchase({
   }
 
   const baseAmount = meta.base ? parseFloat(meta.base) : 0;
-  const now = new Date();
+  const splitWallet = meta.splitWallet ? parseFloat(meta.splitWallet) : 0;
+  const discountCode = meta.discount || meta.discountCode || undefined;
+  const promoCodeInput = meta.promo || meta.promoCode || undefined;
 
-  // 1. Teacher Subscription Auto-Fulfillment
-  if (itemType === "teacher_sub" && meta.teacherId && meta.planType) {
-    const { teacherId, planType, grade, lang } = meta;
-    const isLanguages = lang === "languages" || lang === "english";
+  // Handle Split Funding if splitWallet was recorded
+  if (splitWallet > 0) {
+    let targetId = "";
+    let pType: PurchaseType = "COURSE";
 
-    const teacher = await tx.user.findUnique({
-      where: { id: teacherId },
-      include: { teacherProfile: true },
-    });
-
-    if (!teacher || teacher.role !== "teacher") {
-      return { fulfilled: false, error: "المعلم لم يعد متاحاً للتأكيد الآلي" };
+    if (itemType === "course" && meta.courseId) {
+      targetId = meta.courseId;
+      pType = "COURSE";
+    } else if (itemType === "folder" && meta.folderId) {
+      targetId = meta.folderId;
+      pType = "FOLDER";
+    } else if (itemType === "video" && meta.videoId) {
+      targetId = meta.videoId;
+      pType = "VIDEO";
+    } else if (itemType === "plan" && meta.planId) {
+      targetId = meta.planId;
+      pType = "PLAN";
+    } else if (itemType === "teacher_sub" && meta.teacherId) {
+      targetId = meta.teacherId;
+      pType = "TEACHER_SUB";
     }
 
-    const teacherName = teacher.teacherProfile?.displayName || teacher.teacherProfile?.slug || teacher.name || "المعلم";
-    const monthsMap: Record<string, number> = { monthly: 1, termly: 3, yearly: 6 };
-    const months = monthsMap[planType] || 1;
-
-    const planNames: Record<string, string> = {
-      monthly: "شهر واحد (1 Month)",
-      termly: "3 شهور (3 Months)",
-      yearly: "6 شهور (6 Months)",
-    };
-    const planLabel = `${planNames[planType] || "اشتراك"} ${isLanguages ? "(لغات / إنجليزي)" : "(عربي)"}`;
-
-    const studentUser = await tx.user.findUnique({
-      where: { id: userId },
-      select: { name: true, phone: true, parentPhone: true, educationalStage: true },
-    });
-
-    const targetStage = grade || studentUser?.educationalStage;
-
-    const existingSub = await tx.teacherSubscription.findUnique({
-      where: {
-        studentId_teacherId_planType: {
-          studentId: userId,
-          teacherId,
-          planType,
-        },
-      },
-      select: { expiresAt: true, status: true },
-    });
-
-    const baseDate =
-      existingSub && existingSub.status === "active" && existingSub.expiresAt && existingSub.expiresAt > now
-        ? existingSub.expiresAt
-        : now;
-
-    const expiresAt = new Date(baseDate);
-    expiresAt.setMonth(expiresAt.getMonth() + months);
-
-    const trackedLang = isLanguages ? "languages" : "arabic";
-
-    await tx.teacherSubscription.upsert({
-      where: {
-        studentId_teacherId_planType: {
-          studentId: userId,
-          teacherId,
-          planType,
-        },
-      },
-      create: {
+    if (targetId) {
+      const splitRes = await PurchaseService.executeSplitFulfillment({
         studentId: userId,
-        teacherId,
-        planType,
-        planLabel,
-        amount: baseAmount,
-        educationalStage: targetStage,
-        languageTrack: trackedLang,
-        studentName: studentUser?.name,
-        studentPhone: studentUser?.phone,
-        parentPhone: studentUser?.parentPhone,
-        status: "active",
-        expiresAt,
-      },
-      update: {
-        planLabel,
-        amount: baseAmount,
-        educationalStage: targetStage,
-        languageTrack: trackedLang,
-        studentName: studentUser?.name,
-        studentPhone: studentUser?.phone,
-        parentPhone: studentUser?.parentPhone,
-        status: "active",
-        expiresAt,
-      },
-    });
-
-    if (baseAmount > 0) {
-      await tx.user.update({
-        where: { id: userId },
-        data: { balance: { decrement: baseAmount } },
+        purchaseType: pType,
+        targetId,
+        walletDeduction: splitWallet,
+        gatewayAmount: baseAmount,
+        discountCode,
+        promoCodeInput,
+        planType: meta.planType,
+        studentGrade: meta.grade,
+        languageTrack: meta.lang,
+        tx,
       });
 
-      await tx.balanceTransaction.create({
-        data: {
-          userId,
-          type: "debit_purchase",
-          amount: -baseAmount,
-          note: `تفعيل تلقائي لحجز اشتراك (${planLabel}) - أستاذ ${teacherName}`,
-        },
-      });
-    }
-
-    void ReferralService.qualifyAndRewardReferral(userId, `sub:${teacherId}:${planType}`).catch(() => {});
-
-    return {
-      fulfilled: true,
-      itemType: "teacher_sub",
-      itemName: `اشتراك معلم: أستاذ ${teacherName}`,
-      message: `تم حجز وتفعيل اشتراك المعلم (${teacherName}) تلقائياً بنجاح! 🎉`,
-    };
-  }
-
-  // 2. Course Auto-Fulfillment
-  if (itemType === "course" && meta.courseId) {
-    const courseId = meta.courseId;
-    const course = await tx.course.findUnique({
-      where: { id: courseId },
-      select: { id: true, title: true, teacherId: true },
-    });
-
-    if (course) {
-      const existing = await tx.accessCode.findFirst({
-        where: { courseId, studentId: userId },
-        select: { id: true },
-      });
-
-      if (!existing) {
-        const code = `PAY-${Date.now().toString(36).toUpperCase()}-${randomBytes(3).toString("hex").toUpperCase()}`;
-        await tx.accessCode.create({
-          data: { code, courseId, studentId: userId, isActive: true, usedAt: now },
-        });
-
+      if (splitRes.success) {
         if (baseAmount > 0) {
           await tx.user.update({
             where: { id: userId },
@@ -198,131 +104,222 @@ export async function fulfillPendingItemPurchase({
           await tx.balanceTransaction.create({
             data: {
               userId,
-              type: "debit_course",
+              type: pType === "COURSE" || pType === "FOLDER" || pType === "VIDEO" ? "debit_course" : "debit_purchase",
               amount: -baseAmount,
-              note: `تفعيل تلقائي لشراء كورس: ${course.title}`,
+              note: `سداد حصة بوابة الدفع في الشراء المجمع: ${splitRes.itemTitle || targetId}`,
             },
           });
         }
 
-        await processTeacherAttribution({
-          studentId: userId,
-          teacherIdOfContent: course.teacherId,
-          amount: baseAmount,
-          purchaseType: "COURSE",
-          courseId: course.id,
-          tx,
+        return {
+          fulfilled: true,
+          itemType: itemType as any,
+          itemName: splitRes.itemTitle,
+          message: splitRes.message || "تم إتمام الشراء المجمع وتفعيل المحتوى بنجاح!",
+        };
+      }
+      return {
+        fulfilled: false,
+        error: splitRes.error || "فشل إتمام الشراء المجمع",
+      };
+    }
+  }
+
+  // 1. Teacher Subscription Auto-Fulfillment
+  if (itemType === "teacher_sub" && meta.teacherId && meta.planType) {
+    const res = await PurchaseService.purchaseTeacherSubscription({
+      studentId: userId,
+      teacherId: meta.teacherId,
+      planType: meta.planType,
+      languageTrack: meta.lang,
+      studentGrade: meta.grade,
+      discountCode,
+      paymentMethod: "gateway_direct",
+      tx,
+    });
+
+    if (res.success) {
+      // Deduct balance that was credited for the payment
+      if (baseAmount > 0) {
+        await tx.user.update({
+          where: { id: userId },
+          data: { balance: { decrement: baseAmount } },
+        });
+
+        await tx.balanceTransaction.create({
+          data: {
+            userId,
+            type: "debit_purchase",
+            amount: -baseAmount,
+            note: `تفعيل تلقائي لحجز اشتراك (${res.itemTitle || "معلم"})`,
+          },
+        });
+      }
+
+      return {
+        fulfilled: true,
+        itemType: "teacher_sub",
+        itemName: res.itemTitle,
+        message: res.message || "تم حجز وتفعيل اشتراك المعلم تلقائياً بنجاح! 🎉",
+      };
+    }
+
+    return { fulfilled: false, error: res.error };
+  }
+
+  // 2. Course Auto-Fulfillment
+  if (itemType === "course" && meta.courseId) {
+    const res = await PurchaseService.purchaseCourse({
+      studentId: userId,
+      courseId: meta.courseId,
+      discountCode,
+      promoCodeInput,
+      paymentMethod: "gateway_direct",
+      tx,
+    });
+
+    if (res.success) {
+      if (baseAmount > 0) {
+        await tx.user.update({
+          where: { id: userId },
+          data: { balance: { decrement: baseAmount } },
+        });
+
+        await tx.balanceTransaction.create({
+          data: {
+            userId,
+            type: "debit_course",
+            amount: -baseAmount,
+            note: `تفعيل تلقائي لشراء كورس: ${res.itemTitle || meta.courseId}`,
+          },
         });
       }
 
       return {
         fulfilled: true,
         itemType: "course",
-        itemName: course.title,
-        message: `تم شراء وتسجيل «${course.title}» تلقائياً بنجاح! 🎉`,
+        itemName: res.itemTitle,
+        message: res.message || `تم تفعيل الكورس تلقائياً بنجاح! 🎉`,
       };
     }
+
+    return { fulfilled: false, error: res.error };
   }
 
   // 3. Folder Auto-Fulfillment
   if (itemType === "folder" && meta.folderId) {
-    const folderId = meta.folderId;
-    const folder = await tx.folder.findUnique({
-      where: { id: folderId },
-      include: { course: { select: { id: true, teacherId: true, title: true } } },
+    const res = await PurchaseService.purchaseFolder({
+      studentId: userId,
+      folderId: meta.folderId,
+      discountCode,
+      promoCodeInput,
+      paymentMethod: "gateway_direct",
+      tx,
     });
 
-    if (folder && folder.isPurchasable) {
-      const existing = await tx.folderPurchase.findUnique({
-        where: { studentId_folderId: { studentId: userId, folderId } },
-      });
-
-      if (!existing) {
-        await tx.folderPurchase.create({
-          data: { studentId: userId, folderId, price: baseAmount },
+    if (res.success) {
+      if (baseAmount > 0) {
+        await tx.user.update({
+          where: { id: userId },
+          data: { balance: { decrement: baseAmount } },
         });
 
-        if (baseAmount > 0) {
-          await tx.user.update({
-            where: { id: userId },
-            data: { balance: { decrement: baseAmount } },
-          });
-
-          await tx.balanceTransaction.create({
-            data: {
-              userId,
-              type: "debit_course",
-              amount: -baseAmount,
-              note: `تفعيل تلقائي لشراء مجلد: ${folder.name}`,
-            },
-          });
-        }
-
-        await processTeacherAttribution({
-          studentId: userId,
-          teacherIdOfContent: folder.course.teacherId,
-          amount: baseAmount,
-          purchaseType: "FOLDER",
-          folderId,
-          courseId: folder.course.id,
-          tx,
+        await tx.balanceTransaction.create({
+          data: {
+            userId,
+            type: "debit_course",
+            amount: -baseAmount,
+            note: `تفعيل تلقائي لشراء محاضرة: ${res.itemTitle || meta.folderId}`,
+          },
         });
       }
 
       return {
         fulfilled: true,
         itemType: "folder",
-        itemName: folder.name,
-        message: `تم شراء محاضرة «${folder.name}» تلقائياً بنجاح! 🎉`,
+        itemName: res.itemTitle,
+        message: res.message || `تم تفعيل المحاضرة تلقائياً بنجاح! 🎉`,
       };
     }
+
+    return { fulfilled: false, error: res.error };
   }
 
-  // 4. Study Plan Auto-Fulfillment
-  if (itemType === "plan" && meta.planId) {
-    const planId = meta.planId;
-    const plan = await tx.plan.findUnique({ where: { id: planId } });
+  // 4. Video Auto-Fulfillment
+  if (itemType === "video" && meta.videoId) {
+    const res = await PurchaseService.purchaseVideo({
+      studentId: userId,
+      videoId: meta.videoId,
+      discountCode,
+      promoCodeInput,
+      paymentMethod: "gateway_direct",
+      tx,
+    });
 
-    if (plan && plan.status === "published") {
-      const existing = await tx.planEnrollment.findUnique({
-        where: { planId_studentId: { planId, studentId: userId } },
-      });
-
-      if (!existing) {
-        const durationDays = plan.durationDays > 0 ? plan.durationDays : 365;
-        await tx.planEnrollment.create({
-          data: {
-            planId,
-            studentId: userId,
-            pricePaid: baseAmount,
-            expiresAt: new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000),
-          },
+    if (res.success) {
+      if (baseAmount > 0) {
+        await tx.user.update({
+          where: { id: userId },
+          data: { balance: { decrement: baseAmount } },
         });
 
-        if (baseAmount > 0) {
-          await tx.user.update({
-            where: { id: userId },
-            data: { balance: { decrement: baseAmount } },
-          });
+        await tx.balanceTransaction.create({
+          data: {
+            userId,
+            type: "debit_course",
+            amount: -baseAmount,
+            note: `تفعيل تلقائي لشراء درس: ${res.itemTitle || meta.videoId}`,
+          },
+        });
+      }
 
-          await tx.balanceTransaction.create({
-            data: {
-              userId,
-              type: "debit_purchase",
-              amount: -baseAmount,
-              note: `تفعيل تلقائي لشراء الخطة الدراسية: ${plan.title}`,
-            },
-          });
-        }
+      return {
+        fulfilled: true,
+        itemType: "video",
+        itemName: res.itemTitle,
+        message: res.message || `تم تفعيل الدرس تلقائياً بنجاح! 🎉`,
+      };
+    }
+
+    return { fulfilled: false, error: res.error };
+  }
+
+  // 5. Study Plan Auto-Fulfillment
+  if (itemType === "plan" && meta.planId) {
+    const res = await PurchaseService.purchasePlan({
+      studentId: userId,
+      planId: meta.planId,
+      discountCode,
+      paymentMethod: "gateway_direct",
+      tx,
+    });
+
+    if (res.success) {
+      if (baseAmount > 0) {
+        await tx.user.update({
+          where: { id: userId },
+          data: { balance: { decrement: baseAmount } },
+        });
+
+        await tx.balanceTransaction.create({
+          data: {
+            userId,
+            type: "debit_purchase",
+            amount: -baseAmount,
+            note: `تفعيل تلقائي لشراء الخطة الدراسية: ${res.itemTitle || meta.planId}`,
+          },
+        });
       }
 
       return {
         fulfilled: true,
         itemType: "plan",
-        itemName: plan.title,
-        message: `تم التسجيل في خطة «${plan.title}» تلقائياً بنجاح! 🎉`,
+        itemName: res.itemTitle,
+        message: res.message || `تم التسجيل في الخطة الدراسية تلقائياً بنجاح! 🎉`,
       };
     }
+
+    return { fulfilled: false, error: res.error };
   }
 
   return { fulfilled: false, message: "لم يتم التعرف على نوع المحتوى المستهدف" };

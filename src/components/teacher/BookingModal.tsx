@@ -61,7 +61,7 @@ function buildWhatsAppUrl(
   teacherName: string,
   startDateStr: string | null
 ): string {
-  let rawNumber = contactUrl ? contactUrl.trim() : "";
+  let rawNumber = contactUrl ? contactUrl.trim() : "201118802621";
   if (rawNumber.startsWith("http")) {
     try {
       const u = new URL(rawNumber);

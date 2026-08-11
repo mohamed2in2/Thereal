@@ -1,8 +1,8 @@
 import crypto from "crypto";
 
-// Generic type to accept a Prisma transaction object without importing the full Client
 type PrismaTransactionClient = {
-  $executeRawUnsafe: (query: string, ...values: any[]) => Promise<any>;
+  $executeRawUnsafe?: (query: string, ...values: any[]) => Promise<any>;
+  [key: string]: any;
 };
 
 /**
@@ -17,7 +17,7 @@ type PrismaTransactionClient = {
  */
 export async function acquireAdvisoryLock(
   lockName: string,
-  tx: PrismaTransactionClient
+  tx: any
 ): Promise<void> {
   const isPg = (process.env.DATABASE_URL ?? "").startsWith("postgres");
   if (!isPg) {

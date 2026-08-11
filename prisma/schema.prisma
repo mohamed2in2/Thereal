@@ -88,6 +88,8 @@ model User {
   studentAttributions     TeacherReferralAttribution[] @relation("StudentAttributions")
   teacherSubscriptions    TeacherSubscription[]        @relation("TeacherSubscriptions")
   studentSubscriptions    TeacherSubscription[]        @relation("StudentSubscriptions")
+  discountCodesCreated    DiscountCode[]               @relation("DiscountCodeCreator")
+  discountCodeUsages      DiscountCodeUsage[]          @relation("DiscountCodeUser")
 
   parentVerified           Boolean                      @default(false)
   parentVerifiedAt         DateTime?
@@ -833,6 +835,53 @@ model MoneyCode {
 
   @@index([code])
   @@index([isUsed])
+}
+
+/// Superadmin-generated discount codes to modify the purchase price of specific content.
+/// A DiscountCode NEVER enters the wallet and NEVER creates money.
+model DiscountCode {
+  id                    String              @id @default(cuid())
+  code                  String              @unique
+  discountType          String              // "PERCENTAGE" | "FIXED_AMOUNT"
+  discountValue         Float               // e.g. 20 for 20%, or 100 for 100 EGP
+  scope                 String              @default("PLATFORM_WIDE") // "PLATFORM_WIDE" | "TEACHER" | "COURSE" | "FOLDER" | "VIDEO" | "PLAN"
+  targetId              String?             // Target ID matching the scope (teacherId, courseId, etc.)
+  isActive              Boolean             @default(true)
+  expiresAt             DateTime?
+  maxTotalUses          Int?                // null = unlimited
+  maxUsesPerStudent     Int                 @default(1)
+  allowedPaymentMethods String?             // JSON array of string method IDs (e.g. ["wallet_balance", "vf_cash"]). null = all
+  createdById           String
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  createdBy             User                @relation("DiscountCodeCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  usages                DiscountCodeUsage[]
+
+  @@index([code])
+  @@index([scope, targetId])
+  @@index([isActive])
+}
+
+/// Audit trail of each DiscountCode application during a purchase.
+model DiscountCodeUsage {
+  id               String       @id @default(cuid())
+  discountCodeId   String
+  studentId        String
+  purchaseType     String       // "COURSE" | "FOLDER" | "VIDEO" | "PLAN" | "TEACHER_SUB"
+  purchaseTargetId String       // ID of course, folder, video, plan, or teacher subscription key
+  originalPrice    Float
+  discountAmount   Float
+  finalPrice       Float
+  paymentMethod    String       // "wallet_balance" | "vf_cash" | "split" | etc.
+  usedAt           DateTime     @default(now())
+
+  discountCode     DiscountCode @relation(fields: [discountCodeId], references: [id], onDelete: Cascade)
+  student          User         @relation("DiscountCodeUser", fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([discountCodeId])
+  @@index([studentId])
+  @@index([purchaseType, purchaseTargetId])
 }
 
 // ── Homework ─────────────────────────────────────────────────────────────────

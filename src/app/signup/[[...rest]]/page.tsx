@@ -349,12 +349,14 @@ export default function SignupPage() {
               </div>
               {codeSent && (
                 <div className="md:col-span-2 text-center text-xs text-slate-500 dark:text-slate-400 mt-1">
-                  تحتاج مساعدة؟ تواصل مع الدعم:{" "}
+                  تحتاج مساعدة؟ تواصل مع الدعم عبر واتساب:{" "}
                   <a
-                    href="tel:+201282287267"
-                    className="text-sky-600 dark:text-sky-400 font-semibold hover:underline"
+                    href="https://wa.me/201118802621?text=%D9%85%D8%B1%D8%AD%D8%A8%D8%A7%D9%8B%D8%8C%20%D8%A3%D8%AD%D8%AA%D8%A7%D8%AC%20%D9%85%D8%B3%D8%A7%D8%B9%D8%AF%D8%A9%20%D9%81%D9%8A%20%D8%A5%D9%86%D8%B4%D8%A7%D8%A1%20%D8%AD%D8%B3%D8%A7%D8%A8%20%D8%B9%D9%84%D9%89%20Code-UP"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-emerald-600 dark:text-emerald-400 font-semibold hover:underline"
                   >
-                    01282287267
+                    01118802621 💬
                   </a>
                 </div>
               )}
