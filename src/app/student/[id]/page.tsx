@@ -30,7 +30,6 @@ export default function StudentProfilePage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [user,    setUser]    = useState<{ name: string; role: string } | null>(null);
-  const [copied,  setCopied]  = useState(false);
 
   useEffect(() => {
     fetch("/api/auth/me", { credentials: "include" })
@@ -44,27 +43,6 @@ export default function StudentProfilePage() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [id]);
-
-  const copyReferral = async () => {
-    if (!profile?.referralCode) return;
-    const url = `${window.location.origin}/signup?ref=${profile.referralCode}`;
-    await navigator.clipboard.writeText(url).catch(() => {});
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const shareReferral = () => {
-    if (!profile?.referralCode) return;
-    const url    = `${window.location.origin}/signup?ref=${profile.referralCode}`;
-    const text   = `انضم إلى Code-UP معايا واحصل على نقاط مجانية! 🎓\n${url}`;
-    if (navigator.share) {
-      void navigator.share({ title: "Code-UP", text, url });
-    } else {
-      void navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
 
   if (loading) {
     return (
@@ -157,51 +135,9 @@ export default function StudentProfilePage() {
                   <div style={{ fontFamily: "var(--font-head)", fontWeight: 900, fontSize: 20, color: "var(--brand)" }}>{value}</div>
                   <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>{label}</div>
                 </div>
-              ))}
             </div>
           </div>
         </div>
-
-        {/* Referral card — shown to the student themselves */}
-        {profile.referralCode && (
-          <div
-            className="rounded-[18px]"
-            style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)", padding: "22px 24px" }}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <button
-                onClick={shareReferral}
-                className="flex items-center gap-2 cursor-pointer border-none transition-opacity hover:opacity-80 rounded-[10px] font-bold text-white"
-                style={{ padding: "10px 18px", background: "var(--brand)", fontSize: 14 }}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13"/>
-                </svg>
-                مشاركة
-              </button>
-              <h3 style={{ fontFamily: "var(--font-head)", fontWeight: 800, fontSize: 18, margin: 0, color: "var(--ink)" }}>
-                كود الإحالة 🎁
-              </h3>
-            </div>
-            <p style={{ fontSize: 13.5, color: "var(--ink-2)", margin: "0 0 16px", textAlign: "right" }}>
-              شارك كودك مع أصدقائك — كل من ينضم عبر كودك يحصلان على ٥٠ نقطة إضافية!
-            </p>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={copyReferral}
-                className="flex items-center gap-2 cursor-pointer border-none transition-colors rounded-[10px]"
-                style={{ padding: "10px 16px", background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--ink-2)", fontSize: 13, fontWeight: 600 }}
-              >
-                {copied ? "✓ تم النسخ" : (
-                  <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>نسخ الرابط</>
-                )}
-              </button>
-              <div className="flex-1 text-center" style={{ padding: "12px 18px", borderRadius: 12, background: "var(--brand-soft)", border: "1px solid var(--brand)", fontFamily: "var(--font-head)", fontWeight: 900, fontSize: 22, color: "var(--brand)", letterSpacing: 3 }}>
-                {profile.referralCode}
-              </div>
-            </div>
-          </div>
-        )}
       </main>
       <Footer />
     </div>

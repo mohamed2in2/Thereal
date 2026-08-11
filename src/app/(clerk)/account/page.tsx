@@ -628,25 +628,6 @@ export default function AccountPage() {
                     </div>
                   </div>
                 </div>
-                {isStudent && user.referralCode && (
-                  <div className="rounded-[16px]" style={{ background: "var(--surface)", border: "1px solid var(--border)", padding: "18px 20px" }}>
-                    <div className="flex items-center justify-between mb-2">
-                      {(user.streakFreezes ?? 0) > 0 && <span style={{ padding: "4px 10px", borderRadius: 20, background: "var(--brand-soft)", color: "var(--brand)", fontSize: 12, fontWeight: 700 }}>❄️ {user.streakFreezes} تجميد</span>}
-                      <h3 style={{ fontFamily: "var(--font-head)", fontWeight: 800, fontSize: 16, margin: 0, color: "var(--ink)" }}>كود الإحالة 🎁</h3>
-                    </div>
-                    <p style={{ fontSize: 12.5, color: "var(--ink-2)", margin: "0 0 12px", textAlign: "right" }}>شارك كودك — كل صديق ينضم تحصل كلاكما على ٥٠ نقطة!</p>
-                    <div className="flex items-center gap-3">
-                      <button onClick={async () => { const url = `${window.location.origin}/signup?ref=${user.referralCode}`; await navigator.clipboard.writeText(url).catch(() => { }); setCopiedRef(true); setTimeout(() => setCopiedRef(false), 2000); }}
-                        className="flex items-center gap-1.5 cursor-pointer border-none rounded-[9px]"
-                        style={{ padding: "9px 14px", background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--ink-2)", fontSize: 12.5, fontWeight: 600 }}>
-                        {copiedRef ? "✓ تم النسخ" : "نسخ الرابط"}
-                      </button>
-                      <div className="flex-1 text-center" style={{ padding: "10px 16px", borderRadius: 10, background: "var(--brand-soft)", border: "1px solid var(--brand)", fontFamily: "var(--font-head)", fontWeight: 900, fontSize: 20, color: "var(--brand)", letterSpacing: 3 }}>
-                        {user.referralCode}
-                      </div>
-                    </div>
-                  </div>
-                )}
                 <div className="flex gap-3">
                   <button onClick={handleDelete} disabled={deleting} className="flex-1 cursor-pointer border-none rounded-[12px] hover:opacity-80 disabled:opacity-50"
                     style={{ padding: "12px", background: "var(--danger-soft)", color: "var(--danger)", fontWeight: 700, fontSize: 13.5, border: "1px solid var(--danger)" }}>
