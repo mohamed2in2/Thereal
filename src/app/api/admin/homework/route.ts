@@ -14,7 +14,14 @@ export async function GET() {
     orderBy: { createdAt: "desc" },
     include: {
       video: { select: { id: true, title: true } },
-      _count: { select: { questions: true, submissions: true } },
+      _count: {
+        select: {
+          questions: true,
+          submissions: {
+            where: { student: { accountMode: { not: "TESTER" } } },
+          },
+        },
+      },
       questions: {
         orderBy: { order: "asc" },
         select: {
@@ -23,7 +30,7 @@ export async function GET() {
         },
       },
       submissions: {
-        where: { status: "review_requested" },
+        where: { status: "review_requested", student: { accountMode: { not: "TESTER" } } },
         select: { id: true },
       },
     },

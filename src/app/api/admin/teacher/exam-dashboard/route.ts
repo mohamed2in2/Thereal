@@ -47,6 +47,7 @@ export async function GET(req: NextRequest) {
         },
       },
       results: {
+        where: session.role === "teacher" ? { student: { accountMode: { not: "TESTER" } } } : undefined,
         select: {
           id: true,
           score: true,

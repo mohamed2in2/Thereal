@@ -45,8 +45,16 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    const courseWhere: Record<string, unknown> = { courseId };
+    if (session.role === "teacher") {
+      courseWhere.OR = [
+        { studentId: null },
+        { student: { accountMode: { not: "TESTER" } } },
+      ];
+    }
+
     const codes = await prisma.accessCode.findMany({
-      where: { courseId },
+      where: courseWhere,
       include: { student: { select: { id: true, name: true, email: true } } },
       orderBy: { createdAt: "desc" },
     });

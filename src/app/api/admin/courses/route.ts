@@ -28,7 +28,19 @@ export async function GET() {
   const courses = await prisma.course.findMany({
     where: { teacherId: session.id },
     include: {
-      _count: { select: { accessCodes: true, folders: true } },
+      _count: {
+        select: {
+          accessCodes: {
+            where: {
+              OR: [
+                { studentId: null },
+                { student: { accountMode: { not: "TESTER" } } },
+              ],
+            },
+          },
+          folders: true,
+        },
+      },
       folders: { include: { _count: { select: { videos: true, quizzes: true } } } },
     },
     orderBy: { createdAt: "desc" },
