@@ -66,6 +66,8 @@ export interface StudentContext {
   id: string;
   name: string;
   email?: string;
+  accountMode?: string;
+  isTester?: boolean;
 }
 
 export interface CourseContext {

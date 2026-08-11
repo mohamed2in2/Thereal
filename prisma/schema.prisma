@@ -68,6 +68,7 @@ model User {
   overallIQ           Int                      @default(1000)
   folderPurchases     FolderPurchase[]
   videoPurchases      VideoPurchase[]
+  watchSessions       VideoWatchSession[]
   securityViolations  SecurityViolation[]
   videoQuestionResponses VideoQuestionResponse[]
 
@@ -98,12 +99,19 @@ model User {
 
   isDemo                   Boolean                      @default(false)
 
+  accountMode              String                       @default("NORMAL") // "NORMAL" | "TESTER"
+  testerCapabilities       String?                      // JSON string of boolean capability flags
+  testerNotes              String?                      // Internal notes by superadmin
+  testerActivityLogs       TesterActivityLog[]
+  courseEnrollments        CourseEnrollment[]
+
   @@index([role])
   @@index([educationalStage])
   @@index([email])
   @@index([isDeleted])
   @@index([promoCode])
   @@index([isDemo])
+  @@index([accountMode])
 }
 
 model Course {
@@ -138,6 +146,7 @@ model Course {
   feedbacks           StudentFeedback[]
   supportTickets      SupportTicket[]
   planCourseLinks     PlanCourseLink[]
+  enrollments         CourseEnrollment[]
 
   @@index([teacherId])
   @@index([educationalStage])
@@ -339,6 +348,7 @@ model VideoWatchSession {
   ipAddress     String?
   userAgent     String?
   video         Video     @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  student       User      @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@index([videoId])
   @@index([studentId])
@@ -1557,6 +1567,41 @@ model SecurityViolation {
 
   @@index([studentId])
   @@index([type])
+  @@index([createdAt])
+}
+
+/// Direct course enrollment record (via purchase or QA tester bypass)
+model CourseEnrollment {
+  id                String   @id @default(cuid())
+  courseId          String
+  studentId         String
+  fulfillmentSource String   @default("PURCHASE") // "PURCHASE" | "TESTER_BYPASS" | "ADMIN"
+  amountPaid        Float    @default(0)
+  createdAt         DateTime @default(now())
+
+  course  Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  student User   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, courseId])
+  @@index([courseId])
+  @@index([studentId])
+}
+
+/// Comprehensive QA Tester Activity Audit Trail
+model TesterActivityLog {
+  id          String   @id @default(cuid())
+  testerId    String
+  action      String   // "COURSE_ACCESS" | "VIDEO_WATCH" | "EXAM_ATTEMPT" | "AI_CONVERSATION" | "PAYMENT_BYPASS"
+  targetId    String?
+  targetTitle String?
+  details     String?  // JSON string of action metadata
+  ipAddress   String?
+  createdAt   DateTime @default(now())
+
+  tester User @relation(fields: [testerId], references: [id], onDelete: Cascade)
+
+  @@index([testerId])
+  @@index([action])
   @@index([createdAt])
 }
 

@@ -150,6 +150,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     }
   }
 
+  const isTesterUser = session?.accountMode === "TESTER";
+
   return NextResponse.json({
     videoId,
     sessionToken,
@@ -157,8 +159,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     isExpired,
     startedAt: watchSession.startedAt.toISOString(),
     expiresAt: watchSession.expiresAt.toISOString(),
-    remainingWatches: Math.max(0, total - usedWatchCount),
-    totalWatches: total,
+    unlimited: isTesterUser,
+    remainingWatches: isTesterUser ? null : Math.max(0, total - usedWatchCount),
+    totalWatches: isTesterUser ? null : total,
     usedWatches: usedWatchCount,
     teacherSlug,
     studentPlan,
@@ -431,6 +434,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // grab the last slot. Doing it in one transaction closes that: Serializable
   // isolation (Postgres/prod) aborts the conflicting tx; SQLite (local) serializes
   // writers, so the race can't occur there either.
+  const isTesterUser = session.accountMode === "TESTER";
   const QUOTA_EXCEEDED = "QUOTA_EXCEEDED";
   const isPg = (process.env.DATABASE_URL ?? "").startsWith("postgres");
   try {
@@ -439,7 +443,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         const usedCount = await tx.videoWatchSession.count({
           where: { studentId: session.id, videoId, usedWatchSlot: true },
         });
-        if (usedCount >= video.maxWatchesPerUser) throw new Error(QUOTA_EXCEEDED);
+        if (!isTesterUser && usedCount >= video.maxWatchesPerUser) throw new Error(QUOTA_EXCEEDED);
         await tx.videoWatchSession.updateMany({
           where: { studentId: session.id, videoId, endedAt: null, expiresAt: { lt: now } },
           data: { endedAt: now },
@@ -451,6 +455,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       },
       isPg ? { isolationLevel: "Serializable" } : undefined
     );
+
+    if (isTesterUser) {
+      const { logTesterActivity } = await import("@/lib/tester");
+      await logTesterActivity({
+        testerId: session.id,
+        action: "VIDEO_WATCH",
+        targetId: video.id,
+        targetTitle: video.title,
+        ipAddress,
+      }).catch(() => {});
+    }
 
     const profile = await prisma.teacherProfile.findUnique({
       where: { teacherId: course.teacherId },
@@ -490,8 +505,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       sessionId: ws.id,
       expiresAt: expiresAt.toISOString(),
       watchDurationHours: WATCH_DURATION_HOURS,
-      remainingWatches: video.maxWatchesPerUser - used - 1,
-      totalWatches: video.maxWatchesPerUser,
+      unlimited: isTesterUser,
+      remainingWatches: isTesterUser ? null : video.maxWatchesPerUser - used - 1,
+      totalWatches: isTesterUser ? null : video.maxWatchesPerUser,
       usedWatches: used + 1,
       embedUrl: embedResult.embedUrl,
       provider: embedResult.provider,

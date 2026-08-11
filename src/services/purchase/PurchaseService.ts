@@ -5,6 +5,7 @@ import { processTeacherAttribution } from "@/lib/referral";
 import { ReferralService } from "@/services/referral/ReferralService";
 import { DiscountService, PurchaseType } from "@/services/discount/DiscountService";
 import { verifyAuthoritativePrice } from "@/lib/price-verifier";
+import { isTester, canBypassPayment, logTesterActivity } from "@/lib/tester";
 
 export interface BasePurchaseParams {
   studentId: string;
@@ -169,6 +170,55 @@ export class PurchaseService {
       // 1. Acquire advisory lock
       await acquireAdvisoryLock(`spend:${studentId}`, tx);
 
+      // Check tester account mode bypass
+      const studentUser = await tx.user.findUnique({
+        where: { id: studentId },
+        select: { id: true, balance: true, accountMode: true, testerCapabilities: true },
+      });
+
+      if (studentUser && isTester(studentUser) && canBypassPayment(studentUser)) {
+        const existingDirect = await tx.courseEnrollment.findUnique({
+          where: { studentId_courseId: { studentId, courseId } },
+        });
+        const existingCode = await tx.accessCode.findFirst({
+          where: { courseId, studentId, isActive: true },
+        });
+
+        if (existingDirect || existingCode) {
+          return { success: false, alreadyOwned: true, error: "أنت مسجل في هذا الكورس بالفعل" };
+        }
+
+        const enrollment = await tx.courseEnrollment.create({
+          data: {
+            courseId,
+            studentId,
+            fulfillmentSource: "TESTER_BYPASS",
+            amountPaid: 0,
+          },
+        });
+
+        await logTesterActivity({
+          testerId: studentId,
+          action: "PAYMENT_BYPASS",
+          targetId: courseId,
+          targetTitle: course.title,
+          details: { purchaseType: "COURSE", basePrice },
+          tx,
+        });
+
+        return {
+          success: true,
+          itemTitle: course.title,
+          itemType: "COURSE" as PurchaseType,
+          originalPrice: basePrice,
+          discountAmount: 0,
+          finalPrice: 0,
+          newBalance: studentUser.balance,
+          enrollmentId: enrollment.id,
+          message: "تم تفعيل اشتراك الكورس لحساب الفحص (Test Mode)",
+        };
+      }
+
       // 2. Check not already enrolled
       const existing = await tx.accessCode.findFirst({
         where: { courseId, studentId },
@@ -321,6 +371,46 @@ export class PurchaseService {
     const runInTx = async (tx: any) => {
       await acquireAdvisoryLock(`spend:${studentId}`, tx);
 
+      // Check tester account mode bypass
+      const studentUser = await tx.user.findUnique({
+        where: { id: studentId },
+        select: { id: true, balance: true, accountMode: true, testerCapabilities: true },
+      });
+
+      if (studentUser && isTester(studentUser) && canBypassPayment(studentUser)) {
+        const existing = await tx.folderPurchase.findUnique({
+          where: { studentId_folderId: { studentId, folderId } },
+        });
+        if (existing) {
+          return { success: false, alreadyOwned: true, error: "لقد اشتريت هذه المحاضرة مسبقاً" };
+        }
+
+        const purchase = await tx.folderPurchase.create({
+          data: { studentId, folderId, price: 0 },
+        });
+
+        await logTesterActivity({
+          testerId: studentId,
+          action: "PAYMENT_BYPASS",
+          targetId: folderId,
+          targetTitle: folder.name,
+          details: { purchaseType: "FOLDER", basePrice },
+          tx,
+        });
+
+        return {
+          success: true,
+          itemTitle: folder.name,
+          itemType: "FOLDER" as PurchaseType,
+          originalPrice: basePrice,
+          discountAmount: 0,
+          finalPrice: 0,
+          newBalance: studentUser.balance,
+          enrollmentId: purchase.id,
+          message: "تم تفعيل المحاضرة لحساب الفحص (Test Mode)",
+        };
+      }
+
       const existing = await tx.folderPurchase.findUnique({
         where: { studentId_folderId: { studentId, folderId } },
       });
@@ -454,6 +544,46 @@ export class PurchaseService {
 
     const runInTx = async (tx: any) => {
       await acquireAdvisoryLock(`spend:${studentId}`, tx);
+
+      // Check tester account mode bypass
+      const studentUser = await tx.user.findUnique({
+        where: { id: studentId },
+        select: { id: true, balance: true, accountMode: true, testerCapabilities: true },
+      });
+
+      if (studentUser && isTester(studentUser) && canBypassPayment(studentUser)) {
+        const existing = await tx.videoPurchase.findUnique({
+          where: { studentId_videoId: { studentId, videoId } },
+        });
+        if (existing) {
+          return { success: false, alreadyOwned: true, error: "لقد اشتريت هذا الدرس مسبقاً" };
+        }
+
+        const purchase = await tx.videoPurchase.create({
+          data: { studentId, videoId, price: 0 },
+        });
+
+        await logTesterActivity({
+          testerId: studentId,
+          action: "PAYMENT_BYPASS",
+          targetId: videoId,
+          targetTitle: video.title,
+          details: { purchaseType: "VIDEO", basePrice },
+          tx,
+        });
+
+        return {
+          success: true,
+          itemTitle: video.title,
+          itemType: "VIDEO" as PurchaseType,
+          originalPrice: basePrice,
+          discountAmount: 0,
+          finalPrice: 0,
+          newBalance: studentUser.balance,
+          enrollmentId: purchase.id,
+          message: "تم تفعيل الدرس لحساب الفحص (Test Mode)",
+        };
+      }
 
       const existing = await tx.videoPurchase.findUnique({
         where: { studentId_videoId: { studentId, videoId } },
@@ -606,6 +736,52 @@ export class PurchaseService {
 
     const runInTx = async (tx: any) => {
       await acquireAdvisoryLock(`spend:${studentId}`, tx);
+
+      // Check tester account mode bypass
+      const studentUser = await tx.user.findUnique({
+        where: { id: studentId },
+        select: { id: true, balance: true, accountMode: true, testerCapabilities: true },
+      });
+
+      if (studentUser && isTester(studentUser) && canBypassPayment(studentUser)) {
+        const alreadyEnrolled = await tx.planEnrollment.findUnique({
+          where: { planId_studentId: { planId, studentId } },
+        });
+        if (alreadyEnrolled) {
+          return { success: false, alreadyOwned: true, error: "أنت مسجل بالفعل في هذه الخطة" };
+        }
+
+        const durationDays = plan.durationDays > 0 ? plan.durationDays : 365;
+        const enrollment = await tx.planEnrollment.create({
+          data: {
+            planId,
+            studentId,
+            pricePaid: 0,
+            expiresAt: new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000),
+          },
+        });
+
+        await logTesterActivity({
+          testerId: studentId,
+          action: "PAYMENT_BYPASS",
+          targetId: planId,
+          targetTitle: plan.title,
+          details: { purchaseType: "PLAN", basePrice },
+          tx,
+        });
+
+        return {
+          success: true,
+          itemTitle: plan.title,
+          itemType: "PLAN" as PurchaseType,
+          originalPrice: basePrice,
+          discountAmount: 0,
+          finalPrice: 0,
+          newBalance: studentUser.balance,
+          enrollmentId: enrollment.id,
+          message: "تم تفعيل الخطة الدراسية لحساب الفحص (Test Mode)",
+        };
+      }
 
       const alreadyEnrolled = await tx.planEnrollment.findUnique({
         where: { planId_studentId: { planId, studentId } },
@@ -776,6 +952,83 @@ export class PurchaseService {
 
     const runInTx = async (tx: any) => {
       await acquireAdvisoryLock(`spend:${studentId}`, tx);
+
+      // Check tester account mode bypass
+      const studentUser = await tx.user.findUnique({
+        where: { id: studentId },
+        select: { id: true, balance: true, accountMode: true, testerCapabilities: true },
+      });
+
+      if (studentUser && isTester(studentUser) && canBypassPayment(studentUser)) {
+        const now = new Date();
+        const existingSub = await tx.teacherSubscription.findUnique({
+          where: {
+            studentId_teacherId_planType: {
+              studentId,
+              teacherId,
+              planType,
+            },
+          },
+        });
+
+        const baseDate =
+          existingSub && existingSub.status === "active" && existingSub.expiresAt && existingSub.expiresAt > now
+            ? existingSub.expiresAt
+            : now;
+
+        const expiresAt = new Date(baseDate);
+        expiresAt.setMonth(expiresAt.getMonth() + months);
+
+        const sub = await tx.teacherSubscription.upsert({
+          where: {
+            studentId_teacherId_planType: {
+              studentId,
+              teacherId,
+              planType,
+            },
+          },
+          create: {
+            studentId,
+            teacherId,
+            planType,
+            planLabel,
+            amount: 0,
+            educationalStage: studentGrade || userDetails?.educationalStage || "الكل",
+            languageTrack: languageTrack || "arabic",
+            studentName: userDetails?.name || "طالب تجريبي",
+            studentPhone: userDetails?.phone || "01000000000",
+            parentPhone: userDetails?.parentPhone || "01000000000",
+            status: "active",
+            expiresAt,
+          },
+          update: {
+            status: "active",
+            expiresAt,
+            amount: 0,
+          },
+        });
+
+        await logTesterActivity({
+          testerId: studentId,
+          action: "PAYMENT_BYPASS",
+          targetId: teacherId,
+          targetTitle: `اشتراك معلم (${planType})`,
+          details: { purchaseType: "TEACHER_SUB", teacherId, planType, basePrice },
+          tx,
+        });
+
+        return {
+          success: true,
+          itemTitle: `اشتراك المعلم: ${teacherName}`,
+          itemType: "TEACHER_SUB" as PurchaseType,
+          originalPrice: basePrice,
+          discountAmount: 0,
+          finalPrice: 0,
+          newBalance: studentUser.balance,
+          enrollmentId: sub.id,
+          message: "تم تفعيل اشتراك المعلم لحساب الفحص (Test Mode)",
+        };
+      }
 
       if (paymentMethod === "wallet_balance" || paymentMethod === "balance") {
         if (finalPrice > 0) {

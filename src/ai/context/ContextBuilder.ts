@@ -2,6 +2,8 @@ import { AIContext, EducationalActionType } from "../types";
 
 export interface ContextOptions {
   studentId?: string;
+  accountMode?: string;
+  isTester?: boolean;
   subject?: string;
   grade?: string;
   action?: EducationalActionType;
@@ -13,11 +15,14 @@ export class ContextBuilder {
    * Builds the complete AIContext object combining platform metadata and defaults.
    */
   public buildContext(options: ContextOptions = {}): AIContext {
+    const isTesterUser = options.isTester || options.accountMode === "TESTER";
     const defaultContext: AIContext = {
       student: {
         id: options.studentId || "std_demo_001",
         name: "طالب Code-UP",
         email: "student@code-up.edu",
+        accountMode: options.accountMode || (isTesterUser ? "TESTER" : "NORMAL"),
+        isTester: isTesterUser,
       },
       currentGrade: options.grade || "prep_3",
       educationalTrack: "General STEM & Programming",

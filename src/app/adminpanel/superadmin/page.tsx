@@ -50,6 +50,10 @@ const AIAuditLogs = dynamic(() => import("@/components/admin/superadmin/ai/AIAud
 const AIFeatureFlags = dynamic(() => import("@/components/admin/superadmin/ai/AIFeatureFlags"), { ssr: false });
 const AISettings = dynamic(() => import("@/components/admin/superadmin/ai/AISettings"), { ssr: false });
 const AISystemHealth = dynamic(() => import("@/components/admin/superadmin/ai/AISystemHealth"), { ssr: false });
+const TestersSection = dynamic(
+  () => import("@/components/admin/superadmin/TestersSection").then((m) => m.TestersSection),
+  { ssr: false }
+);
 
 const ROLE_LABEL: Record<string, string> = {
   superadmin: "المشرف العام",
@@ -492,6 +496,8 @@ export default function SuperadminPage() {
           {activeSection === "logs" && <ActivityLogsSection />}
 
           {activeSection === "staff-accounts" && <StaffAccountsSection userRole={userRole} />}
+
+          {activeSection === "testers" && <TestersSection />}
 
           {activeSection === "site-text" && <SiteTextSection />}
 

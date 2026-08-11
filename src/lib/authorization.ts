@@ -7,6 +7,12 @@ import { canBypassPayment } from "./demo";
  * Optional role parameter allows superadmin demo bypass evaluation on denial.
  */
 export async function checkCourseEnrollment(userId: string, courseId: string, role?: string): Promise<boolean> {
+  const directEnrollment = await prisma.courseEnrollment.findUnique({
+    where: { studentId_courseId: { studentId: userId, courseId } },
+    select: { id: true },
+  });
+  if (directEnrollment) return true;
+
   const code = await prisma.accessCode.findFirst({
     where: {
       courseId,
@@ -17,6 +23,14 @@ export async function checkCourseEnrollment(userId: string, courseId: string, ro
     select: { id: true }
   });
   if (code) return true;
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { accountMode: true, testerCapabilities: true },
+  });
+  if (user && user.accountMode === "TESTER") {
+    return true;
+  }
 
   if (role) {
     const course = await prisma.course.findUnique({

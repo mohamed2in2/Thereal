@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ results: [] });
       }
 
-      // Build filter
+      // Build filter (excluding testers for teacher queries)
       const where: Record<string, unknown> = {
         quiz: {
           folder: {
@@ -34,6 +34,9 @@ export async function GET(req: NextRequest) {
           },
         },
       };
+      if (session.role === "teacher") {
+        where.student = { accountMode: { not: "TESTER" } };
+      }
       if (quizId) where.quizId = quizId;
 
       const results = await prisma.quizResult.findMany({
@@ -112,10 +115,11 @@ export async function PATCH(req: NextRequest) {
         return NextResponse.json({ error: "بيانات ناقصة" }, { status: 400 });
       }
 
-      // Verify teacher owns the course
+      // Verify teacher owns the course and student is not a tester
       const result = await prisma.quizResult.findUnique({
         where: { id: resultId },
         include: {
+          student: { select: { accountMode: true } },
           quiz: {
             include: {
               folder: {
@@ -126,7 +130,7 @@ export async function PATCH(req: NextRequest) {
         },
       });
 
-      if (!result) {
+      if (!result || (session.role === "teacher" && result.student.accountMode === "TESTER")) {
         return NextResponse.json({ error: "النتيجة غير موجودة" }, { status: 404 });
       }
 

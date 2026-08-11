@@ -25,6 +25,7 @@ export async function GET(req: NextRequest) {
         select: { planLessonId: true }
       });
       where.planLessonId = { in: teacherLessons.map(t => t.planLessonId) };
+      where.student = { accountMode: { not: "TESTER" } };
     }
 
     const submissions = await prisma.planProjectSubmission.findMany({

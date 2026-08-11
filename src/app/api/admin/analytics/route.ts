@@ -91,44 +91,84 @@ export async function GET(req: NextRequest) {
   const [watchRows, prevWatchCount, enrollRows, prevEnrollCount, completions, prevCompletions,
          quizRows, tickets, feedbacks, totalStudentsRows] = await Promise.all([
     prisma.videoWatchSession.findMany({
-      where: { videoId: { in: videoIds }, startedAt: { gte: periodStart } },
+      where: {
+        videoId: { in: videoIds },
+        startedAt: { gte: periodStart },
+        student: { accountMode: { not: "TESTER" } },
+      },
       select: { videoId: true, startedAt: true },
     }),
     prisma.videoWatchSession.count({
-      where: { videoId: { in: videoIds }, startedAt: { gte: prevStart, lt: periodStart } },
+      where: {
+        videoId: { in: videoIds },
+        startedAt: { gte: prevStart, lt: periodStart },
+        student: { accountMode: { not: "TESTER" } },
+      },
     }),
     prisma.accessCode.findMany({
-      where: { courseId: { in: courseIds }, studentId: { not: null } },
+      where: {
+        courseId: { in: courseIds },
+        studentId: { not: null },
+        student: { accountMode: { not: "TESTER" } },
+      },
       select: { usedAt: true, createdAt: true, studentId: true },
     }),
     prisma.accessCode.count({
-      where: { courseId: { in: courseIds }, studentId: { not: null }, usedAt: { gte: prevStart, lt: periodStart } },
+      where: {
+        courseId: { in: courseIds },
+        studentId: { not: null },
+        student: { accountMode: { not: "TESTER" } },
+        usedAt: { gte: prevStart, lt: periodStart },
+      },
     }),
     prisma.progress.count({
-      where: { videoId: { in: videoIds }, watched: true, watchedAt: { gte: periodStart } },
+      where: {
+        videoId: { in: videoIds },
+        watched: true,
+        watchedAt: { gte: periodStart },
+        student: { accountMode: { not: "TESTER" } },
+      },
     }),
     prisma.progress.count({
-      where: { videoId: { in: videoIds }, watched: true, watchedAt: { gte: prevStart, lt: periodStart } },
+      where: {
+        videoId: { in: videoIds },
+        watched: true,
+        watchedAt: { gte: prevStart, lt: periodStart },
+        student: { accountMode: { not: "TESTER" } },
+      },
     }),
     prisma.quizResult.findMany({
-      where: { quiz: { folder: { courseId: { in: courseIds } } }, completedAt: { gte: periodStart } },
+      where: {
+        quiz: { folder: { courseId: { in: courseIds } } },
+        completedAt: { gte: periodStart },
+        student: { accountMode: { not: "TESTER" } },
+      },
       select: { score: true, totalQ: true },
     }),
     prisma.supportTicket.findMany({
-      where: { courseId: { in: courseIds }, status: { not: "closed" } },
+      where: {
+        courseId: { in: courseIds },
+        status: { not: "closed" },
+        student: { accountMode: { not: "TESTER" } },
+      },
       select: { id: true, title: true, type: true, priority: true, status: true, createdAt: true },
       orderBy: { createdAt: "desc" }, take: 6,
     }),
     prisma.studentFeedback.findMany({
-      where: { teacherId, isResolved: false },
+      where: {
+        teacherId,
+        isResolved: false,
+        student: { accountMode: { not: "TESTER" } },
+      },
       select: { id: true, type: true, content: true, rating: true, createdAt: true },
       orderBy: { createdAt: "desc" }, take: 6,
     }),
-    // NOTE: platform technical errors (ClientError) are intentionally NOT shown
-    // to teachers — that's the superadmin's error monitor. Teachers only see
-    // student-facing issues (tickets, feedback) and their own content health.
     prisma.accessCode.findMany({
-      where: { courseId: { in: courseIds }, studentId: { not: null } },
+      where: {
+        courseId: { in: courseIds },
+        studentId: { not: null },
+        student: { accountMode: { not: "TESTER" } },
+      },
       select: { studentId: true },
     }),
   ]);
@@ -201,7 +241,11 @@ export async function GET(req: NextRequest) {
   }
   const studentsByCourse = await prisma.accessCode.groupBy({
     by: ["courseId"],
-    where: { courseId: { in: courseIds }, studentId: { not: null } },
+    where: {
+      courseId: { in: courseIds },
+      studentId: { not: null },
+      student: { accountMode: { not: "TESTER" } },
+    },
     _count: { studentId: true },
   });
   const studentCountMap = new Map(studentsByCourse.map((s) => [s.courseId, s._count.studentId]));

@@ -31,6 +31,7 @@ const superadminSections = [
   { id: "leaderboard-prizes",  label: "🏆 جوائز لوحة الشرف (24 ساعة)" },
   { id: "logs",                label: "سجلات النشاط" },
   { id: "staff-accounts",      label: "المشرفون والموظفون" },
+  { id: "testers",             label: "🧪 حسابات الفحص (QA Testers)" },
   { id: "site-text",           label: "نصوص الموقع" },
   { id: "advanced-settings",   label: "الإعدادات المتقدمة" },
   { id: "errors",              label: "مراقبة الأخطاء" },

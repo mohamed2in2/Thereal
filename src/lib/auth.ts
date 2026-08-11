@@ -19,6 +19,7 @@ export interface JWTPayload {
   email: string;
   name: string;
   role: string;
+  accountMode?: string;
   /** True for the owner superadmin (Ahmed) and the break-glass master login. */
   isOwner?: boolean;
   deviceId?: string;
@@ -32,6 +33,7 @@ export interface SessionUser {
   email: string;
   name: string;
   role: string;
+  accountMode?: string;
   isOwner?: boolean;
   profileCompleted: boolean;
   phone?: string | null;
@@ -203,6 +205,7 @@ async function getJwtSession(): Promise<SessionUser | null> {
     email: user.email,
     name: user.name,
     role: user.role,
+    accountMode: user.accountMode || "NORMAL",
     profileCompleted: user.profileCompleted,
     phone: user.phone,
     parentPhone: user.parentPhone,

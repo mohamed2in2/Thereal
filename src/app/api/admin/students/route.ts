@@ -26,16 +26,10 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "الكورس غير موجود" }, { status: 404 });
     }
 
-    // Get all students enrolled in this course
+    // Get all students enrolled in this course (strictly excluding testers)
+    const { TeacherVisibilityService } = await import("@/services/teacher/TeacherVisibilityService");
     const students = await prisma.user.findMany({
-      where: {
-        accessCodes: {
-          some: {
-            course: { id: courseId },
-            isActive: true,
-          },
-        },
-      },
+      where: TeacherVisibilityService.getEnrolledStudentsWhere(courseId),
       select: {
         id: true,
         name: true,
@@ -93,6 +87,12 @@ export async function PATCH(req: NextRequest) {
 
     if (!course) {
       return NextResponse.json({ error: "الكورس غير موجود" }, { status: 404 });
+    }
+
+    const { TeacherVisibilityService } = await import("@/services/teacher/TeacherVisibilityService");
+    const visibleStudent = await TeacherVisibilityService.findStudentById(session.id, studentId);
+    if (!visibleStudent) {
+      return NextResponse.json({ error: "المتعلم غير موجود" }, { status: 404 });
     }
 
     if (action === "ban") {

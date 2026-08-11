@@ -85,8 +85,10 @@ export class PromptBuilder {
   }
 
   private formatContext(ctx: AIContext): string {
+    const isTester = ctx.student.isTester || ctx.student.accountMode === "TESTER";
     return [
       `- اسم الطالب: ${ctx.student.name} (المعرف: ${ctx.student.id})`,
+      ...(isTester ? [`- وضع الحساب: حساب فحص وضمان جودة (QA Platform Tester) — مخصص للتشخيص والاختبار.`] : []),
       `- المرحلة الدراسية: ${ctx.currentGrade} | المسار: ${ctx.educationalTrack}`,
       `- الكورس الحالي: ${ctx.course.title} (المادة: ${ctx.course.subject})`,
       `- الدرس الحالي: ${ctx.lesson.title} (نسبة الإنجاز: ${ctx.lessonProgress.completionPercentage}%)`,

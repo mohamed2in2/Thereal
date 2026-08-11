@@ -17,7 +17,10 @@ export async function GET(req: NextRequest) {
 
     const teacherId = session.id;
 
-    const where: any = { teacherId };
+    const where: any = {
+      teacherId,
+      ...(session.role === "teacher" ? { student: { accountMode: { not: "TESTER" } } } : {}),
+    };
 
     if (stage) where.educationalStage = stage;
     if (plan) where.planType = plan;
@@ -84,9 +87,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "نوع الباقة غير صحيح" }, { status: 400 });
     }
 
-    // Find student by email or phone
+    // Find student by email or phone (excluding testers from teacher discovery)
     const student = await prisma.user.findFirst({
       where: {
+        ...(session.role === "teacher" ? { accountMode: { not: "TESTER" } } : {}),
         OR: [
           { email: String(studentEmailOrPhone).trim().toLowerCase() },
           { phone: String(studentEmailOrPhone).trim() },
