@@ -174,7 +174,7 @@ export const PAYMENT_METHODS: readonly PaymentMethodConfig[] = [
     brandColor: "#FFC20E",
     brandForeground: "#000000",
     monogram: "FAW",
-    needsPhone: true,
+    needsPhone: false,
     requiresReference: true,
     available: true,
     processingSpeed: "فوري خلال دقائق",
