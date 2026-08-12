@@ -203,7 +203,7 @@ export default function CourseProductPage() {
       const price = data.effectivePrice ?? 0;
       const ctx = encodeURIComponent(`شراء كورس ${courseId} — ${price} جنيه`);
       router.push(
-        `/payment?amount=${price}&return=${encodeURIComponent(`/courses/${courseId}`)}&context=${ctx}`
+        `/payment?amount=${price}&courseId=${courseId}&courseTitle=${encodeURIComponent(course?.title || "")}&return=${encodeURIComponent(`/courses/${courseId}`)}&context=${ctx}`
       );
     } else {
       toastError(data.error || "تعذر إتمام الشراء");

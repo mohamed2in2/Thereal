@@ -44,6 +44,7 @@ export interface SessionUser {
   deviceId?: string;
   referralCode?: string | null;
   streakFreezes?: number;
+  balance?: number;
 }
 
 type PhoneChallengePayload = {
@@ -215,6 +216,7 @@ async function getJwtSession(): Promise<SessionUser | null> {
     deviceId: payload.deviceId,
     referralCode: user.referralCode,
     streakFreezes: user.streakFreezes,
+    balance: user.balance ?? 0,
   };
 }
 

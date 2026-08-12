@@ -9,7 +9,7 @@ import {
   listPaymentMethods,
   getPaymentMethod,
 } from "@/lib/payment-methods";
-import { validateVodafoneCashPhone, normalizeEgyptianPhone, calculateAmountWithTax } from "@/lib/sha7nawy";
+import { validateVodafoneCashPhone, validateEgyptianPhone, normalizeEgyptianPhone, calculateAmountWithTax } from "@/lib/sha7nawy";
 import { PaymentMethodGrid } from "@/components/payment/PaymentMethodGrid";
 import { LoadingState } from "@/components/payment/LoadingState";
 import { ErrorState } from "@/components/payment/ErrorState";
@@ -56,9 +56,24 @@ function PaymentContent() {
   const contextParam = searchParams.get("context");
 
   const [step, setStep] = useState<Step>("checkout");
-  const [baseAmount, setBaseAmount] = useState<string>("100");
+  const [baseAmount, setBaseAmount] = useState<string>(() => {
+    if (amountParam && Number(amountParam) > 0) return String(Number(amountParam));
+    if (planTypeParam) {
+      const planPriceMap: Record<string, string> = { monthly: "180", termly: "750", yearly: "1200" };
+      return planPriceMap[planTypeParam] || "180";
+    }
+    return "180";
+  });
   const [isPriceLocked, setIsPriceLocked] = useState(false);
-  const [verifiedItemName, setVerifiedItemName] = useState<string>("");
+  const [verifiedItemName, setVerifiedItemName] = useState<string>(() => {
+    if (planLabelParam) return planLabelParam;
+    if (contextParam) return contextParam;
+    if (teacherNameParam && planTypeParam) {
+      const planNames: Record<string, string> = { monthly: "شهر واحد", termly: "3 شهور", yearly: "6 شهور" };
+      return `اشتراك ${planNames[planTypeParam] || "معلم"} — الأستاذ ${teacherNameParam}`;
+    }
+    return "";
+  });
   const [selectedMethodId, setSelectedMethodId] = useState<string>("vf_cash");
   const [phone, setPhone] = useState("");
   const [phoneError, setPhoneError] = useState("");
@@ -95,6 +110,9 @@ function PaymentContent() {
       .then((d) => {
         if (d?.user) {
           setUser({ id: d.user.id, name: d.user.name, role: d.user.role, balance: d.user.balance });
+          if (d.user.phone) {
+            setPhone((prev) => (prev ? prev : normalizeEgyptianPhone(d.user.phone)));
+          }
         } else {
           setUser(null);
         }
@@ -107,6 +125,21 @@ function PaymentContent() {
   useEffect(() => {
     const fetchAuthoritativePrice = async () => {
       const hasSpecificItem = teacherIdParam || courseIdParam || folderIdParam || videoIdParam || planIdParam;
+
+      if (amountParam && Number(amountParam) > 0) {
+        setBaseAmount(String(Number(amountParam)));
+      } else if (planTypeParam) {
+        const planPriceMap: Record<string, string> = { monthly: "180", termly: "750", yearly: "1200" };
+        if (planPriceMap[planTypeParam]) setBaseAmount(planPriceMap[planTypeParam]);
+      }
+
+      if (planLabelParam) setVerifiedItemName(planLabelParam);
+      else if (contextParam) setVerifiedItemName(contextParam);
+      else if (teacherNameParam && planTypeParam) {
+        const planNames: Record<string, string> = { monthly: "شهر واحد", termly: "3 شهور", yearly: "6 شهور" };
+        setVerifiedItemName(`اشتراك ${planNames[planTypeParam] || "معلم"} — الأستاذ ${teacherNameParam}`);
+      }
+
       if (hasSpecificItem) {
         setIsPriceLocked(true);
         try {
@@ -114,10 +147,12 @@ function PaymentContent() {
           if (teacherIdParam) query.set("teacherId", teacherIdParam);
           if (planTypeParam) query.set("planType", planTypeParam);
           if (gradeParam) query.set("grade", gradeParam);
+          if (languageTrackParam) query.set("languageTrack", languageTrackParam);
           if (courseIdParam) query.set("courseId", courseIdParam);
           if (folderIdParam) query.set("folderId", folderIdParam);
           if (videoIdParam) query.set("videoId", videoIdParam);
           if (planIdParam) query.set("planId", planIdParam);
+          if (amountParam) query.set("amount", amountParam);
 
           const res = await fetch(`/api/payments/quote?${query.toString()}`);
           if (res.ok) {
@@ -128,10 +163,14 @@ function PaymentContent() {
             if (data.itemName) {
               setVerifiedItemName(data.itemName);
             }
+          } else {
+            if (amountParam && Number(amountParam) > 0) {
+              setBaseAmount(String(Number(amountParam)));
+            }
           }
         } catch {
           if (amountParam && Number(amountParam) > 0) {
-            setBaseAmount(amountParam);
+            setBaseAmount(String(Number(amountParam)));
           }
         }
       } else if (amountParam) {
@@ -150,7 +189,21 @@ function PaymentContent() {
         setSelectedMethodId("vf_cash");
       }
     }
-  }, [amountParam, methodParam, teacherIdParam, planTypeParam, gradeParam, courseIdParam, folderIdParam, videoIdParam, planIdParam]);
+  }, [
+    amountParam,
+    methodParam,
+    teacherIdParam,
+    teacherNameParam,
+    planTypeParam,
+    planLabelParam,
+    gradeParam,
+    languageTrackParam,
+    courseIdParam,
+    folderIdParam,
+    videoIdParam,
+    planIdParam,
+    contextParam,
+  ]);
 
   // ── Apply Discount Code Handler ──
   const handleApplyDiscount = async () => {
@@ -234,13 +287,19 @@ function PaymentContent() {
   };
 
   const validatePhone = useCallback((val: string, methodId: string = selectedMethodId) => {
-    if (!val.trim()) {
+    const clean = normalizeEgyptianPhone(val);
+    if (!clean) {
       setPhoneError("رقم المحفظة مطلوب لإتمام العملية");
       return false;
     }
     if (methodId === "vf_cash") {
-      if (!validateVodafoneCashPhone(val)) {
+      if (!validateVodafoneCashPhone(clean)) {
         setPhoneError("رقم محفظة فودافون كاش يجب أن يبدأ بـ 010 ويتكون من 11 رقماً");
+        return false;
+      }
+    } else {
+      if (!validateEgyptianPhone(clean)) {
+        setPhoneError("يرجى كتابة رقم هاتف مصري صحيح مكون من 11 رقماً (مثال: 010xxxxxxx)");
         return false;
       }
     }
@@ -270,8 +329,10 @@ function PaymentContent() {
   const effectiveGatewayBase = selectedMethodId === "fawry" ? Math.max(10, payableToGateway) : payableToGateway;
   const taxCalculation = calculateAmountWithTax(effectiveGatewayBase, selectedMethodId);
 
-  const handleCreatePayment = async () => {
-    if (!selectedMethod) return;
+  const handleCreatePayment = async (overrideMethodId?: string) => {
+    const activeMethodId = overrideMethodId || selectedMethodId;
+    const methodObj = getPaymentMethod(activeMethodId) || selectedMethod;
+    if (!methodObj) return;
 
     if (!user) {
       toastError("يرجى تسجيل الدخول أو إنشاء حساب جديد لإتمام عملية الدفع");
@@ -280,11 +341,11 @@ function PaymentContent() {
       return;
     }
 
-    if (selectedMethod.needsPhone && !validatePhone(phone)) {
+    if (methodObj.needsPhone && !validatePhone(phone, methodObj.id)) {
       return;
     }
 
-    if (selectedMethod.needsCode && !validateCode(code)) {
+    if (methodObj.needsCode && !validateCode(code)) {
       return;
     }
 
@@ -292,7 +353,7 @@ function PaymentContent() {
     setErrors([]);
 
     try {
-      if (selectedMethod.id === "voucher") {
+      if (methodObj.id === "voucher") {
         const codeRes = await fetch("/api/codes", {
           method: "POST",
           credentials: "include",
@@ -322,16 +383,16 @@ function PaymentContent() {
         return;
       }
 
-      const normalizedPhone = selectedMethod.needsPhone ? normalizeEgyptianPhone(phone) : "";
+      const normalizedPhone = methodObj.needsPhone ? normalizeEgyptianPhone(phone) : "";
       const res = await fetch("/api/payments/sha7nawy/create", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          number: selectedMethod.needsCode ? code.trim() : (normalizedPhone || "01000000000"),
+          number: methodObj.needsCode ? code.trim() : (normalizedPhone || "01000000000"),
           amount: rawItemPrice,
-          method: selectedMethod.id,
-          code: selectedMethod.needsCode ? code.trim() : undefined,
+          method: methodObj.id,
+          code: methodObj.needsCode ? code.trim() : undefined,
           teacherId: teacherIdParam || undefined,
           planType: planTypeParam || undefined,
           grade: gradeParam || undefined,
@@ -342,7 +403,7 @@ function PaymentContent() {
           planId: planIdParam || undefined,
           courseTitle: verifiedItemName || planLabelParam || contextParam || undefined,
           discountCode: appliedDiscount?.code,
-          useWalletBalance: useWalletBalance && hasPartialBalance,
+          useWalletBalance: useWalletBalance && hasPartialBalance && methodObj.id !== "wallet_balance",
         }),
       });
 
@@ -364,13 +425,16 @@ function PaymentContent() {
 
       if (body.whatsappUrl) {
         toastSuccess("جاري فتح واتساب للتأكيد والتفعيل الفوري... 💬");
-        window.open(body.whatsappUrl, "_blank");
+        try {
+          window.open(body.whatsappUrl, "_blank");
+        } catch {}
         setIntent({
           reference: body.reference || "IPN-DIRECT",
-          method: body.method || selectedMethod.id,
+          method: body.method || methodObj.id,
           totalAmount: body.totalAmount || effectiveGatewayBase,
-          instructions: body.instructions || selectedMethod.shortNote,
+          instructions: body.instructions || methodObj.shortNote,
           walletDeduction: body.walletDeduction,
+          paymentPageUrl: body.whatsappUrl,
         });
         setTimeLeftSeconds(15 * 60);
         setStep("instructions");
@@ -387,9 +451,9 @@ function PaymentContent() {
 
       setIntent({
         reference: body.reference || "REF-PENDING",
-        method: body.method || selectedMethod.id,
+        method: body.method || methodObj.id,
         totalAmount: body.totalAmount || taxCalculation.totalAmount,
-        instructions: body.instructions || selectedMethod.shortNote,
+        instructions: body.instructions || methodObj.shortNote,
         transactionId: body.data?.transaction_id ?? body.data?.id,
         paymentPageUrl: body.data?.payment_page_url ?? body.data?.url ?? undefined,
         walletDeduction: body.walletDeduction,
@@ -397,8 +461,8 @@ function PaymentContent() {
 
       setTimeLeftSeconds(15 * 60);
       setStep("instructions");
-    } catch {
-      setErrors(["حدث خطأ أثناء الاتصال ببوابة الدفع. يرجى المحاولة مرة أخرى."]);
+    } catch (err: any) {
+      setErrors([err?.message || "حدث خطأ أثناء الاتصال ببوابة الدفع. يرجى المحاولة مرة أخرى."]);
       setStep("error");
     } finally {
       setIsCreating(false);
@@ -570,7 +634,7 @@ function PaymentContent() {
                   type="button"
                   onClick={() => {
                     setSelectedMethodId("wallet_balance");
-                    setTimeout(() => handleCreatePayment(), 50);
+                    handleCreatePayment("wallet_balance");
                   }}
                   disabled={isCreating}
                   className="shrink-0 px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-black text-xs shadow-md transition-all cursor-pointer"
@@ -711,8 +775,9 @@ function PaymentContent() {
                   dir="ltr"
                   value={phone}
                   onChange={(e) => {
-                    setPhone(e.target.value);
-                    if (phoneError) validatePhone(e.target.value);
+                    const normalized = normalizeEgyptianPhone(e.target.value);
+                    setPhone(normalized || e.target.value);
+                    if (phoneError) validatePhone(normalized || e.target.value);
                   }}
                   placeholder="010XXXXXXXX"
                   className="w-full h-12 px-4 rounded-xl border border-[#E4E7EC] dark:border-[#232C36] bg-[#F8F9FA] dark:bg-[#0B0F19] text-[#101828] dark:text-[#F2F4F7] font-mono text-base focus:outline-none focus:border-emerald-500 text-right"
@@ -746,7 +811,7 @@ function PaymentContent() {
 
             {/* Action Submit Button */}
             <button
-              onClick={handleCreatePayment}
+              onClick={() => handleCreatePayment()}
               disabled={isCreating || userLoading}
               className="w-full h-14 rounded-2xl bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white text-[16px] sm:text-[18px] font-black shadow-lg shadow-emerald-500/20 active:scale-[0.99] transition-all flex items-center justify-center gap-3 disabled:opacity-60 cursor-pointer"
             >

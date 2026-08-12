@@ -104,7 +104,7 @@ export default function PlanProductPage() {
         // Not enough balance → send the student to the Payment page to top up,
         // then they get returned here automatically after a successful payment.
         const price = typeof data.effectivePrice === "number" ? data.effectivePrice : 0;
-        router.push(`/payment?amount=${price}&return=${encodeURIComponent(`/plans/${planId}`)}&context=${encodeURIComponent(`شراء خطة — ${price} جنيه`)}`);
+        router.push(`/payment?amount=${price}&planId=${planId}&return=${encodeURIComponent(`/plans/${planId}`)}&context=${encodeURIComponent(`شراء خطة — ${price} جنيه`)}`);
       } else {
         toastError(data.error || "تعذر إتمام الشراء");
       }
@@ -342,7 +342,7 @@ export default function PlanProductPage() {
                         </p>
                         <button onClick={() => {
                           if (!user) { router.push(`/login?redirect_url=/plans/${planId}`); return; }
-                          router.push(`/payment?amount=${plan.effectivePrice}&return=${encodeURIComponent(`/plans/${planId}`)}&context=${encodeURIComponent(`شراء خطة — ${plan.effectivePrice} جنيه`)}`);
+                          router.push(`/payment?amount=${plan.effectivePrice}&planId=${planId}&return=${encodeURIComponent(`/plans/${planId}`)}&context=${encodeURIComponent(`شراء خطة — ${plan.effectivePrice} جنيه`)}`);
                         }} disabled={userLoading}
                           className="w-full py-2.5 rounded-xl text-white font-bold text-sm cursor-pointer border-none transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 shadow-md"
                           style={{ background: "linear-gradient(135deg, var(--brand), var(--brand-strong))" }}>

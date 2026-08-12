@@ -7,6 +7,7 @@ import {
   calculateAmountWithTax,
   SHA7NAWY_PENDING_TYPE,
   sha7nawyRefNote,
+  normalizeEgyptianPhone,
 } from "@/lib/sha7nawy";
 import {
   createShakeOutPayment,
@@ -83,7 +84,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (methodConfig.needsPhone && !number?.trim()) {
+    const cleanNumber = number ? normalizeEgyptianPhone(number) : "";
+    if (methodConfig.needsPhone && !cleanNumber) {
       return NextResponse.json({ error: "رقم المحفظة مطلوب" }, { status: 400 });
     }
 
@@ -115,7 +117,7 @@ export async function POST(req: NextRequest) {
     // ────────────────────────────────────────────────────────────────────────
     // 1. Direct Purchase via Wallet Balance
     // ────────────────────────────────────────────────────────────────────────
-    if (methodConfig.id === "wallet_balance" || methodConfig.provider === "internal") {
+    if (methodConfig.id === "wallet_balance") {
       let purchaseRes: any = null;
 
       if (teacherId && planType) {
@@ -340,7 +342,7 @@ export async function POST(req: NextRequest) {
     // ────────────────────────────────────────────────────────────────────────
     const webhookUrl = `${appUrl}/api/payments/sha7nawy/webhook`;
     const result = await createSha7nawyPayment({
-      number: number || "",
+      number: cleanNumber || number || "",
       amount: totalAmount,
       method: methodConfig.id,
       client: session.id,
@@ -385,6 +387,9 @@ export async function POST(req: NextRequest) {
     });
   } catch (error: any) {
     console.error("[Create Payment API] Error:", error);
-    return NextResponse.json({ error: "حدث خطأ غير متوقع أثناء بدء عملية الدفع" }, { status: 500 });
+    return NextResponse.json(
+      { error: error?.message || "حدث خطأ غير متوقع أثناء بدء عملية الدفع" },
+      { status: 500 }
+    );
   }
 }

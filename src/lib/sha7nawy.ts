@@ -99,6 +99,32 @@ export function calculateAmountWithTax(
 }
 
 /**
+ * Normalizes phone number format supporting:
+ * - Arabic-Indic (٠١٢٣٤٥٦٧٨٩) and Eastern Arabic (۰۱۲۳۴۵۶۷۸۹) numerals
+ * - International (+20, 0020, 20) and local prefixes (010, 10)
+ * - Removing whitespace, hyphens, and non-digit characters
+ */
+export function normalizeEgyptianPhone(phone: string): string {
+  if (!phone) return "";
+  const raw = String(phone).trim();
+  const arabicMap: Record<string, string> = {
+    "٠": "0", "١": "1", "٢": "2", "٣": "3", "٤": "4", "٥": "5", "٦": "6", "٧": "7", "٨": "8", "٩": "9",
+    "۰": "0", "۱": "1", "۲": "2", "۳": "3", "۴": "4", "۵": "5", "۶": "6", "۷": "7", "۸": "8", "۹": "9",
+  };
+  const cleaned = raw.replace(/[٠-٩۰-۹]/g, (d) => arabicMap[d] || d);
+  let digits = cleaned.replace(/\D/g, "");
+
+  if (digits.startsWith("0020") && digits.length >= 13) {
+    digits = "0" + digits.slice(4);
+  } else if (digits.startsWith("20") && digits.length >= 12) {
+    digits = "0" + digits.slice(2);
+  } else if ((digits.startsWith("10") || digits.startsWith("11") || digits.startsWith("12") || digits.startsWith("15")) && digits.length === 10) {
+    digits = "0" + digits;
+  }
+  return digits;
+}
+
+/**
  * Validates a Vodafone Cash phone number (must be 11 digits starting with 010)
  */
 export function validateVodafoneCashPhone(phone: string): boolean {
@@ -107,22 +133,11 @@ export function validateVodafoneCashPhone(phone: string): boolean {
 }
 
 /**
- * Validates a mobile wallet phone number
+ * Validates a mobile wallet phone number across Egyptian carriers (010, 011, 012, 015)
  */
 export function validateEgyptianPhone(phone: string): boolean {
   const clean = normalizeEgyptianPhone(phone);
-  return clean.length >= 4;
-}
-
-/**
- * Normalizes phone number format
- */
-export function normalizeEgyptianPhone(phone: string): string {
-  let clean = phone.trim().replace(/\D/g, "");
-  if (clean.startsWith("20") && clean.length > 10) {
-    clean = clean.slice(2);
-  }
-  return clean;
+  return /^01[0125]\d{8}$/.test(clean);
 }
 
 /**

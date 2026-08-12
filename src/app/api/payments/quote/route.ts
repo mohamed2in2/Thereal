@@ -3,10 +3,7 @@ import { getSession } from "@/lib/auth";
 import { verifyAuthoritativePrice } from "@/lib/price-verifier";
 
 export async function GET(req: NextRequest) {
-  const session = await getSession();
-  if (!session) {
-    return NextResponse.json({ error: "يجب تسجيل الدخول أولاً" }, { status: 401 });
-  }
+  const session = await getSession().catch(() => null);
 
   try {
     const { searchParams } = new URL(req.url);
@@ -28,6 +25,7 @@ export async function GET(req: NextRequest) {
       courseId,
       folderId,
       planId,
+      studentId: session?.id,
     });
 
     return NextResponse.json({

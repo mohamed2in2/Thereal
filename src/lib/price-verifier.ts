@@ -97,13 +97,14 @@ export async function verifyAuthoritativePrice(params: {
       } catch {}
     }
 
+    const defaultTeacherPlanPrices: Record<string, number> = {
+      monthly: 180,
+      termly: 750,
+      yearly: 1200,
+    };
+
     if (planPrice === null || planPrice === undefined || planPrice <= 0) {
-      return {
-        valid: false,
-        expectedPrice: 0,
-        itemName: "اشتراك معلم",
-        error: "لسه الأستاذ محددش سعر الباقة دي. كلّم الدعم.",
-      };
+      planPrice = defaultTeacherPlanPrices[planType] ?? 180;
     }
 
     const isLanguages = languageTrack === "languages" || languageTrack === "english";
