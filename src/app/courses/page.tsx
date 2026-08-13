@@ -24,7 +24,7 @@ interface Course {
   subject?: string;
   educationalStage?: string;
   thumbnailUrl?: string;
-  teacher: { id: string; name: string; teacherProfile?: { photoUrl?: string | null } | null };
+  teacher: { id: string; name: string; teacherProfile?: { photoUrl?: string | null; slug?: string | null } | null };
   isPaid?: boolean;
   price?: number | null;
   discountPercent?: number | null;
@@ -98,6 +98,7 @@ export default function CoursesPage() {
       const teacherMap = new Map<string, Teacher>();
 
       for (const t of apiTeachers) {
+        if (t.slug === "demo" || t.name === "test" || t.name?.includes("المدرس التجريبي")) continue;
         teacherMap.set(t.id, {
           id: t.id,
           name: t.name,
@@ -110,6 +111,10 @@ export default function CoursesPage() {
 
       for (const c of allCourses) {
         if (c.teacher?.id) {
+          const tSlug = c.teacher.teacherProfile?.slug;
+          const tName = c.teacher.name;
+          if (tSlug === "demo" || tName === "test" || tName?.includes("المدرس التجريبي")) continue;
+
           const existing = teacherMap.get(c.teacher.id);
           const photoUrl = c.teacher.teacherProfile?.photoUrl || null;
           if (existing) {

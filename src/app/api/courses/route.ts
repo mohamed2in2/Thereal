@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
     const canSeeDemo = isSuperadmin || isTesterUser;
 
     const where: Record<string, unknown> = {
-      teacher: canSeeDemo ? { isDeleted: false } : { isDeleted: false, isDemo: false },
+      teacher: teacherId ? (canSeeDemo ? { isDeleted: false } : { isDeleted: false, isDemo: false }) : { isDeleted: false, isDemo: false },
     };
     if (stage) where.educationalStage = stage;
     if (subject) where.subject = subject;
@@ -30,9 +30,12 @@ export async function GET(req: NextRequest) {
       ];
     }
 
-    const teacherWhere: Record<string, unknown> = canSeeDemo
-      ? { role: "teacher", isDeleted: false }
-      : { role: "teacher", isDeleted: false, isDemo: false };
+    // Regular teachers list should NEVER include the demo teacher (it has its own dedicated pinned Showroom card)
+    const teacherWhere: Record<string, unknown> = {
+      role: "teacher",
+      isDeleted: false,
+      isDemo: false,
+    };
 
     const [courses, allTeachers] = await Promise.all([
       prisma.course.findMany({
