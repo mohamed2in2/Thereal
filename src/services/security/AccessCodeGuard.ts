@@ -1,6 +1,9 @@
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 
+// In-memory sliding-window rate limiting map per (IP + UserID)
+const memoryRateLimitMap = new Map<string, number[]>();
+
 export class AccessCodeGuard {
   private static SERVER_SECRET = process.env.ACCESS_CODE_SECRET || "codeup_access_code_server_secret_2026";
 
@@ -52,27 +55,29 @@ export class AccessCodeGuard {
     ip: string,
     userId?: string
   ): Promise<{ allowed: boolean; lockTimeSeconds: number; failureCount: number }> {
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    try {
+      const key = `${ip}:${userId || ""}`;
+      const now = Date.now();
+      const oneHourAgo = now - 60 * 60 * 1000;
 
-    const failures = await prisma.accessCodeLog.count({
-      where: {
-        OR: [{ ip }, ...(userId ? [{ userId }] : [])],
-        success: false,
-        createdAt: { gte: oneHourAgo },
-      },
-    });
+      const timestamps = (memoryRateLimitMap.get(key) || []).filter((t) => t >= oneHourAgo);
+      memoryRateLimitMap.set(key, timestamps);
 
-    if (failures >= 20) {
-      return { allowed: false, lockTimeSeconds: 3600, failureCount: failures };
-    }
-    if (failures >= 10) {
-      return { allowed: false, lockTimeSeconds: 300, failureCount: failures };
-    }
-    if (failures >= 5) {
-      return { allowed: false, lockTimeSeconds: 30, failureCount: failures };
-    }
+      const failures = timestamps.length;
+      if (failures >= 20) {
+        return { allowed: false, lockTimeSeconds: 3600, failureCount: failures };
+      }
+      if (failures >= 10) {
+        return { allowed: false, lockTimeSeconds: 300, failureCount: failures };
+      }
+      if (failures >= 5) {
+        return { allowed: false, lockTimeSeconds: 30, failureCount: failures };
+      }
 
-    return { allowed: true, lockTimeSeconds: 0, failureCount: failures };
+      return { allowed: true, lockTimeSeconds: 0, failureCount: failures };
+    } catch {
+      return { allowed: true, lockTimeSeconds: 0, failureCount: 0 };
+    }
   }
 
   /**
@@ -85,34 +90,14 @@ export class AccessCodeGuard {
     codeAttempted: string;
     success: boolean;
   }): Promise<void> {
-    const rawInput = String(params.codeAttempted || "").trim().toUpperCase();
-    const attemptHash = this.hashCode(rawInput);
-    const first4Characters = rawInput.substring(0, 4);
-    const codeLength = rawInput.length;
-
-    await prisma.accessCodeLog.create({
-      data: {
-        ip: params.ip,
-        userId: params.userId,
-        attemptHash,
-        first4Characters,
-        codeLength,
-        success: params.success,
-      },
-    }).catch(() => {});
-
-    // Audit Log for security monitoring
-    await prisma.auditLog.create({
-      data: {
-        userId: params.userId,
-        action: params.success ? "ACCESS_CODE_REDEEMED" : "ACCESS_CODE_FAILED",
-        ip: params.ip,
-        metadata: JSON.stringify({
-          first4: first4Characters,
-          length: codeLength,
-          success: params.success,
-        }),
-      },
-    }).catch(() => {});
+    try {
+      if (!params.success) {
+        const key = `${params.ip}:${params.userId || ""}`;
+        const now = Date.now();
+        const timestamps = memoryRateLimitMap.get(key) || [];
+        timestamps.push(now);
+        memoryRateLimitMap.set(key, timestamps);
+      }
+    } catch {}
   }
 }
