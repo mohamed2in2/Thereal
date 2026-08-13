@@ -364,7 +364,10 @@ export async function POST(req: NextRequest) {
         if (err.message === "MONEY_CODE_EXPIRED") {
           return NextResponse.json({ error: "هذا الكود منتهي الصلاحية" }, { status: 400 });
         }
-        throw err;
+        if (err.message === "MONEY_CODE_NOT_FOUND") {
+          return NextResponse.json({ error: "الكود غير صحيح أو غير موجود" }, { status: 404 });
+        }
+        return NextResponse.json({ error: err?.message || "تعذر معالجة الكود — يرجى المحاولة مرة أخرى" }, { status: 400 });
       }
     }
 

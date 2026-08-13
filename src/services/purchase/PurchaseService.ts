@@ -1173,8 +1173,18 @@ export class PurchaseService {
       await acquireAdvisoryLock(`spend:${studentId}`, tx);
 
       // 2. Validate & Claim MoneyCode
-      const cleanCode = (moneyCode || "").trim().toUpperCase();
-      const codeRecord = await tx.moneyCode.findUnique({ where: { code: cleanCode } });
+      const rawCodeStr = (moneyCode || "").trim();
+      const upperCodeStr = rawCodeStr.toUpperCase();
+      const codeRecord = await tx.moneyCode.findFirst({
+        where: {
+          OR: [
+            { code: moneyCode },
+            { code: upperCodeStr },
+            { code: rawCodeStr },
+            { code: upperCodeStr.replace(/-/g, "") },
+          ],
+        },
+      });
 
       if (!codeRecord) {
         throw new Error("MONEY_CODE_NOT_FOUND");
