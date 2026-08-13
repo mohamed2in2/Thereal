@@ -865,7 +865,7 @@ export class PurchaseService {
     if (params.tx) {
       return runInTx(params.tx);
     }
-    return prisma.$transaction(runInTx);
+    return prisma.$transaction(runInTx, { timeout: 60000 });
   }
 
   // ────────────────────────────────────────────────────────────────────────────
@@ -873,12 +873,13 @@ export class PurchaseService {
   // ────────────────────────────────────────────────────────────────────────────
   static async purchaseTeacherSubscription(params: TeacherSubscriptionPurchaseParams): Promise<PurchaseResult> {
     const { studentId, teacherId, planType, languageTrack, studentGrade, discountCode, paymentMethod = "wallet_balance" } = params;
+    const db = params.tx || prisma;
 
     if (teacherId === studentId) {
       return { success: false, error: "لا يمكنك الاشتراك في حسابك الخاص" };
     }
 
-    const teacherUser = await prisma.user.findUnique({
+    const teacherUser = await db.user.findUnique({
       where: { id: teacherId },
       select: { id: true, role: true, isActive: true, isDeleted: true },
     });
@@ -892,10 +893,6 @@ export class PurchaseService {
       return { success: false, error: "نوع الباقة غير صحيح" };
     }
 
-    // Authoritative price computation. studentId is passed so the verifier can
-    // resolve the pricing grade from the student's own profile rather than
-    // trusting the caller-supplied `studentGrade` — that value is a price
-    // control (it selects the TeacherProfile.stagePricing tier).
     const priceResult = await verifyAuthoritativePrice({
       amount: 999999,
       teacherId,
@@ -937,7 +934,7 @@ export class PurchaseService {
     const months = monthsMap[planType] || 1;
     const isLanguages = languageTrack === "languages" || languageTrack === "english";
 
-    const profile = await prisma.teacherProfile.findUnique({
+    const profile = await db.teacherProfile.findUnique({
       where: { teacherId },
       select: { displayName: true, slug: true },
     });
@@ -1321,7 +1318,7 @@ export class PurchaseService {
           purchaseResult?.error ||
           `تم إضافة ${codeRecord.amount} جنيه إلى محفظتك. رصيدك الحالي (${currentBalance} ج) غير كافٍ لإتمام الشراء.${missing ? ` تحتاج إلى ${missing} ج إضافية.` : ""}`,
       };
-    });
+    }, { maxWait: 15000, timeout: 60000 });
   }
 
   // ────────────────────────────────────────────────────────────────────────────
