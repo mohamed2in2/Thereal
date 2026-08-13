@@ -26,20 +26,14 @@ export async function register() {
           console.log(`⏰ Leaderboard cache already populated. Last updated at: ${cache.updatedAt.toISOString()}`);
         }
 
-        // Auto-update teacher profiles to 180/750/1200 pricing
-        await prisma.teacherProfile.updateMany({
-          where: {
-            OR: [
-              { priceMonthly: 200 },
-              { priceTermly: 600 },
-            ],
-          },
-          data: {
-            priceMonthly: 180,
-            priceTermly: 750,
-            priceYearly: 1200,
-          },
-        }).catch(() => {});
+        // The legacy 200/600 -> 180/750/1200 teacher-pricing backfill that used
+        // to run here has moved to migration 20260813000002_backfill_teacher_pricing.
+        //
+        // It ran on *every* boot, in *every* PM2 worker, and rewrote all three
+        // price columns for any profile matching the old values — so a teacher
+        // who deliberately priced at 200 had their monthly, termly and yearly
+        // prices silently reset on the next restart. Schema defaults are already
+        // 180/750/1200, so no new profile can need it.
       } catch (err) {
         console.error("❌ Failed to perform initial leaderboard cache check/refresh:", err);
       }

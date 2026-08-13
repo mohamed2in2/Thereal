@@ -26,6 +26,17 @@ export interface RecaptchaResult {
 }
 
 /**
+ * Whether reCAPTCHA is actually armed on this deployment.
+ *
+ * Callers use this to decide whether a *missing* token is acceptable. Treating
+ * "no token supplied" as "no check needed" made the whole bot defence opt-in
+ * from the client's side: an attacker just omitted the field.
+ */
+export function isRecaptchaEnforced(): boolean {
+  return process.env.RECAPTCHA_BYPASS !== "true" && !!process.env.RECAPTCHA_API_KEY;
+}
+
+/**
  * Verify a reCAPTCHA Enterprise token on the server.
  *
  * @param token        The token produced by grecaptcha.enterprise.execute()

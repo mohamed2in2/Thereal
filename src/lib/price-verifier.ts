@@ -36,7 +36,6 @@ export async function verifyAuthoritativePrice(params: {
     amount,
     teacherId,
     planType,
-    grade,
     languageTrack,
     courseId,
     folderId,
@@ -46,6 +45,9 @@ export async function verifyAuthoritativePrice(params: {
     studentId,
     paymentMethod,
   } = params;
+
+  // Reassigned below for teacher subscriptions from the student's own profile.
+  let grade = params.grade;
 
   let basePrice = 0;
   let itemName = "شحن رصيد المحفظة";
@@ -59,6 +61,21 @@ export async function verifyAuthoritativePrice(params: {
     const validPlanTypes = ["monthly", "termly", "yearly"];
     if (!validPlanTypes.includes(planType)) {
       return { valid: false, expectedPrice: 0, itemName: "اشتراك معلم", error: "نوع باقة الاشتراك غير صالح" };
+    }
+
+    // The grade selects which tier of TeacherProfile.stagePricing applies, so a
+    // client-supplied grade is a price control. A student could name whichever
+    // stage was cheapest and be billed that while still receiving a subscription
+    // bound to their real stage. Resolve it from the student's own profile; the
+    // supplied value is only a fallback for profiles with no stage recorded yet.
+    if (studentId) {
+      const gradeOwner = await prisma.user.findUnique({
+        where: { id: studentId },
+        select: { educationalStage: true },
+      });
+      if (gradeOwner?.educationalStage) {
+        grade = gradeOwner.educationalStage;
+      }
     }
 
     const teacher = await prisma.user.findUnique({

@@ -4,9 +4,11 @@ import { OtpService } from "@/services/otp/OtpService";
 export async function POST(req: NextRequest) {
   try {
     const authHeader = req.headers.get("authorization");
-    const cronSecret = process.env.CRON_SECRET || "codeup_secret_cron";
+    // No default secret: the previous literal fallback shipped in the source
+    // tree, so anyone who read it could drain the WhatsApp OTP queue.
+    const cronSecret = process.env.CRON_SECRET;
 
-    if (authHeader !== `Bearer ${cronSecret}`) {
+    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
       return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
     }
 

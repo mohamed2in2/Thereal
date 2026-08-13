@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { SignJWT, jwtVerify } from "jose";
 import { isPhoneVerificationBypassed } from "@/lib/aws-sms";
 import { cookies } from "next/headers";
@@ -49,11 +49,31 @@ export interface SessionUser {
 
 type PhoneChallengePayload = {
   phone: string;
-  codeHash?: string;
+  /** Opaque id of the PhoneVerificationChallenge row holding the real hash. */
+  cid?: string;
   method?: string;
   iat?: number;
   exp?: number;
 };
+
+/** Wrong codes accepted per challenge before it is burned. */
+const MAX_PHONE_CHALLENGE_ATTEMPTS = 5;
+/** How long a phone challenge stays valid. Matches the cookie maxAge. */
+const PHONE_CHALLENGE_TTL_MS = 3 * 60 * 1000;
+
+/**
+ * Whether auth cookies should carry the Secure flag.
+ *
+ * Defaults to on in production so the session cookie is never sent over plain
+ * HTTP. `SECURE_COOKIES=false` remains available as an explicit opt-out for
+ * deployments that genuinely terminate on HTTP (previously the flag had to be
+ * opted *in*, which silently left production cookies non-Secure).
+ */
+function isSecureCookieContext() {
+  if (process.env.SECURE_COOKIES === "true") return true;
+  if (process.env.SECURE_COOKIES === "false") return false;
+  return process.env.NODE_ENV === "production";
+}
 
 export async function signToken(payload: Omit<JWTPayload, "iat" | "exp">) {
   const days = await getConfigNumberClamped("jwt_expiry_days", 1, 365); // was 7d; never 0/NaN
@@ -76,7 +96,7 @@ export async function verifyToken(token: string): Promise<JWTPayload | null> {
 export async function setAuthCookie(token: string) {
   const cookieStore = await cookies();
   const days = await getConfigNumberClamped("jwt_expiry_days", 1, 365); // matches the JWT expiry
-  const isSecure = process.env.NODE_ENV === "production" && process.env.SECURE_COOKIES === "true";
+  const isSecure = isSecureCookieContext();
   cookieStore.set(AUTH_COOKIE_NAME, token, {
     httpOnly: true,
     secure: isSecure,
@@ -91,14 +111,48 @@ export async function clearAuthCookie() {
   cookieStore.delete(AUTH_COOKIE_NAME);
 }
 
-function hashVerificationCode(code: string) {
-  return createHash("sha256").update(code).digest("hex");
+/**
+ * Keyed hash of a verification code, bound to the phone it was issued for.
+ *
+ * Keyed (HMAC) rather than a bare digest so that even a database read does not
+ * hand an attacker an offline-crackable value — a 6-digit code has only 9×10^5
+ * candidates, which a plain SHA-256 exhausts in milliseconds.
+ */
+function hashVerificationCode(phone: string, code: string) {
+  return createHmac("sha256", JWT_SECRET).update(`${phone}:${code}`).digest("hex");
 }
 
+function hashesEqual(a: string, b: string) {
+  const aBuf = Buffer.from(a, "utf8");
+  const bBuf = Buffer.from(b, "utf8");
+  if (aBuf.length !== bBuf.length) return false;
+  return timingSafeEqual(aBuf, bBuf);
+}
+
+/**
+ * Issues a phone-verification challenge.
+ *
+ * The code hash is persisted server-side; the returned token — which becomes a
+ * browser cookie — carries only the phone and an opaque challenge id. Handing
+ * the hash to the client would let anyone who can request a code for a victim's
+ * number recover that code offline and reset the victim's password.
+ */
 export async function createPhoneVerificationChallenge(phone: string, code?: string, method?: string) {
   const payload: Record<string, unknown> = { phone };
-  if (code) payload.codeHash = hashVerificationCode(code);
   if (method) payload.method = method;
+
+  if (code) {
+    const challenge = await prisma.phoneVerificationChallenge.create({
+      data: {
+        phone,
+        codeHash: hashVerificationCode(phone, code),
+        method: method ?? null,
+        expiresAt: new Date(Date.now() + PHONE_CHALLENGE_TTL_MS),
+      },
+      select: { id: true },
+    });
+    payload.cid = challenge.id;
+  }
 
   return new SignJWT(payload)
     .setProtectedHeader({ alg: "HS256" })
@@ -109,7 +163,7 @@ export async function createPhoneVerificationChallenge(phone: string, code?: str
 
 export async function setPhoneVerificationCookie(token: string) {
   const cookieStore = await cookies();
-  const isSecure = process.env.NODE_ENV === "production" && process.env.SECURE_COOKIES === "true";
+  const isSecure = isSecureCookieContext();
   cookieStore.set(PHONE_VERIFY_COOKIE_NAME, token, {
     httpOnly: true,
     secure: isSecure,
@@ -124,6 +178,13 @@ export async function clearPhoneVerificationCookie() {
   cookieStore.delete(PHONE_VERIFY_COOKIE_NAME);
 }
 
+/**
+ * Verifies a submitted code against the server-side challenge.
+ *
+ * A correct code consumes the challenge (single use); a wrong one burns an
+ * attempt. After MAX_PHONE_CHALLENGE_ATTEMPTS the challenge is dead, so the
+ * 6-digit code space cannot be walked online either.
+ */
 export async function verifyPhoneVerificationCookie(phone: string, code: string) {
   const cookieStore = await cookies();
   const token = cookieStore.get(PHONE_VERIFY_COOKIE_NAME)?.value;
@@ -143,9 +204,34 @@ export async function verifyPhoneVerificationCookie(phone: string, code: string)
       return true;
     }
 
-    if (!challenge.codeHash) return false;
-    const codeHash = hashVerificationCode(code.trim());
-    return challenge.codeHash === codeHash;
+    if (!challenge.cid) return false;
+
+    const row = await prisma.phoneVerificationChallenge.findUnique({
+      where: { id: challenge.cid },
+    });
+
+    if (!row) return false;
+    if (row.phone !== normalizedPhone) return false;
+    if (row.consumedAt) return false;
+    if (row.expiresAt < new Date()) return false;
+    if (row.attempts >= MAX_PHONE_CHALLENGE_ATTEMPTS) return false;
+
+    const submittedHash = hashVerificationCode(normalizedPhone, String(code).trim());
+
+    if (!hashesEqual(row.codeHash, submittedHash)) {
+      await prisma.phoneVerificationChallenge
+        .update({ where: { id: row.id }, data: { attempts: { increment: 1 } } })
+        .catch(() => {});
+      return false;
+    }
+
+    // Single-use: only the first concurrent caller may consume the challenge.
+    const consumed = await prisma.phoneVerificationChallenge.updateMany({
+      where: { id: row.id, consumedAt: null },
+      data: { consumedAt: new Date() },
+    });
+
+    return consumed.count === 1;
   } catch {
     return false;
   }

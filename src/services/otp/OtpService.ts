@@ -1,3 +1,4 @@
+import { randomInt } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { OtpQuotaManager, OtpActionCategory } from "./OtpQuotaManager";
 import { sendVerificationSms } from "@/lib/aws-sms";
@@ -40,8 +41,11 @@ export class OtpService {
     // 1. Reserve quota slot atomically
     const quotaRes = await OtpQuotaManager.reserveQuota(actionCategory);
 
-    // Generate random 6-digit OTP code
-    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    // Generate random 6-digit OTP code.
+    // randomInt (CSPRNG) rather than Math.random: V8's PRNG state is
+    // recoverable from a handful of outputs, and an attacker can mint outputs
+    // at will by requesting codes.
+    const otpCode = String(100000 + randomInt(900000));
 
     if (quotaRes.allowed) {
       // Quota available -> Send WhatsApp OTP immediately

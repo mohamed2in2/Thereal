@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { validateParentToken, hashToken } from "@/lib/whatsapp/parentToken";
 import { parentRateLimiter } from "@/lib/whatsapp/parentRateLimiter";
 import { whatsappOrchestrator } from "@/lib/whatsapp/orchestrator";
+import { averagePercent, examResultPercent, quizResultPercent } from "@/lib/scoring";
 
 function maskPhone(phone: string | null): string {
   if (!phone) return "••••";
@@ -96,20 +97,11 @@ export async function GET(req: NextRequest) {
     const validQuizResults = quizResults.filter((q) => typeof q.totalQ === "number" && q.totalQ > 0);
     const validExamResults = dailyExamResults.filter((e) => typeof e.totalQ === "number" && e.totalQ > 0);
 
-    let totalScoreSum = 0;
-    let totalMaxSum = 0;
-
-    validQuizResults.forEach((q) => {
-      totalScoreSum += q.score;
-      totalMaxSum += q.totalQ;
-    });
-
-    validExamResults.forEach((e) => {
-      totalScoreSum += e.score;
-      totalMaxSum += e.totalQ;
-    });
-
-    const overallAveragePercent = totalMaxSum > 0 ? Math.round((totalScoreSum / totalMaxSum) * 100) : null;
+    // QuizResult.score is already a percentage while DailyExamResult.score is a
+    // raw correct-count, so the previous "sum scores / sum totalQ" mixed units:
+    // a quiz scored 85 with 3 questions contributed 85/3 = 2833%, which made
+    // every student read as ممتاز regardless of how they were actually doing.
+    const overallAveragePercent = averagePercent(validQuizResults, validExamResults);
 
     let overallStatusBadge: { label: string; color: string; text: string } | null = null;
     if (overallAveragePercent !== null) {
@@ -127,20 +119,23 @@ export async function GET(req: NextRequest) {
 
     const recentExams = [
       ...validQuizResults.map((q) => {
-        const max = q.totalQ;
-        const pct = Math.round((q.score / max) * 100);
+        const pct = Math.round(quizResultPercent(q));
         return {
           title: q.quiz?.title || "اختبار تفاعلي",
-          score: q.score,
-          maxScore: max,
+          // Reported out of 100 because the stored score is a percentage;
+          // showing it out of totalQ (the question count) implied 85/3.
+          score: pct,
+          maxScore: 100,
           percent: pct,
           status: pct >= 85 ? "🟢" : pct >= 65 ? "🟡" : "🔴",
           date: q.completedAt.toISOString().split("T")[0],
         };
       }),
       ...validExamResults.map((e) => {
+        // Correct as written — DailyExamResult.score IS a raw correct-count, so
+        // dividing by totalQ is right here even though it was wrong for quizzes.
         const max = e.totalQ;
-        const pct = Math.round((e.score / max) * 100);
+        const pct = Math.round(examResultPercent(e));
         return {
           title: e.exam?.title || "امتحان لوحة الشرف",
           score: e.score,

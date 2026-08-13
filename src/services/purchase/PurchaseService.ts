@@ -892,13 +892,17 @@ export class PurchaseService {
       return { success: false, error: "نوع الباقة غير صحيح" };
     }
 
-    // Authoritative price computation
+    // Authoritative price computation. studentId is passed so the verifier can
+    // resolve the pricing grade from the student's own profile rather than
+    // trusting the caller-supplied `studentGrade` — that value is a price
+    // control (it selects the TeacherProfile.stagePricing tier).
     const priceResult = await verifyAuthoritativePrice({
       amount: 999999,
       teacherId,
       planType,
       grade: studentGrade,
       languageTrack,
+      studentId,
     });
 
     if (!priceResult.valid || !priceResult.expectedPrice) {

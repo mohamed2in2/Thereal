@@ -18,9 +18,28 @@ export interface AlaslyPlaybackResult {
   title?: string;
 }
 
+/**
+ * Reads the Alasly API credentials.
+ *
+ * These used to fall back to literals committed in this file. A checked-in key
+ * is a published key, and it grants playback-token minting for the whole video
+ * library — so credentials now come from the environment or not at all.
+ */
+function alaslyCredentials(): { apiKey: string; apiSecret: string } {
+  const apiKey = (process.env.ALASLY_API_KEY || "").trim();
+  const apiSecret = (process.env.ALASLY_API_SECRET || "").trim();
+
+  if (!apiKey || !apiSecret) {
+    throw new Error(
+      "ALASLY_API_KEY / ALASLY_API_SECRET are not configured — refusing to resolve Native video playback."
+    );
+  }
+
+  return { apiKey, apiSecret };
+}
+
 export async function getAlaslyPlaybackToken(lessonId: string, domain?: string): Promise<AlaslyPlaybackResult> {
-  const apiKey = (process.env.ALASLY_API_KEY || "alk_06a5ofogdqo11inzwoqn186jukk0bh7o").trim();
-  const apiSecret = (process.env.ALASLY_API_SECRET || "als_ga4xg1zjs8h94ksv4rgbrc6yb4cjngf4pl0u7evxc106k7lq").trim();
+  const { apiKey, apiSecret } = alaslyCredentials();
 
   if (!lessonId) {
     throw new Error("Native/Alasly Video ID is required");
@@ -68,8 +87,11 @@ export async function getAlaslyPlaybackToken(lessonId: string, domain?: string):
 
     const json = await res.json().catch(() => ({}));
 
-    if (res.ok && (json.token || json.embed_url || json.ok)) {
-      const token = json.token || json.playback_token || "";
+    // A response is only usable if it actually carries a playback token; an
+    // `ok:true` with no token would otherwise fall through to a tokenless
+    // embed URL that never expires.
+    if (res.ok && (json.token || json.playback_token)) {
+      const token = json.token || json.playback_token;
       let embedUrl = json.embed_url || `https://alasly.lovable.app/embed/lesson/${lessonId}?key=${token}`;
 
       // Fix iframe parameter: change api_key= to key= if returned by endpoint
@@ -107,17 +129,19 @@ export async function getAlaslyPlaybackToken(lessonId: string, domain?: string):
     cache: "no-store",
   });
 
-  const legacyJson = await legacyRes.json();
+  const legacyJson = await legacyRes.json().catch(() => ({}));
 
-  if (!legacyRes.ok || !legacyJson.ok) {
-    console.warn("[Native Video] External playback token endpoint returned error, using resilient fallback embed URL:", legacyJson?.error || legacyRes.status);
-    return {
-      token: "resilient_local_token",
-      expiresInSeconds: 86400,
-      expiresAt: new Date(Date.now() + 86400 * 1000).toISOString(),
-      embedUrl: `https://alasly.lovable.app/embed/lesson/${encodeURIComponent(lessonId)}`,
-      title: "Native Video",
-    };
+  if (!legacyRes.ok || !legacyJson.ok || !legacyJson.token) {
+    // Fail closed. The previous "resilient fallback" returned a *tokenless*
+    // provider embed URL, which turns any provider outage into a permanent,
+    // shareable, un-revocable link to the lesson — the exact leak the playback
+    // token exists to prevent. A failed playback is the safe outcome here.
+    console.error(
+      "[Native Video] Playback token could not be minted for lesson %s: %s",
+      lessonId,
+      legacyJson?.error || legacyRes.status
+    );
+    throw new Error("Native video playback is temporarily unavailable");
   }
 
   let embedUrl = legacyJson.embed_url || `https://alasly.lovable.app/embed/lesson/${lessonId}?key=${legacyJson.token}`;
@@ -148,8 +172,7 @@ export interface AlaslyUploadCompleteResult {
 }
 
 export async function initAlaslyUpload(filename: string, contentType: string, fileSize?: number): Promise<AlaslyUploadInitResult> {
-  const apiKey = (process.env.ALASLY_API_KEY || "alk_06a5ofogdqo11inzwoqn186jukk0bh7o").trim();
-  const apiSecret = (process.env.ALASLY_API_SECRET || "als_ga4xg1zjs8h94ksv4rgbrc6yb4cjngf4pl0u7evxc106k7lq").trim();
+  const { apiKey, apiSecret } = alaslyCredentials();
 
   const timestamp = Math.floor(Date.now() / 1000).toString();
   const body = JSON.stringify({
@@ -195,8 +218,7 @@ export async function initAlaslyUpload(filename: string, contentType: string, fi
 }
 
 export async function completeAlaslyUpload(assetId: string): Promise<AlaslyUploadCompleteResult> {
-  const apiKey = (process.env.ALASLY_API_KEY || "alk_06a5ofogdqo11inzwoqn186jukk0bh7o").trim();
-  const apiSecret = (process.env.ALASLY_API_SECRET || "als_ga4xg1zjs8h94ksv4rgbrc6yb4cjngf4pl0u7evxc106k7lq").trim();
+  const { apiKey, apiSecret } = alaslyCredentials();
 
   const timestamp = Math.floor(Date.now() / 1000).toString();
   const body = JSON.stringify({

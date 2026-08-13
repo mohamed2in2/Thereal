@@ -1,4 +1,5 @@
 import { prisma } from "./prisma";
+import { quizResultPercent } from "./scoring";
 
 function clampPercentage(value: number): number {
   if (!Number.isFinite(value)) return 0;
@@ -340,10 +341,12 @@ export async function buildTeacherContext(teacherId: string): Promise<TeacherCon
     const allResults = course.folders.flatMap((f: typeof course.folders[number]) =>
       f.quizzes.flatMap((q) => q.results)
     );
+    // QuizResult.score is already a percentage — see src/lib/scoring.ts. The
+    // previous division by totalQ fed the AI averages of several hundred
+    // percent, so any reasoning it did about performance was built on nonsense.
     const avgScore =
       allResults.length > 0
-        ? allResults.reduce((sum, r) => sum + (r.totalQ && r.totalQ > 0 ? r.score / r.totalQ : 0) * 100, 0) /
-          allResults.length
+        ? allResults.reduce((sum, r) => sum + quizResultPercent(r), 0) / allResults.length
         : 0;
 
     return {

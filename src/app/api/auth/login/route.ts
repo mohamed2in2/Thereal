@@ -5,7 +5,13 @@ import { signToken, setAuthCookie } from "@/lib/auth";
 import { normalizeEgyptPhone } from "@/lib/phone";
 import { readDeviceId, setDeviceCookie, deviceLabelFromUA } from "@/lib/devices";
 import { getStudentMaxDevices } from "@/lib/settings";
-import { verifyRecaptchaToken } from "@/lib/recaptcha";
+import {
+  clearFailedLogins,
+  enforceCaptcha,
+  getLockoutState,
+  lockoutResponseBody,
+  recordFailedLogin,
+} from "@/lib/login-guard";
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,12 +19,9 @@ export async function POST(req: NextRequest) {
     const { phone, password, recaptchaToken } = body;
 
     // ── reCAPTCHA Enterprise verification ──────────────────────────────────────
-    if (recaptchaToken) {
-      const captcha = await verifyRecaptchaToken(recaptchaToken, "login");
-      if (!captcha.success) {
-        console.warn("[reCAPTCHA] Login blocked — score:", captcha.score, "reasons:", captcha.reasons);
-        return NextResponse.json({ error: "تم اكتشاف نشاط مشبوه. يرجى المحاولة مرة أخرى." }, { status: 403 });
-      }
+    const captchaGate = await enforceCaptcha(recaptchaToken, "login");
+    if (!captchaGate.ok) {
+      return NextResponse.json({ error: captchaGate.error }, { status: captchaGate.status });
     }
 
     if (!phone || !password) {
@@ -36,14 +39,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "بيانات الدخول غير صحيحة" }, { status: 401 });
     }
 
+    // Lockout is checked before the bcrypt compare so a locked account also
+    // stops burning CPU on attacker-supplied passwords.
+    const lockout = getLockoutState(user);
+    if (lockout.locked) {
+      return NextResponse.json(lockoutResponseBody(lockout.retryAfterSeconds), { status: 429 });
+    }
+
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) {
+      await recordFailedLogin(user.id);
       return NextResponse.json({ error: "بيانات الدخول غير صحيحة" }, { status: 401 });
     }
 
     if (user.role !== "student") {
       return NextResponse.json({ error: "استخدم لوحة الإدارة لتسجيل الدخول" }, { status: 403 });
     }
+
+    await clearFailedLogins(user.id);
 
     // ── Device lock: bind the account to a limited number of devices ──────────
     const { deviceId, isNew } = await readDeviceId();

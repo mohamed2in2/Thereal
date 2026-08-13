@@ -5,6 +5,7 @@ import { isPhoneVerificationBypassed } from "@/lib/aws-sms";
 import { generateVerificationCode, sendVerificationCode } from "@/lib/whatsapp";
 import { createPhoneVerificationChallenge, setPhoneVerificationCookie } from "@/lib/auth";
 import { checkCooldown } from "@/lib/cooldown";
+import { OtpQuotaManager } from "@/services/otp/OtpQuotaManager";
 
 export async function POST(req: NextRequest) {
   try {
@@ -42,11 +43,30 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Reserve a slot from the daily provider quota before spending it. This
+    // path previously skipped OtpQuotaManager entirely, so password-reset
+    // traffic could exhaust the WhatsApp allowance with no accounting.
+    const quota = await OtpQuotaManager.reserveQuota("PASSWORD_RESET");
+    if (!quota.allowed) {
+      return NextResponse.json(
+        { error: "تم بلوغ الحد اليومي لرسائل التحقق. يرجى المحاولة غداً أو التواصل مع الدعم." },
+        { status: 429 }
+      );
+    }
+
     // Generate code and send via requested channel (or WhatsApp with SMS fallback)
     const code = generateVerificationCode();
-    const result = await sendVerificationCode(normalized, code, forceChannel === "sms" ? "sms" : undefined);
+    let result;
+    try {
+      result = await sendVerificationCode(normalized, code, forceChannel === "sms" ? "sms" : undefined);
+    } catch (sendErr) {
+      // Give the slot back — a consumed quota with no delivered message is the
+      // worst of both outcomes.
+      await OtpQuotaManager.releaseQuota("PASSWORD_RESET");
+      throw sendErr;
+    }
 
-    // Store the code hash in a secure HTTP-only cookie for verification
+    // Persist the challenge server-side and hand the browser only its id.
     const challengeToken = await createPhoneVerificationChallenge(normalized, code);
     await setPhoneVerificationCookie(challengeToken);
 

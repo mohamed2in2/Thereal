@@ -3,6 +3,7 @@ import { Navbar } from "@/components/ui/Navbar";
 import { Footer } from "@/components/ui/Footer";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { quizResultPercent } from "@/lib/scoring";
 import Link from "next/link";
 import { PrintButton } from "@/components/ui/PrintButton";
 import { 
@@ -214,7 +215,9 @@ export default async function ParentDashboardPage() {
               {student.quizResults.length > 0 ? (
                 <div className="space-y-6 relative z-10">
                   {student.quizResults.map((result) => {
-                    const percentage = Math.round((result.score / result.totalQ) * 100);
+                    // QuizResult.score is already a percentage; dividing by
+                    // totalQ (the question count) showed parents e.g. 2833%.
+                    const percentage = Math.round(quizResultPercent(result));
                     return (
                       <div key={result.id} className="group">
                         <div className="flex justify-between text-sm mb-2">

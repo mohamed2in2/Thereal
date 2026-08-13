@@ -5,7 +5,8 @@ import { isPhoneVerificationBypassed } from "@/lib/aws-sms";
 import { generateVerificationCode, sendVerificationCode } from "@/lib/whatsapp";
 import { createPhoneVerificationChallenge, setPhoneVerificationCookie } from "@/lib/auth";
 import { checkCooldown } from "@/lib/cooldown";
-import { verifyRecaptchaToken } from "@/lib/recaptcha";
+import { OtpQuotaManager } from "@/services/otp/OtpQuotaManager";
+import { enforceCaptcha } from "@/lib/login-guard";
 
 export async function POST(req: NextRequest) {
   try {
@@ -15,12 +16,11 @@ export async function POST(req: NextRequest) {
     }
 
     // ── reCAPTCHA Enterprise verification ──────────────────────────────────────
-    if (recaptchaToken) {
-      const captcha = await verifyRecaptchaToken(recaptchaToken, "send_code");
-      if (!captcha.success) {
-        console.warn("[reCAPTCHA] send-code blocked — score:", captcha.score, "reasons:", captcha.reasons);
-        return NextResponse.json({ error: "تم اكتشاف نشاط مشبوه. يرجى المحاولة مرة أخرى." }, { status: 403 });
-      }
+    // Enforced even when the client omits the token — this endpoint spends real
+    // WhatsApp/SMS quota per call.
+    const captchaGate = await enforceCaptcha(recaptchaToken, "send_code");
+    if (!captchaGate.ok) {
+      return NextResponse.json({ error: captchaGate.error }, { status: captchaGate.status });
     }
 
     let normalizedPhone: string;
@@ -58,11 +58,26 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Signup OTPs draw on the same daily provider allowance as everything else.
+    const quota = await OtpQuotaManager.reserveQuota("SIGNUP");
+    if (!quota.allowed) {
+      return NextResponse.json(
+        { error: "تم بلوغ الحد اليومي لرسائل التحقق. يرجى المحاولة غداً." },
+        { status: 429 }
+      );
+    }
+
     // Generate code and send via requested channel (or WhatsApp with SMS fallback)
     const code = generateVerificationCode();
-    const result = await sendVerificationCode(normalizedPhone, code, forceChannel === "sms" ? "sms" : undefined);
+    let result;
+    try {
+      result = await sendVerificationCode(normalizedPhone, code, forceChannel === "sms" ? "sms" : undefined);
+    } catch (sendErr) {
+      await OtpQuotaManager.releaseQuota("SIGNUP");
+      throw sendErr;
+    }
 
-    // Store the code hash in a secure HTTP-only cookie for verification
+    // Persist the challenge server-side and hand the browser only its id.
     const challengeToken = await createPhoneVerificationChallenge(normalizedPhone, code);
     await setPhoneVerificationCookie(challengeToken);
 

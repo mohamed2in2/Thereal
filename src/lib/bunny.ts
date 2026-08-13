@@ -5,8 +5,17 @@
  */
 
 const BUNNY_API_KEY = process.env.BUNNY_API_KEY ?? "";
-const BUNNY_LIBRARY_ID = process.env.BUNNY_LIBRARY_ID ?? "";
-const BUNNY_TOKEN_KEY = process.env.BUNNY_TOKEN_AUTHENTICATION_KEY ?? "";
+// `||` not `??`: .env.example ships these keys as empty strings, and `??` would
+// stop at "" instead of trying the next name.
+const BUNNY_LIBRARY_ID = process.env.BUNNY_LIBRARY_ID || process.env.BUNNY_STREAM_LIBRARY_ID || "";
+// The documented env names are BUNNY_TOKEN_KEY / BUNNY_STREAM_TOKEN_AUTH_KEY;
+// only BUNNY_TOKEN_AUTHENTICATION_KEY was read, so a correctly configured
+// deployment still fell through to *unsigned* embed URLs. Accept all three.
+const BUNNY_TOKEN_KEY =
+  process.env.BUNNY_TOKEN_AUTHENTICATION_KEY ||
+  process.env.BUNNY_TOKEN_KEY ||
+  process.env.BUNNY_STREAM_TOKEN_AUTH_KEY ||
+  "";
 // Base pull zone hostname — e.g. "iframe.mediadelivery.net"
 const BUNNY_CDN_HOSTNAME = process.env.BUNNY_CDN_HOSTNAME ?? "iframe.mediadelivery.net";
 

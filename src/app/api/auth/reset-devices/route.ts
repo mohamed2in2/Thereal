@@ -4,18 +4,22 @@ import bcrypt from "bcryptjs";
 import { signToken, setAuthCookie } from "@/lib/auth";
 import { normalizeEgyptPhone } from "@/lib/phone";
 import { readDeviceId, setDeviceCookie, deviceLabelFromUA } from "@/lib/devices";
-import { verifyRecaptchaToken } from "@/lib/recaptcha";
+import {
+  clearFailedLogins,
+  enforceCaptcha,
+  getLockoutState,
+  lockoutResponseBody,
+  recordFailedLogin,
+} from "@/lib/login-guard";
 
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json().catch(() => ({}))) as { phone?: string; password?: string; recaptchaToken?: string };
     const { phone, password, recaptchaToken } = body;
 
-    if (recaptchaToken) {
-      const captcha = await verifyRecaptchaToken(recaptchaToken, "login");
-      if (!captcha.success) {
-        return NextResponse.json({ error: "تم اكتشاف نشاط مشبوه. يرجى المحاولة مرة أخرى." }, { status: 403 });
-      }
+    const captchaGate = await enforceCaptcha(recaptchaToken, "login");
+    if (!captchaGate.ok) {
+      return NextResponse.json({ error: captchaGate.error }, { status: captchaGate.status });
     }
 
     if (!phone || !password) {
@@ -28,14 +32,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "بيانات الدخول غير صحيحة" }, { status: 401 });
     }
 
+    // This endpoint wipes every registered device, so it is at least as
+    // sensitive as login and gets the same lockout.
+    const lockout = getLockoutState(user);
+    if (lockout.locked) {
+      return NextResponse.json(lockoutResponseBody(lockout.retryAfterSeconds), { status: 429 });
+    }
+
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) {
+      await recordFailedLogin(user.id);
       return NextResponse.json({ error: "بيانات الدخول غير صحيحة" }, { status: 401 });
     }
 
     if (user.role !== "student") {
       return NextResponse.json({ error: "استخدم لوحة الإدارة لتسجيل الدخول" }, { status: 403 });
     }
+
+    await clearFailedLogins(user.id);
 
     // Remove all old registered devices for this user
     await prisma.device.deleteMany({ where: { userId: user.id } });

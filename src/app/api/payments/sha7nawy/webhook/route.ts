@@ -8,6 +8,7 @@ import {
   sha7nawyRefNote,
 } from "@/lib/sha7nawy";
 import { fulfillPendingItemPurchase } from "@/lib/fulfillment";
+import { secretsMatch } from "@/lib/secret-compare";
 
 export async function POST(req: NextRequest) {
   try {
@@ -19,7 +20,7 @@ export async function POST(req: NextRequest) {
     const incomingSecret =
       req.headers.get("x-webhook-secret") ||
       req.headers.get("x-sha7nawy-secret");
-    if (!incomingSecret || incomingSecret !== webhookSecret) {
+    if (!secretsMatch(incomingSecret, webhookSecret)) {
       const ip = req.headers.get("x-forwarded-for")?.split(",")[0] || req.headers.get("x-real-ip") || "127.0.0.1";
       console.warn(`[Sha7nawy Webhook] Unauthorized secret attempt from IP: ${ip}`);
       return NextResponse.json({ error: "Unauthorized webhook caller" }, { status: 401 });

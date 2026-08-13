@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { checkVideoAccess } from "@/lib/authorization";
 import fs from "fs";
 import path from "path";
 
@@ -15,6 +17,26 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const { id } = await params;
     // Sanitize filename to prevent directory traversal
     const safeFilename = path.basename(id);
+
+    // ── Authorization ────────────────────────────────────────────────────────
+    // The path segment is a *provider asset id*, not a Video row id, so resolve
+    // the owning lesson first. Without this, any logged-in account could stream
+    // any uploaded lesson simply by naming its file — enrollment, purchase and
+    // plan gating were all bypassed for locally hosted video.
+    const video = await prisma.video.findFirst({
+      where: { OR: [{ providerVideoId: safeFilename }, { vdoCipherId: safeFilename }] },
+      select: { id: true },
+    });
+
+    if (!video) {
+      return NextResponse.json({ error: "الفيديو غير موجود" }, { status: 404 });
+    }
+
+    const hasAccess = await checkVideoAccess(session.id, session.role, video.id);
+    if (!hasAccess) {
+      return NextResponse.json({ error: "لا يوجد صلاحية للوصول لهذا الفيديو" }, { status: 403 });
+    }
+
     const filePath = path.join(UPLOAD_DIR, safeFilename);
 
     if (!fs.existsSync(filePath)) {
@@ -33,8 +55,19 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     if (range) {
       const parts = range.replace(/bytes=/, "").split("-");
-      const start = parseInt(parts[0], 10);
-      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+      // A malformed or out-of-bounds Range must not produce a negative-length
+      // read; clamp to the file and reject anything still nonsensical.
+      const start = Number.parseInt(parts[0], 10);
+      const requestedEnd = parts[1] ? Number.parseInt(parts[1], 10) : fileSize - 1;
+      const end = Math.min(Number.isNaN(requestedEnd) ? fileSize - 1 : requestedEnd, fileSize - 1);
+
+      if (Number.isNaN(start) || start < 0 || start > end) {
+        return new Response(null, {
+          status: 416,
+          headers: { "Content-Range": `bytes */${fileSize}` },
+        });
+      }
+
       const chunksize = end - start + 1;
       const fileStream = fs.createReadStream(filePath, { start, end });
 
@@ -46,7 +79,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         "Cache-Control": "no-store, private",
       });
 
-      return new Response(fileStream as any, {
+      // Node's ReadStream is accepted by undici at runtime but isn't typed as a
+      // web ReadableStream; the double cast is the impedance mismatch, not a
+      // suppressed type error.
+      return new Response(fileStream as unknown as ReadableStream, {
         status: 206,
         headers,
       });
@@ -59,12 +95,17 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       });
 
       const fileStream = fs.createReadStream(filePath);
-      return new Response(fileStream as any, {
+      // Node's ReadStream is accepted by undici at runtime but isn't typed as a
+      // web ReadableStream; the double cast is the impedance mismatch, not a
+      // suppressed type error.
+      return new Response(fileStream as unknown as ReadableStream, {
         status: 200,
         headers,
       });
     }
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || "فشل عرض الفيديو" }, { status: 500 });
+  } catch (error) {
+    // Never surface raw error text (it leaks absolute filesystem paths).
+    console.error("[videos/stream] error:", error);
+    return NextResponse.json({ error: "فشل عرض الفيديو" }, { status: 500 });
   }
 }

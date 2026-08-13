@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getStudentSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { quizResultPercent } from "@/lib/scoring";
 
 export async function GET() {
   const { getSession } = await import("@/lib/auth");
@@ -52,7 +53,9 @@ export async function GET() {
       courseId:    r.quiz.folder?.course?.id ?? 'plan',
       totalQ:      r.totalQ,
       score:       r.score,
-      pct:         Math.round((r.score / Math.max(r.totalQ, 1)) * 100),
+      // QuizResult.score is already a percentage — dividing by totalQ (the
+      // question count) reported e.g. 85/3 = 2833%. See src/lib/scoring.ts.
+      pct:         Math.round(quizResultPercent(r)),
       attempted,
       correct,
       hasAnswers:  r.answers.length > 0,

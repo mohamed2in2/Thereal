@@ -62,6 +62,20 @@ export async function sendVerificationSms(phone: string, code: string): Promise<
   }
 }
 
+/**
+ * Dev-only escape hatch that treats every phone as verified.
+ *
+ * Refused in production: with it on, `/api/auth/reset-password` accepts no code
+ * at all, so anyone could reset any account by phone number alone.
+ */
 export function isPhoneVerificationBypassed() {
-  return process.env.BYPASS_PHONE_VERIFICATION === "true";
+  if (process.env.BYPASS_PHONE_VERIFICATION !== "true") return false;
+  if (process.env.NODE_ENV === "production") {
+    console.error(
+      "[security] BYPASS_PHONE_VERIFICATION is set in production and is being ignored — " +
+        "it would allow password reset without an OTP. Remove it from the environment."
+    );
+    return false;
+  }
+  return true;
 }

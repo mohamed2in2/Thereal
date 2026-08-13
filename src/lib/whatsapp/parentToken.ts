@@ -43,10 +43,17 @@ export function isValidEgyptianMobile(phone: string): boolean {
 }
 
 /**
- * Gets or creates a permanent 365-day Parent Portal token for a student
- * Returns { rawToken, parentToken }
+ * Gets or creates a permanent 365-day Parent Portal token for a student.
+ *
+ * `rawToken` is null when an existing, still-valid token was reused — the raw
+ * value is unrecoverable by design (only its hash is stored), so callers that
+ * need a sendable URL must pass `regenerate: true` and accept that any link
+ * already in the parent's hands stops working.
  */
-export async function getOrCreateParentToken(studentId: string, options?: { regenerate?: boolean }) {
+export async function getOrCreateParentToken(
+  studentId: string,
+  options?: { regenerate?: boolean }
+): Promise<{ rawToken: string | null; parentToken: Awaited<ReturnType<typeof prisma.parentToken.create>> }> {
   let existing = await prisma.parentToken.findUnique({
     where: { studentId },
   });
@@ -58,14 +65,13 @@ export async function getOrCreateParentToken(studentId: string, options?: { rege
   expiresAt.setDate(expiresAt.getDate() + TOKEN_EXPIRY_DAYS);
 
   if (existing && existing.expiresAt > now && !options?.regenerate) {
-    existing = await prisma.parentToken.update({
-      where: { studentId },
-      data: {
-        tokenHash,
-        updatedAt: now,
-      },
-    });
-    return { rawToken, parentToken: existing };
+    // Reuse, don't rotate. Overwriting tokenHash here killed the link already
+    // sent to the parent while returning a fresh raw token that callers such as
+    // maybeAutoSendParentPortalLink then decline to send (because sentAt is
+    // set) — leaving the parent with a dead URL and no replacement. Callers that
+    // genuinely want a new link pass regenerate:true or use
+    // regenerateParentToken().
+    return { rawToken: null, parentToken: existing };
   }
 
   if (existing) {
@@ -450,10 +456,17 @@ export async function maybeAutoSendParentPortalLink(studentId: string) {
 
     if (!student || !student.parentPhone) return null;
 
-    const { rawToken, parentToken } = await getOrCreateParentToken(studentId);
+    const existingToken = await prisma.parentToken.findUnique({
+      where: { studentId },
+      select: { sentAt: true },
+    });
 
     // Ensure it is ONLY sent ONCE automatically
-    if (parentToken.sentAt) return null;
+    if (existingToken?.sentAt) return null;
+
+    // Nothing has been delivered yet, so minting a fresh raw token here cannot
+    // orphan a link the parent already holds.
+    const { rawToken, parentToken } = await getOrCreateParentToken(studentId, { regenerate: true });
 
     const portalUrl = `${getAppBaseUrl()}/p/${rawToken}`;
 

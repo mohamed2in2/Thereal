@@ -38,6 +38,10 @@ model User {
   balance             Float                    @default(0)
   isVerified          Boolean                  @default(false)
   verificationStatus  String                   @default("UNVERIFIED") // "VERIFIED" | "WAITING_FOR_OTP" | "UNVERIFIED"
+  // Credential-stuffing guard. Enforces the existing `max_login_attempts` /
+  // `lockout_minutes` platform config, which previously had no effect.
+  failedLoginAttempts Int                      @default(0)
+  lockedUntil         DateTime?
   createdAt           DateTime                 @default(now())
   updatedAt           DateTime                 @updatedAt
   parentToken         ParentToken?
@@ -1353,7 +1357,68 @@ model TeacherReferralAttribution {
   @@index([createdAt])
 }
 
+/// Versioned thresholds for the Teacher Command Center.
+///
+/// Superadmin-editable, but never edited in place: changing a threshold inserts
+/// a new version and deactivates the previous one. Statuses themselves are
+/// derived live from authoritative data and are deliberately NOT stored, so
+/// there is no historical label to rewrite; the version exists so that anything
+/// which *does* get snapshotted later (or any figure a teacher acted on) can
+/// state which rules produced it.
+model TeacherAlertThresholds {
+  id      String  @id @default(cuid())
+  version Int     @unique
+  isActive Boolean @default(false)
+
+  /// Percent of expected curriculum/plan pace below which a student is "behind".
+  behindPacePercent Float @default(80)
+  /// Fallback only, when no expected schedule exists: percent of the peer median.
+  behindPeerPercent Float @default(50)
+
+  /// Drop in score points, versus the student's own prior average, that counts
+  /// as declining.
+  decliningDropPoints Float @default(15)
+  /// How many recent results form the comparison window.
+  decliningWindow Int @default(3)
+
+  /// Days without meaningful educational activity before a student is inactive.
+  inactiveDays Int @default(7)
+
+  /// Percent of incorrect attempts within one topic that counts as struggling.
+  strugglingWrongPercent Float @default(40)
+  /// Minimum attempts before the struggling rule is allowed to fire, so a
+  /// student who answered two questions is not flagged on noise.
+  strugglingMinAttempts Int @default(5)
+
+  note        String?
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@index([isActive])
+}
+
 // ── Security & OTP Infrastructure Models ────────────────────────────────────
+
+/// Server-side phone OTP challenge.
+///
+/// The verification code is low entropy (6 digits), so its hash must never
+/// reach the client — anyone holding the hash can recover the code offline in
+/// well under a second. The browser only carries an opaque challenge id; the
+/// keyed hash, the attempt counter and single-use consumption all live here.
+model PhoneVerificationChallenge {
+  id         String    @id @default(cuid())
+  phone      String
+  /// HMAC-SHA256(phone + code) keyed with JWT_SECRET — never leaves the server.
+  codeHash   String
+  method     String?
+  attempts   Int       @default(0)
+  consumedAt DateTime?
+  expiresAt  DateTime
+  createdAt  DateTime  @default(now())
+
+  @@index([phone, createdAt])
+  @@index([expiresAt])
+}
 
 /// Daily WhatsApp OTP Usage Quota Manager (Hard Limit: 250/24h)
 model OtpQuota {
