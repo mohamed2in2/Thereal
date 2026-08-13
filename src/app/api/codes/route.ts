@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { PurchaseService } from "@/services/purchase/PurchaseService";
-import { PurchaseType } from "@/services/discount/DiscountService";
+import { DiscountService, PurchaseType } from "@/services/discount/DiscountService";
 
 const ROLE_MESSAGES: Record<string, string> = {
   teacher: "حساب المعلم لا يمكنه تفعيل أكواد الكورسات — هذا الإجراء مخصص للمتعلمين فقط.",
@@ -43,12 +43,19 @@ export async function POST(req: NextRequest) {
     }
 
     const normalizedCode = String(code).trim().toUpperCase();
+    const rawCode = String(code).trim();
 
     // ────────────────────────────────────────────────────────────────────────
     // 1. Check Course / Folder / Video Access Code (Teacher or System Generated)
     // ────────────────────────────────────────────────────────────────────────
-    const accessCode = await prisma.accessCode.findUnique({
-      where: { code: normalizedCode },
+    const accessCode = await prisma.accessCode.findFirst({
+      where: {
+        OR: [
+          { code: normalizedCode },
+          { code: rawCode },
+          { code: normalizedCode.replace(/-/g, "") },
+        ],
+      },
       include: {
         course: {
           select: {
@@ -77,14 +84,33 @@ export async function POST(req: NextRequest) {
 
       try {
         const result = await prisma.$transaction(async (tx: any) => {
+          let alreadyEnrolledWhere: any = { studentId: session.id };
+          if (accessCode.accessType === "FOLDER" && accessCode.folderId) {
+            alreadyEnrolledWhere.folderId = accessCode.folderId;
+          } else if (accessCode.accessType === "VIDEO" && accessCode.videoId) {
+            alreadyEnrolledWhere.videoId = accessCode.videoId;
+          } else {
+            alreadyEnrolledWhere.courseId = accessCode.courseId;
+            alreadyEnrolledWhere.OR = [
+              { accessType: "TERM" },
+              { accessType: "COURSE" },
+              { folderId: null, videoId: null },
+            ];
+          }
+
           const alreadyEnrolled = await tx.accessCode.findFirst({
-            where: { courseId: accessCode.courseId, studentId: session.id },
+            where: alreadyEnrolledWhere,
           });
+
           if (alreadyEnrolled) {
             return {
               alreadyEnrolled: true,
               courseId: accessCode.courseId,
-              message: "أنت مسجل بالفعل في هذا الكورس",
+              message: accessCode.accessType === "FOLDER"
+                ? "أنت مسجل بالفعل في هذه المحاضرة"
+                : accessCode.accessType === "VIDEO"
+                ? "أنت مسجل بالفعل في هذا الدرس"
+                : "أنت مسجل بالفعل في هذا الكورس",
             };
           }
 
@@ -139,7 +165,15 @@ export async function POST(req: NextRequest) {
     // ────────────────────────────────────────────────────────────────────────
     // 2. Check Plan Access Code
     // ────────────────────────────────────────────────────────────────────────
-    const planCode = await prisma.planAccessCode.findUnique({ where: { code: normalizedCode } });
+    const planCode = await prisma.planAccessCode.findFirst({
+      where: {
+        OR: [
+          { code: normalizedCode },
+          { code: rawCode },
+          { code: normalizedCode.replace(/-/g, "") },
+        ],
+      },
+    });
     if (planCode) {
       if (planCode.usedById) {
         return NextResponse.json({ error: "هذا الكود مستخدم بالفعل" }, { status: 400 });
@@ -267,7 +301,15 @@ export async function POST(req: NextRequest) {
     // ────────────────────────────────────────────────────────────────────────
     // 3. Check Money Code (Prepaid Recharge Card)
     // ────────────────────────────────────────────────────────────────────────
-    const moneyCode = await prisma.moneyCode.findUnique({ where: { code: normalizedCode } });
+    const moneyCode = await prisma.moneyCode.findFirst({
+      where: {
+        OR: [
+          { code: normalizedCode },
+          { code: rawCode },
+          { code: normalizedCode.replace(/-/g, "") },
+        ],
+      },
+    });
     if (moneyCode) {
       if (moneyCode.isUsed) {
         return NextResponse.json({ error: "هذا الكود مستخدم بالفعل" }, { status: 400 });
@@ -300,7 +342,7 @@ export async function POST(req: NextRequest) {
       try {
         const combinedResult = await PurchaseService.processCombinedMoneyCodePurchase({
           studentId: session.id,
-          moneyCode: normalizedCode,
+          moneyCode: moneyCode.code,
           purchaseType,
           targetId,
           discountCode,
@@ -333,7 +375,10 @@ export async function POST(req: NextRequest) {
       where: {
         role: "teacher",
         promoProgramEnabled: true,
-        promoCode: normalizedCode,
+        OR: [
+          { promoCode: normalizedCode },
+          { promoCode: rawCode },
+        ],
       },
       select: { id: true, name: true, promoCode: true, promoCodeCreatedAt: true },
     });
@@ -375,10 +420,161 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // ────────────────────────────────────────────────────────────────────────
+    // 5. Check Discount Code (Coupon / Discount Voucher)
+    // ────────────────────────────────────────────────────────────────────────
+    const discountCodeRecord = await prisma.discountCode.findFirst({
+      where: {
+        OR: [
+          { code: normalizedCode },
+          { code: rawCode },
+        ],
+        isActive: true,
+      },
+    });
+
+    if (discountCodeRecord) {
+      const now = new Date();
+      if (discountCodeRecord.expiresAt && discountCodeRecord.expiresAt < now) {
+        return NextResponse.json({ error: "كود الخصم منتهي الصلاحية" }, { status: 400 });
+      }
+
+      let purchaseType: PurchaseType | undefined = undefined;
+      let targetId: string | undefined = undefined;
+
+      if (courseId) {
+        purchaseType = "COURSE";
+        targetId = courseId;
+      } else if (folderId) {
+        purchaseType = "FOLDER";
+        targetId = folderId;
+      } else if (videoId) {
+        purchaseType = "VIDEO";
+        targetId = videoId;
+      } else if (planId) {
+        purchaseType = "PLAN";
+        targetId = planId;
+      } else if (teacherId && planType) {
+        purchaseType = "TEACHER_SUB";
+        targetId = teacherId;
+      }
+
+      if (purchaseType && targetId) {
+        const { verifyAuthoritativePrice } = await import("@/lib/price-verifier");
+        const priceRes = await verifyAuthoritativePrice({
+          amount: 999999,
+          courseId,
+          folderId,
+          videoId,
+          planId,
+          teacherId,
+          planType,
+          grade,
+          languageTrack,
+          studentId: session.id,
+        });
+
+        if (!priceRes.valid || priceRes.expectedPrice === undefined) {
+          return NextResponse.json({ error: priceRes.error || "تعذر تحديد سعر المحتوى" }, { status: 400 });
+        }
+
+        const basePrice = priceRes.originalPrice ?? priceRes.expectedPrice;
+        const discountValidation = await DiscountService.validateDiscountCode({
+          code: discountCodeRecord.code,
+          studentId: session.id,
+          purchaseType,
+          targetId,
+          basePrice,
+        });
+
+        if (!discountValidation.valid || !discountValidation.pricing) {
+          return NextResponse.json({ error: discountValidation.error || "كود الخصم غير صالح لهذا المحتوى" }, { status: 400 });
+        }
+
+        const finalPrice = discountValidation.pricing.finalPrice;
+        const user = await prisma.user.findUnique({ where: { id: session.id }, select: { balance: true } });
+        const userBalance = user?.balance ?? 0;
+
+        if (finalPrice === 0 || userBalance >= finalPrice) {
+          let purchaseResult: any = null;
+          if (purchaseType === "COURSE") {
+            purchaseResult = await PurchaseService.purchaseCourse({
+              studentId: session.id,
+              courseId: targetId,
+              discountCode: discountCodeRecord.code,
+              promoCodeInput: promoCode,
+              paymentMethod: "wallet_balance",
+            });
+          } else if (purchaseType === "FOLDER") {
+            purchaseResult = await PurchaseService.purchaseFolder({
+              studentId: session.id,
+              folderId: targetId,
+              discountCode: discountCodeRecord.code,
+              promoCodeInput: promoCode,
+              paymentMethod: "wallet_balance",
+            });
+          } else if (purchaseType === "VIDEO") {
+            purchaseResult = await PurchaseService.purchaseVideo({
+              studentId: session.id,
+              videoId: targetId,
+              discountCode: discountCodeRecord.code,
+              promoCodeInput: promoCode,
+              paymentMethod: "wallet_balance",
+            });
+          } else if (purchaseType === "PLAN") {
+            purchaseResult = await PurchaseService.purchasePlan({
+              studentId: session.id,
+              planId: targetId,
+              discountCode: discountCodeRecord.code,
+              paymentMethod: "wallet_balance",
+            });
+          } else if (purchaseType === "TEACHER_SUB") {
+            purchaseResult = await PurchaseService.purchaseTeacherSubscription({
+              studentId: session.id,
+              teacherId: targetId,
+              planType: planType || "monthly",
+              languageTrack,
+              studentGrade: grade,
+              discountCode: discountCodeRecord.code,
+              paymentMethod: "wallet_balance",
+            });
+          }
+
+          if (purchaseResult && purchaseResult.success) {
+            await AccessCodeGuard.logAttempt({ ip: clientIp, userId: session.id, codeAttempted: normalizedCode, success: true });
+            return NextResponse.json({
+              success: true,
+              type: "discount_purchase",
+              message: purchaseResult.message || "تم تطبيق الخصم وتفعيل المحتوى بنجاح! 🎉",
+            });
+          } else {
+            return NextResponse.json({ error: purchaseResult?.error || "تعذر إتمام العملية باستخدام الكود" }, { status: 400 });
+          }
+        } else {
+          return NextResponse.json({
+            success: true,
+            type: "discount_applied",
+            code: discountCodeRecord.code,
+            discountAmount: discountValidation.pricing.discountAmount,
+            finalPrice,
+            message: `تم تطبيق خصم بقيمة ${discountValidation.pricing.discountAmount} جنيه. السعر المتبقي هو ${finalPrice} جنيه.`,
+          });
+        }
+      }
+
+      return NextResponse.json({
+        success: true,
+        type: "discount",
+        discountType: discountCodeRecord.discountType,
+        discountValue: discountCodeRecord.discountValue,
+        message: `كود خصم صالح (${discountCodeRecord.discountValue}${discountCodeRecord.discountType === "PERCENTAGE" ? "%" : " ج"} خصم). يمكنك استخدامه عند الشراء.`,
+      });
+    }
+
     await AccessCodeGuard.logAttempt({ ip: clientIp, userId: session.id, codeAttempted: normalizedCode, success: false });
-    return NextResponse.json({ error: "الكود غير صحيح" }, { status: 404 });
+    return NextResponse.json({ error: "الكود غير صحيح أو منتهي الصلاحية" }, { status: 404 });
   } catch (error) {
     console.error("[codes] error:", error);
-    return NextResponse.json({ error: "حدث خطأ داخلي" }, { status: 500 });
+    return NextResponse.json({ error: "حدث خطأ داخلي أثناء معالجة الكود" }, { status: 500 });
   }
 }

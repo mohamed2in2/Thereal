@@ -363,6 +363,7 @@ function PaymentContent() {
             teacherId: teacherIdParam || undefined,
             planType: planTypeParam || undefined,
             grade: gradeParam || undefined,
+            languageTrack: languageTrackParam || undefined,
             courseId: courseIdParam || undefined,
             folderId: folderIdParam || undefined,
             videoId: videoIdParam || undefined,
@@ -371,12 +372,25 @@ function PaymentContent() {
           }),
         });
         const codeBody = await codeRes.json().catch(() => ({}));
-        if (!codeRes.ok || codeBody.error) {
-          setErrors([codeBody.error || "كود التفعيل غير صحيح أو منتهي الصلاحية"]);
+        if (!codeRes.ok || codeBody.error || codeBody.success === false) {
+          setErrors([codeBody.error || codeBody.message || "كود التفعيل غير صحيح أو منتهي الصلاحية"]);
           setStep("error");
           setIsCreating(false);
           return;
         }
+
+        if (codeBody.itemPurchased === false) {
+          if (codeBody.newBalance !== undefined) {
+            setUser((prev) => prev ? { ...prev, balance: codeBody.newBalance } : prev);
+          }
+          const msg = codeBody.message || "تم شحن الكود في محفظتك، ولكن رصيدك المتاح غير كافٍ لإتمام الحجز بالكامل.";
+          toastError(msg);
+          setErrors([msg]);
+          setStep("error");
+          setIsCreating(false);
+          return;
+        }
+
         toastSuccess(codeBody.message || "تم تفعيل الكود بنجاح! 🎉");
         setStep("success");
         setIsCreating(false);
