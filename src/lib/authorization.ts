@@ -37,7 +37,7 @@ export async function checkCourseEnrollment(userId: string, courseId: string, ro
       where: { id: courseId },
       select: { teacherId: true },
     });
-    if (course?.teacherId && await canBypassPayment(role, course.teacherId)) {
+    if (course?.teacherId && (await canBypassPayment(role, course.teacherId, user?.accountMode))) {
       return true;
     }
   }
@@ -167,9 +167,13 @@ export async function checkHomeworkAccess(userId: string, role: string, homework
     return hw.teacherId === userId;
   }
 
-  if (role !== "student") return false;
+  // 1. Teacher subscription access & QA Tester check
+  const studentUser = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { accountMode: true },
+  });
+  if (studentUser && studentUser.accountMode === "TESTER") return true;
 
-  // 1. Teacher subscription access
   const now = new Date();
   const activeSub = await prisma.teacherSubscription.findFirst({
     where: {
@@ -183,7 +187,7 @@ export async function checkHomeworkAccess(userId: string, role: string, homework
   if (activeSub) return true;
 
   // 2. Demo bypass check
-  if (await canBypassPayment(role, hw.teacherId)) return true;
+  if (await canBypassPayment(role, hw.teacherId, studentUser?.accountMode)) return true;
 
   // 3. Resolve courseId / folderId
   let courseId = hw.courseId;

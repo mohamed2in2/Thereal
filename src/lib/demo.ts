@@ -21,14 +21,17 @@ export function resetDemoTeacherIdCache(): void {
 }
 
 /**
- * True only when a superadmin is viewing content owned by the demo teacher.
- * Both halves are required. There is no other way to obtain a bypass.
+ * True when a superadmin or a QA Platform Tester is viewing content owned by the demo teacher.
+ * Required: valid demo teacher content owner, and viewer must be superadmin or QA Tester.
  */
 export async function canBypassPayment(
   viewerRole: string | null | undefined,
-  contentOwnerId: string | null | undefined
+  contentOwnerId: string | null | undefined,
+  accountMode?: string | null | undefined
 ): Promise<boolean> {
-  if (viewerRole !== "superadmin") return false;
+  const isSuper = viewerRole === "superadmin";
+  const isTester = accountMode === "TESTER";
+  if (!isSuper && !isTester) return false;
   if (!contentOwnerId) return false;
   const demoId = await getDemoTeacherId();
   return demoId !== null && contentOwnerId === demoId;

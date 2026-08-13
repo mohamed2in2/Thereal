@@ -20,7 +20,7 @@ export function DemoBanner({ show = true }: DemoBannerProps) {
       <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-500 text-white font-bold text-[10px]">
         ⚙️
       </span>
-      <span>وضع العرض — بيانات تجريبية ومرئية للإدارة فقط</span>
+      <span>وضع العرض — بيانات تجريبية ومرئية للإدارة وفاحصي الجودة (QA) فقط</span>
     </div>
   );
 }

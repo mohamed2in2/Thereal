@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getStudentSession } from "@/lib/auth";
+import { getSession } from "@/lib/auth";
 import { canBypassPayment } from "@/lib/demo";
 
 export async function GET(req: NextRequest) {
@@ -11,11 +11,13 @@ export async function GET(req: NextRequest) {
     const teacherId = searchParams.get("teacher");
     const search = searchParams.get("search");
 
-    const session = await getStudentSession();
+    const session = await getSession();
     const isSuperadmin = session?.role === "superadmin";
+    const isTesterUser = session?.accountMode === "TESTER";
+    const canSeeDemo = isSuperadmin || isTesterUser;
 
     const where: Record<string, unknown> = {
-      teacher: isSuperadmin ? { isDeleted: false } : { isDeleted: false, isDemo: false },
+      teacher: canSeeDemo ? { isDeleted: false } : { isDeleted: false, isDemo: false },
     };
     if (stage) where.educationalStage = stage;
     if (subject) where.subject = subject;
@@ -28,7 +30,7 @@ export async function GET(req: NextRequest) {
       ];
     }
 
-    const teacherWhere: Record<string, unknown> = isSuperadmin
+    const teacherWhere: Record<string, unknown> = canSeeDemo
       ? { role: "teacher", isDeleted: false }
       : { role: "teacher", isDeleted: false, isDemo: false };
 
@@ -90,8 +92,8 @@ export async function GET(req: NextRequest) {
       courses.map(async (course) => {
         const isOwnerTeacher = session.role === "teacher" && course.teacherId === session.id;
         const isAdminPreview = session.role === "admin";
-        const isDemoBypass = await canBypassPayment(session.role, course.teacherId);
-        const hasAccess = accessMap.has(course.id) || isOwnerTeacher || isAdminPreview || isDemoBypass;
+        const isDemoBypass = await canBypassPayment(session.role, course.teacherId, session.accountMode);
+        const hasAccess = accessMap.has(course.id) || isOwnerTeacher || isAdminPreview || isDemoBypass || isTesterUser;
         return {
           ...course,
           hasAccess,

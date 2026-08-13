@@ -11,8 +11,10 @@ export async function GET(req: NextRequest) {
 
   const isStudent = session.role === "student";
   const isSuperadmin = session.role === "superadmin";
+  const isTesterUser = session.accountMode === "TESTER";
+  const canSeeDemo = isSuperadmin || isTesterUser;
 
-  const teacherFilter = isSuperadmin ? { isDeleted: false } : { isDeleted: false, isDemo: false };
+  const teacherFilter = canSeeDemo ? { isDeleted: false } : { isDeleted: false, isDemo: false };
 
   // Parallel search across courses, teachers, videos
   const [courses, teachers, videos] = await Promise.all([
@@ -36,7 +38,7 @@ export async function GET(req: NextRequest) {
       where: {
         role: "teacher",
         isDeleted: false,
-        ...(isSuperadmin ? {} : { isDemo: false }),
+        ...(canSeeDemo ? {} : { isDemo: false }),
         OR: [{ name: { contains: q } }],
         teacherProfile: { isPublished: true },
       },

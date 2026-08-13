@@ -17,11 +17,13 @@ const getProfile = cache(async (slug: string) => {
   if (RESERVED_SLUGS.has(slug.toLowerCase())) return null;
   const session = await getSession();
   const isSuperadmin = session?.role === "superadmin";
+  const isTester = session?.accountMode === "TESTER";
+  const canSeeDemo = isSuperadmin || isTester;
   return prisma.teacherProfile.findFirst({
     where: {
       slug,
       isPublished: true,
-      teacher: isSuperadmin ? { isDeleted: false } : { isDeleted: false, isDemo: false },
+      teacher: canSeeDemo ? { isDeleted: false } : { isDeleted: false, isDemo: false },
     },
     include: {
       teacher: {

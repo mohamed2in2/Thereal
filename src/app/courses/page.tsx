@@ -64,7 +64,7 @@ export default function CoursesPage() {
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [user, setUser] = useState<{ name: string; role: string } | null>(null);
+  const [user, setUser] = useState<{ name: string; role: string; accountMode?: string } | null>(null);
 
   const selectedTeacherId = useSyncExternalStore(subscribeToTeacher, readTeacherParam, () => "");
 
@@ -74,7 +74,7 @@ export default function CoursesPage() {
         const raw = await r.text();
         return raw ? JSON.parse(raw) : {};
       })
-      .then((d) => setUser(d.user ? { name: d.user.name, role: d.user.role } : null))
+      .then((d) => setUser(d.user ? { name: d.user.name, role: d.user.role, accountMode: d.user.accountMode } : null))
       .catch(() => setUser(null));
   }, []);
 
@@ -259,8 +259,8 @@ export default function CoursesPage() {
               transition={{ duration: 0.4, ease: EASE }}
               className="space-y-3.5 max-w-3xl"
             >
-              {/* ── Superadmin-Only Pinned DEMO Teacher Showroom Card ── */}
-              {user?.role === "superadmin" && (
+              {/* ── Superadmin & QA Pinned DEMO Teacher Showroom Card ── */}
+              {(user?.role === "superadmin" || user?.accountMode === "TESTER") && (
                 <Link href="/demo" className="no-underline block mb-4">
                   <motion.div
                     whileHover={{ scale: 1.01, boxShadow: "0 0 24px rgba(245,158,11,0.35)" }}
@@ -286,7 +286,7 @@ export default function CoursesPage() {
                           </span>
                         </div>
                         <span className="text-xs text-[var(--ink-muted)]">
-                          معاينة كامل مزايا المنصة للمشرف العام فقط — بدون دفع وبصلاحيات مطلقة
+                          معاينة كامل مزايا المنصة للمشرفين وفاحصي الجودة (QA) — بدون دفع وبصلاحيات مطلقة
                         </span>
                       </div>
                     </div>

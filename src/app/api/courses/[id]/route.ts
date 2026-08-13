@@ -101,25 +101,31 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         }
 
         if (!hasPlanAccess) {
-          const targetCourseRow = await prisma.course.findUnique({
-            where: { id },
-            select: { teacherId: true },
-          });
-          const canBypass = await canBypassPayment(role, targetCourseRow?.teacherId);
-          if (!canBypass) {
-            return NextResponse.json(
-              { error: "لا يوجد صلاحية للوصول. فعّل كود الكورس أو تواصل مع المعلم.", code: "NOT_ENROLLED" },
-              { status: 403 }
-            );
+          const isTester = session.accountMode === "TESTER";
+          if (!isTester) {
+            const targetCourseRow = await prisma.course.findUnique({
+              where: { id },
+              select: { teacherId: true },
+            });
+            const canBypass = await canBypassPayment(role, targetCourseRow?.teacherId, session.accountMode);
+            if (!canBypass) {
+              return NextResponse.json(
+                { error: "لا يوجد صلاحية للوصول. فعّل كود الكورس أو تواصل مع المعلم.", code: "NOT_ENROLLED" },
+                { status: 403 }
+              );
+            }
           }
         }
       }
     }
 
+    const isTesterUser = session.accountMode === "TESTER";
+    const canSeeDemo = role === "superadmin" || isTesterUser;
+
     const course = await prisma.course.findFirst({
       where: {
         id,
-        teacher: role === "superadmin" ? { isDeleted: false } : { isDeleted: false, isDemo: false },
+        teacher: canSeeDemo ? { isDeleted: false } : { isDeleted: false, isDemo: false },
       },
       include: {
         teacher: { select: { id: true, name: true } },

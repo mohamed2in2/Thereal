@@ -61,9 +61,9 @@ export async function POST(req: NextRequest) {
     });
 
     if (accessCode) {
-      if (accessCode.course?.teacher?.isDemo && session.role !== "superadmin") {
+      if (accessCode.course?.teacher?.isDemo && session.role !== "superadmin" && session.accountMode !== "TESTER") {
         await AccessCodeGuard.logAttempt({ ip: clientIp, userId: session.id, codeAttempted: normalizedCode, success: false });
-        return NextResponse.json({ error: "محتوى تجريبي — الأكواد التجريبية مخصصة للمعاينة الإدارية فقط" }, { status: 403 });
+        return NextResponse.json({ error: "محتوى تجريبي — الأكواد التجريبية مخصصة للمعاينة الإدارية وفاحصي الجودة فقط" }, { status: 403 });
       }
 
       if (accessCode.studentId) {

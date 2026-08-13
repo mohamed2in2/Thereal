@@ -41,10 +41,14 @@ export default async function TeacherHomeworkHubPage({ params }: Props) {
   // ── Identify student from session cookie ─────────────────────────────────
   // We do a lightweight session check (same pattern as getSession but server-side)
   let studentId: string | null = null;
+  let isTesterOrAdmin = false;
   try {
     const { getSession } = await import("@/lib/auth");
     const session = await getSession();
-    if (session?.role === "student") studentId = session.id;
+    if (session) {
+      studentId = session.id;
+      isTesterOrAdmin = session.accountMode === "TESTER" || session.role === "superadmin";
+    }
   } catch { /* not logged in */ }
 
   // ── Fetch published homeworks by this teacher ─────────────────────────────
@@ -79,6 +83,9 @@ export default async function TeacherHomeworkHubPage({ params }: Props) {
   if (!studentId) {
     // Not logged in — show no homeworks
     accessibleHomeworkIds = new Set();
+  } else if (isTesterOrAdmin) {
+    // QA Testers & Superadmins have full access to all published homeworks
+    accessibleHomeworkIds = new Set(rawHomeworks.map((h) => h.id));
   } else {
     // Get all course-level access codes the student has used
     const studentCodes = await prisma.accessCode.findMany({
