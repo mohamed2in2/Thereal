@@ -1134,6 +1134,14 @@ export class PurchaseService {
         );
       }
 
+      await processTeacherAttribution({
+        studentId,
+        teacherIdOfContent: teacherId,
+        amount: finalPrice,
+        purchaseType: "TEACHER_SUB",
+        tx,
+      });
+
       await ReferralService.qualifyAndRewardReferral(studentId, `sub:${teacherId}:${planType}`, tx);
       const freshUser = await tx.user.findUnique({ where: { id: studentId }, select: { balance: true } });
 

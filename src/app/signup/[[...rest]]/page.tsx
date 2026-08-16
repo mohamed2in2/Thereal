@@ -9,10 +9,12 @@ import { useRecaptcha } from "@/lib/use-recaptcha";
 
 export default function SignupPage() {
   const router = useRouter();
-  // Read referral code from ?ref= query param
+  // Read referral/promo code from query params (?promo=, ?ref=, ?teacher=, ?code=)
+  const [initialPromoCode, setInitialPromoCode] = useState<string>("");
   const [refCode] = useState<string>(() => {
     if (typeof window === "undefined") return "";
-    return new URLSearchParams(window.location.search).get("ref") ?? "";
+    const params = new URLSearchParams(window.location.search);
+    return params.get("ref") ?? "";
   });
   const [form, setForm] = useState({
     name: "",
@@ -25,6 +27,24 @@ export default function SignupPage() {
     verificationCode: "",
     promoCode: "",
   });
+
+  // Read URL query params for teacher promo code on mount
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const codeFromUrl = (
+      params.get("promo") ||
+      params.get("teacher") ||
+      params.get("code") ||
+      params.get("ref") ||
+      ""
+    ).trim().toUpperCase();
+
+    if (codeFromUrl) {
+      setInitialPromoCode(codeFromUrl);
+      setForm((prev) => ({ ...prev, promoCode: codeFromUrl }));
+    }
+  }, []);
   const [sendingCode, setSendingCode] = useState(false);
   const [signingUp, setSigningUp] = useState(false);
   const [codeSent, setCodeSent] = useState(false);
@@ -251,7 +271,16 @@ export default function SignupPage() {
               </div>
 
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">كود خصم المعلم (اختياري)</label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                    كود خصم المعلم (اختياري)
+                  </label>
+                  {initialPromoCode && form.promoCode === initialPromoCode && (
+                    <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                      ✓ تم التطبيق تلقائياً عبر رابط الدعوة
+                    </span>
+                  )}
+                </div>
                 <input
                   type="text"
                   value={form.promoCode}

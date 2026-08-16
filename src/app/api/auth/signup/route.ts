@@ -62,20 +62,19 @@ export async function POST(req: NextRequest) {
     const parsedAge = Number(age);
     if (!Number.isFinite(parsedAge) || parsedAge < 6 || parsedAge > 25) {
       return NextResponse.json({ error: "العمر غير صالح" }, { status: 400 });
-    }
-
-    // Resolve teacher referral if promoCode or teacherPromoCode was supplied
+    // Resolve teacher referral ONLY when student explicitly writes the code of the teacher when creating an account
     const promoCodeInput = (promoCode || teacherPromoCode || body.promo_code);
     let referredByTeacherId: string | undefined;
     let promoCodeUsed: string | undefined;
 
-    if (promoCodeInput) {
+    if (promoCodeInput && String(promoCodeInput).trim().length > 0) {
       const codeUpper = String(promoCodeInput).trim().toUpperCase();
       const teacher = await prisma.user.findFirst({
         where: {
           role: "teacher",
           promoProgramEnabled: true,
           promoCode: codeUpper,
+          isDeleted: false,
         },
         select: { id: true, promoCodeCreatedAt: true },
       });
@@ -86,25 +85,6 @@ export async function POST(req: NextRequest) {
         if (now <= expiryDate) {
           referredByTeacherId = teacher.id;
           promoCodeUsed = codeUpper;
-        }
-      }
-    } else {
-      // Auto-attribute if student joined after visiting a teacher's page
-      const teacherRefCookie = req.cookies.get("teacher_ref")?.value;
-      if (teacherRefCookie) {
-        const teacher = await prisma.user.findFirst({
-          where: {
-            id: teacherRefCookie,
-            role: "teacher",
-            promoProgramEnabled: true,
-            isDeleted: false,
-          },
-          select: { id: true, promoCode: true },
-        });
-
-        if (teacher) {
-          referredByTeacherId = teacher.id;
-          promoCodeUsed = teacher.promoCode || "PAGE_VISIT";
         }
       }
     }

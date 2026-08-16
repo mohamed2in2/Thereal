@@ -190,6 +190,63 @@ export function ReferredStudentsSection() {
             {savingCode ? "جارٍ الحفظ..." : "حفظ الكود"}
           </button>
         </form>
+
+        {/* Smart Invite Link Box */}
+        {promoCode && (
+          <div className="mt-4 pt-4 border-t border-[var(--border)] space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-black text-[var(--ink)] flex items-center gap-1.5">
+                <span>🔗</span> رابط الدعوة الذكي لطلابك:
+              </span>
+              <span className="text-[11px] text-[var(--ink-3)]">
+                (يتم تعبئة كودك تلقائياً عند فتح الطالب للرابط)
+              </span>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+              <div
+                dir="ltr"
+                className="px-3.5 py-2 rounded-xl text-xs font-mono truncate flex-1 select-all"
+                style={{ background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--brand)" }}
+              >
+                {typeof window !== "undefined"
+                  ? `${window.location.origin}/signup?promo=${promoCode}`
+                  : `https://code-up.tech/signup?promo=${promoCode}`}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const url = typeof window !== "undefined"
+                    ? `${window.location.origin}/signup?promo=${promoCode}`
+                    : `https://code-up.tech/signup?promo=${promoCode}`;
+                  navigator.clipboard.writeText(url);
+                  toastSuccess("تم نسخ رابط الدعوة الذكي بنجاح! 📋");
+                }}
+                className="px-4 py-2 text-xs font-bold text-white rounded-xl transition-all hover:brightness-110 active:scale-95 cursor-pointer border-none flex items-center justify-center gap-1.5"
+                style={{ background: "var(--brand)" }}
+              >
+                <span>📋</span>
+                <span>نسخ الرابط</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const url = typeof window !== "undefined"
+                    ? `${window.location.origin}/signup?promo=${promoCode}`
+                    : `https://code-up.tech/signup?promo=${promoCode}`;
+                  const msg = encodeURIComponent(`مرحباً بك! 👋 سجل الآن على منصة Code-UP عبر هذا الرابط وسيتم تفعيل كود الخصم والإحالة الخاص بي تلقائياً:\n${url}`);
+                  window.open(`https://wa.me/?text=${msg}`, "_blank");
+                }}
+                className="px-4 py-2 text-xs font-bold text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-xl transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <span>💬</span>
+                <span>واتساب</span>
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Attributions Table */}
@@ -223,7 +280,19 @@ export function ReferredStudentsSection() {
                       {a.studentName}
                     </td>
                     <td className="px-4 py-3 text-xs" style={{ color: "var(--ink-2)" }}>
-                      {a.purchaseType === "SIGNUP" ? "إنشاء حساب" : a.purchaseType === "COURSE" ? "شراء كورس" : a.purchaseType === "FOLDER" ? "شراء مجلد" : "شراء درس"}
+                      {a.purchaseType === "SIGNUP"
+                        ? "إنشاء حساب"
+                        : a.purchaseType === "COURSE"
+                        ? "شراء كورس"
+                        : a.purchaseType === "FOLDER"
+                        ? "شراء محاضرة"
+                        : a.purchaseType === "VIDEO"
+                        ? "شراء درس"
+                        : a.purchaseType === "TEACHER_SUB"
+                        ? "اشتراك باقة معلم"
+                        : a.purchaseType === "PLAN"
+                        ? "شراء خطة دراسية"
+                        : a.purchaseType}
                     </td>
                     <td className="px-4 py-3 text-xs font-mono" style={{ color: "var(--brand)" }}>
                       {a.promoCodeUsed || "إحالة حساب"}

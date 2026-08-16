@@ -5,6 +5,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { SecurePlayer } from "@/components/ui/SecurePlayer";
 import { VideoGuard } from "@/components/ui/VideoGuard";
+import { AILectureNotesModal } from "@/components/player/AILectureNotesModal";
 
 type VideoProvider = "vdocipher" | "bunny" | "youtube" | "alasly";
 
@@ -82,6 +83,7 @@ export default function VideoWatchPage() {
   const [wmLabel, setWmLabel] = useState("");
   const [resumeSeconds, setResumeSeconds] = useState(0);
   const [resumeLoaded, setResumeLoaded] = useState(false);
+  const [showNotesModal, setShowNotesModal] = useState(false);
 
   useEffect(() => {
     fetch("/api/auth/me")
@@ -533,6 +535,14 @@ export default function VideoWatchPage() {
               <div className="flex items-center gap-3">
                 <button
                   type="button"
+                  onClick={() => setShowNotesModal(true)}
+                  className="px-3.5 py-2 bg-gradient-to-r from-cyan-600 via-teal-600 to-emerald-600 hover:from-cyan-500 hover:to-emerald-500 text-white font-bold text-xs rounded-xl transition-all shadow-md hover:shadow-cyan-500/20 active:scale-95 flex items-center gap-1.5 shrink-0 cursor-pointer border border-cyan-400/30"
+                >
+                  <span>🤖</span>
+                  <span>ملخص المحاضرة الذكي</span>
+                </button>
+                <button
+                  type="button"
                   onClick={() => {
                     window.dispatchEvent(
                       new CustomEvent("open-ai-assistant", {
@@ -542,8 +552,8 @@ export default function VideoWatchPage() {
                   }}
                   className="px-3.5 py-2 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white font-bold text-xs rounded-xl transition-all shadow-md hover:shadow-teal-500/20 active:scale-95 flex items-center gap-1.5 shrink-0 cursor-pointer border border-teal-400/30"
                 >
-                  <span>🤖</span>
-                  <span>اسأل المساعد الذكي</span>
+                  <span>💬</span>
+                  <span>اسأل المساعد</span>
                 </button>
                 {session.teacherSlug && (
                   <Link
@@ -611,6 +621,15 @@ export default function VideoWatchPage() {
           </div>
         </div>
       </main>
+
+      {/* AI Lecture Notes & Summary Modal — completely isolated from player DOM & security guards */}
+      <AILectureNotesModal
+        isOpen={showNotesModal}
+        onClose={() => setShowNotesModal(false)}
+        videoId={session.video.id}
+        videoTitle={session.video.title}
+        courseTitle={session.video.courseTitle}
+      />
     </div>
   );
 }
