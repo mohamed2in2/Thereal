@@ -5,6 +5,7 @@ import { useFullscreen } from "../ui/useFullscreen";
 import { VideoWatermark } from "../ui/VideoWatermark";
 import { VideoQuestionModal } from "./VideoQuestionModal";
 import { VideoQuestionOverlay } from "./VideoQuestionOverlay";
+import { extractYouTubeVideoId } from "@/lib/youtube";
 
 interface YTPlayer {
   playVideo(): void;
@@ -25,23 +26,30 @@ interface YTNamespace {
 }
 
 function loadYTApi(): Promise<YTNamespace> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     if (window.YT?.Player) return resolve(window.YT);
     const prev = window.onYouTubeIframeAPIReady;
     window.onYouTubeIframeAPIReady = () => {
       prev?.();
-      if (window.YT) resolve(window.YT);
+      if (window.YT?.Player) resolve(window.YT);
     };
     if (!window.__ytApiLoading) {
       window.__ytApiLoading = true;
       const s = document.createElement("script");
       s.src = "https://www.youtube.com/iframe_api";
+      s.async = true;
+      s.onerror = (e) => reject(new Error("Failed to load YouTube API"));
       document.head.appendChild(s);
     }
+    let elapsed = 0;
     const iv = setInterval(() => {
+      elapsed += 200;
       if (window.YT?.Player) {
         clearInterval(iv);
         resolve(window.YT);
+      } else if (elapsed > 8000) {
+        clearInterval(iv);
+        reject(new Error("YouTube API timeout"));
       }
     }, 200);
   });
@@ -79,8 +87,10 @@ export function CustomYouTubePlayer({
   answeredQuestionIds?: Set<string>;
   onQuestionAnswered: (questionId: string) => void;
 }) {
+  const cleanVideoId = extractYouTubeVideoId(videoId) || videoId.trim();
+
   const { ref: wrapRef, isFs, cssFs, toggle: toggleFs } = useFullscreen<HTMLDivElement>();
-  const hostRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YTPlayer | null>(null);
 
   const [ready, setReady] = useState(false);
@@ -101,11 +111,19 @@ export function CustomYouTubePlayer({
   // 1. Initialize Player
   useEffect(() => {
     let disposed = false;
+    const container = containerRef.current;
+    if (!container || !cleanVideoId) return;
+
+    container.innerHTML = "";
+    const slot = document.createElement("div");
+    slot.style.width = "100%";
+    slot.style.height = "100%";
+    container.appendChild(slot);
 
     loadYTApi().then((YT) => {
-      if (disposed || !hostRef.current) return;
-      playerRef.current = new YT.Player(hostRef.current, {
-        videoId,
+      if (disposed || !containerRef.current) return;
+      playerRef.current = new YT.Player(slot, {
+        videoId: cleanVideoId,
         host: "https://www.youtube-nocookie.com",
         playerVars: {
           controls: 0,
@@ -116,6 +134,7 @@ export function CustomYouTubePlayer({
           fs: 0,
           playsinline: 1,
           autoplay: 0,
+          enablejsapi: 1,
           origin: typeof window !== "undefined" ? window.location.origin : undefined,
         },
         events: {
@@ -148,8 +167,13 @@ export function CustomYouTubePlayer({
               onEnded?.();
             }
           },
+          onError: () => {
+            setReady(true);
+          }
         },
       });
+    }).catch(() => {
+      if (!disposed) setReady(true);
     });
 
     return () => {
@@ -158,8 +182,11 @@ export function CustomYouTubePlayer({
         playerRef.current?.destroy();
       } catch { /* noop */ }
       playerRef.current = null;
+      if (containerRef.current) {
+        containerRef.current.innerHTML = "";
+      }
     };
-  }, [videoId]);
+  }, [cleanVideoId]);
 
   // 2. Playback state syncing from parent props (such as session quotas / completions)
   useEffect(() => {
@@ -320,7 +347,7 @@ export function CustomYouTubePlayer({
     >
       {/* 16:9 YouTube video viewport */}
       <div className="absolute inset-0 w-full h-full">
-        <div ref={hostRef} className="w-full h-full" />
+        <div ref={containerRef} className="w-full h-full" />
       </div>
 
       {/* Surface click shield: play/pause trigger */}

@@ -6,6 +6,7 @@ import { useState, useCallback } from "react";
 import { VideoWatermark } from "./VideoWatermark";
 import { YouTubeSecurePlayer } from "./YouTubeSecurePlayer";
 import { useFullscreen } from "./useFullscreen";
+import { extractYouTubeVideoId } from "@/lib/youtube";
 
 /**
  * Watermark-safe player. The iframe is a cross-origin embed (Bunny/VdoCipher) —
@@ -52,12 +53,10 @@ export function SecurePlayer({
 }) {
   const { ref: wrapRef, isFs, cssFs, toggle: toggleFs } = useFullscreen<HTMLDivElement>();
 
-
-
   // YouTube → hardened API player (no clickable YouTube chrome).
   if (provider === "youtube") {
-    const id = embedUrl.match(/\/embed\/([^?/]+)/)?.[1] ?? "";
-    if (id)
+    const id = extractYouTubeVideoId(embedUrl) || embedUrl.match(/\/embed\/([^?/]+)/)?.[1] || "";
+    if (id) {
       return (
         <YouTubeSecurePlayer
           videoId={id}
@@ -73,6 +72,7 @@ export function SecurePlayer({
           {children}
         </YouTubeSecurePlayer>
       );
+    }
   }
 
   const iframeRef = React.useRef<HTMLIFrameElement>(null);

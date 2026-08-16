@@ -5,7 +5,7 @@
 
 import { getVdoCipherOtp } from "./vdocipher";
 import { getBunnyEmbedUrl } from "./bunny";
-import { getYouTubeEmbedUrl } from "./youtube";
+import { getYouTubeEmbedUrl, extractYouTubeVideoId } from "./youtube";
 import { getAlaslyPlaybackToken } from "./alasly";
 
 export type VideoProvider = "vdocipher" | "bunny" | "youtube" | "alasly";
@@ -15,6 +15,30 @@ export interface VideoEmbedResult {
   provider: VideoProvider;
   signed: boolean;
   expiresInSeconds: number | null;
+}
+
+/** Sanitizes and extracts clean provider video ID based on provider rules */
+export function cleanProviderVideoId(provider: VideoProvider, input: string): string {
+  if (!input || typeof input !== "string") return "";
+  const trimmed = input.trim();
+
+  switch (provider) {
+    case "youtube": {
+      const extracted = extractYouTubeVideoId(trimmed);
+      return extracted || trimmed;
+    }
+    case "bunny": {
+      // If full iframe/embed URL was pasted, extract the GUID:
+      // e.g. https://iframe.mediadelivery.net/embed/12345/382e703d-82d6-444a-a430-86ad178da857
+      const guidMatch = trimmed.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+      if (guidMatch) return guidMatch[0];
+      return trimmed;
+    }
+    case "vdocipher":
+    case "alasly":
+    default:
+      return trimmed;
+  }
 }
 
 /**
@@ -29,11 +53,13 @@ export async function resolveEmbedUrl(video: {
   const provider = (video.videoProvider || "vdocipher") as VideoProvider;
 
   // Legacy rows have providerVideoId="" and vdoCipherId set — fall back gracefully.
-  const id = video.providerVideoId || video.vdoCipherId;
+  const rawId = video.providerVideoId || video.vdoCipherId;
 
-  if (!id) {
+  if (!rawId) {
     throw new Error("Video has no provider ID configured");
   }
+
+  const id = cleanProviderVideoId(provider, rawId);
 
   switch (provider) {
     case "alasly": {
@@ -66,21 +92,27 @@ export const PROVIDER_LABELS: Record<VideoProvider, string> = {
 /** Validates a provider ID format per provider rules */
 export function validateProviderId(provider: VideoProvider, id: string): string | null {
   if (!id || !id.trim()) return "معرف الفيديو مطلوب";
+  const trimmed = id.trim();
 
   switch (provider) {
     case "alasly":
-      if (!/^[a-z0-9_.-]+$/i.test(id)) return "معرف درس Native يحتوي على أحرف وأرقام وشرطات ونقاط فقط";
+      if (!/^[a-z0-9_.-]+$/i.test(trimmed)) return "معرف درس Native يحتوي على أحرف وأرقام وشرطات ونقاط فقط";
       break;
     case "vdocipher":
-      if (!/^[a-z0-9_.-]+$/i.test(id)) return "معرف VdoCipher يحتوي على أحرف وأرقام وشرطات ونقاط فقط";
+      if (!/^[a-z0-9_.-]+$/i.test(trimmed)) return "معرف VdoCipher يحتوي على أحرف وأرقام وشرطات ونقاط فقط";
       break;
-    case "bunny":
-      if (!/^[a-z0-9_.-]+$/i.test(id)) return "معرف Bunny Stream يحتوي على أحرف وأرقام وشرطات ونقاط فقط";
+    case "bunny": {
+      const cleanBunny = cleanProviderVideoId("bunny", trimmed);
+      if (!/^[a-z0-9_.-]+$/i.test(cleanBunny)) return "معرف Bunny Stream يحتوي على أحرف وأرقام وشرطات ونقاط فقط";
       break;
-    case "youtube":
-      // YouTube video IDs are exactly 11 chars: letters, digits, -, _
-      if (!/^[a-zA-Z0-9_-]{11}$/.test(id)) return "معرف YouTube يجب أن يكون 11 حرفاً (مثال: dQw4w9WgXcQ)";
+    }
+    case "youtube": {
+      const cleanYt = extractYouTubeVideoId(trimmed);
+      if (!cleanYt || !/^[a-zA-Z0-9_-]{10,12}$/.test(cleanYt)) {
+        return "رابط أو معرف YouTube غير صالح. يرجى إدخال رابط فيديو صالح (مثال: https://youtu.be/... أو https://youtube.com/watch?v=...) أو معرف الفيديو";
+      }
       break;
+    }
   }
   return null;
 }

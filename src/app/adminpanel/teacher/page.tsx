@@ -19,6 +19,7 @@ import {
   IconKey, IconShield, IconClock, IconEye,
 } from "@/components/admin/AdminIcons";
 import { HomeworkManagerSection, LiveReviewPanel } from "@/components/admin/TeacherHomeworkComponents";
+import { extractYouTubeVideoId } from "@/lib/youtube";
 
 function fileToResizedDataUrl(file: File, max = 600): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -517,6 +518,11 @@ export default function TeacherDashboardPage() {
   const addVideo = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newVideo.folderId) return;
+    const finalProviderVideoId =
+      newVideo.videoProvider === "youtube"
+        ? extractYouTubeVideoId(newVideo.providerVideoId) || newVideo.providerVideoId.trim()
+        : newVideo.providerVideoId.trim();
+
     const res = await fetch(`/api/admin/folders/${newVideo.folderId}/videos`, {
       method: "POST",
       credentials: "include",
@@ -524,7 +530,7 @@ export default function TeacherDashboardPage() {
       body: JSON.stringify({
         title: newVideo.title,
         videoProvider: newVideo.videoProvider,
-        providerVideoId: newVideo.providerVideoId,
+        providerVideoId: finalProviderVideoId,
         durationMinutes: newVideo.durationMinutes,
         maxWatchesPerUser: newVideo.maxWatchesPerUser,
         publishAt: newVideo.publishAt || null,
@@ -1711,16 +1717,48 @@ export default function TeacherDashboardPage() {
                               {newVideo.videoProvider === "vdocipher" && "VdoCipher Video ID — أعلى حماية مشفرة (Highest DRM)"}
                               {newVideo.videoProvider === "alasly" && "معرف درس Native — حماية عالية (Super Native Security)"}
                               {newVideo.videoProvider === "bunny" && "Bunny Stream Video GUID — حماية متوسطة (Medium CDN Security)"}
-                              {newVideo.videoProvider === "youtube" && "YouTube Video ID (11 حرف) — مخصص للكورسات المجانية ومنخفضة التكلفة"}
+                              {newVideo.videoProvider === "youtube" && "رابط الفيديو أو معرّف YouTube (يدعم youtu.be / youtube.com / المعرف المباشر)"}
                             </label>
                             <input
                               type="text"
                               value={newVideo.providerVideoId}
                               onChange={(e) => setNewVideo({ ...newVideo, providerVideoId: e.target.value.trim() })}
-                              placeholder={newVideo.videoProvider === "vdocipher" ? "مثال: abc123def456" : newVideo.videoProvider === "bunny" ? "مثال: 12345678-abcd-…" : newVideo.videoProvider === "alasly" ? "أدخل معرف الدرس أو قم برفع الملف مباشرة أدناه" : "مثال: dQw4w9WgXcQ"}
+                              placeholder={newVideo.videoProvider === "vdocipher" ? "مثال: abc123def456" : newVideo.videoProvider === "bunny" ? "مثال: 12345678-abcd-…" : newVideo.videoProvider === "alasly" ? "أدخل معرف الدرس أو قم برفع الملف مباشرة أدناه" : "ضع رابط الفيديو مثل: https://youtu.be/... أو المعرّف"}
                               dir="ltr"
                               className={`${input} font-mono`}
                             />
+                            {/* YouTube live URL detection & validation badge */}
+                            {newVideo.videoProvider === "youtube" && newVideo.providerVideoId && (() => {
+                              const ytId = extractYouTubeVideoId(newVideo.providerVideoId);
+                              if (ytId) {
+                                return (
+                                  <div className="mt-2 p-2.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 flex items-center justify-between gap-2 text-xs">
+                                    <div className="flex items-center gap-1.5 font-bold">
+                                      <span className="text-emerald-400">✓</span>
+                                      <span>تم التعرف على الفيديو بنجاح! معرّف YouTube:</span>
+                                      <span className="font-mono bg-black/40 px-2 py-0.5 rounded text-white font-bold">{ytId}</span>
+                                    </div>
+                                    <a
+                                      href={`https://www.youtube.com/watch?v=${ytId}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-[11px] text-sky-400 hover:text-sky-300 underline font-bold shrink-0"
+                                    >
+                                      معاينة ↗
+                                    </a>
+                                  </div>
+                                );
+                              }
+                              if (newVideo.providerVideoId.length >= 3) {
+                                return (
+                                  <div className="mt-2 p-2 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-300 text-xs flex items-center gap-1.5">
+                                    <span>⚠️</span>
+                                    <span>الرجاء إدخال رابط يوتيوب صالح (مثل: https://youtu.be/... أو https://youtube.com/watch?v=...) أو معرّف الفيديو (10-12 حرف).</span>
+                                  </div>
+                                );
+                              }
+                              return null;
+                            })()}
 
                             {/* Native Video SaaS Direct Upload Button */}
                             {newVideo.videoProvider === "alasly" && (
@@ -1847,6 +1885,38 @@ export default function TeacherDashboardPage() {
                           </select>
                           <input type="text" value={newMaterial.title} onChange={(e) => setNewMaterial({ ...newMaterial, title: e.target.value })} placeholder="عنوان الملحق" className={input} />
                           <input type="url" value={newMaterial.url} onChange={(e) => setNewMaterial({ ...newMaterial, url: e.target.value })} placeholder="الرابط (URL)" dir="ltr" className={`${input} font-mono`} />
+                            {/* YouTube live URL detection & validation badge */}
+                            {newVideo.videoProvider === "youtube" && newVideo.providerVideoId && (() => {
+                              const ytId = extractYouTubeVideoId(newVideo.providerVideoId);
+                              if (ytId) {
+                                return (
+                                  <div className="mt-2 p-2.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 flex items-center justify-between gap-2 text-xs">
+                                    <div className="flex items-center gap-1.5 font-bold">
+                                      <span className="text-emerald-400">✓</span>
+                                      <span>تم التعرف على الفيديو بنجاح! معرّف YouTube:</span>
+                                      <span className="font-mono bg-black/40 px-2 py-0.5 rounded text-white font-bold">{ytId}</span>
+                                    </div>
+                                    <a
+                                      href={`https://www.youtube.com/watch?v=${ytId}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-[11px] text-sky-400 hover:text-sky-300 underline font-bold shrink-0"
+                                    >
+                                      معاينة ↗
+                                    </a>
+                                  </div>
+                                );
+                              }
+                              if (newVideo.providerVideoId.length >= 3) {
+                                return (
+                                  <div className="mt-2 p-2 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-300 text-xs flex items-center gap-1.5">
+                                    <span>⚠️</span>
+                                    <span>الرجاء إدخال رابط يوتيوب صالح (مثل: https://youtu.be/... أو https://youtube.com/watch?v=...) أو معرّف الفيديو (10-12 حرف).</span>
+                                  </div>
+                                );
+                              }
+                              return null;
+                            })()}
                           <button type="submit" disabled={!newMaterial.folderId || !newMaterial.title || !newMaterial.url} className={`${primaryBtn} w-full`}>
                             <IconPlus className="w-4 h-4" /> إضافة الملحق
                           </button>
@@ -2232,6 +2302,38 @@ export default function TeacherDashboardPage() {
                       <div>
                         <label className={label}>رابط صفحة الواجب المنزلي</label>
                         <input type="url" value={courseSettings.homeworkUrl} onChange={(e) => setCourseSettings({ ...courseSettings, homeworkUrl: e.target.value })} placeholder="https://…" dir="ltr" className={`${input} font-mono`} />
+                            {/* YouTube live URL detection & validation badge */}
+                            {newVideo.videoProvider === "youtube" && newVideo.providerVideoId && (() => {
+                              const ytId = extractYouTubeVideoId(newVideo.providerVideoId);
+                              if (ytId) {
+                                return (
+                                  <div className="mt-2 p-2.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 flex items-center justify-between gap-2 text-xs">
+                                    <div className="flex items-center gap-1.5 font-bold">
+                                      <span className="text-emerald-400">✓</span>
+                                      <span>تم التعرف على الفيديو بنجاح! معرّف YouTube:</span>
+                                      <span className="font-mono bg-black/40 px-2 py-0.5 rounded text-white font-bold">{ytId}</span>
+                                    </div>
+                                    <a
+                                      href={`https://www.youtube.com/watch?v=${ytId}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-[11px] text-sky-400 hover:text-sky-300 underline font-bold shrink-0"
+                                    >
+                                      معاينة ↗
+                                    </a>
+                                  </div>
+                                );
+                              }
+                              if (newVideo.providerVideoId.length >= 3) {
+                                return (
+                                  <div className="mt-2 p-2 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-300 text-xs flex items-center gap-1.5">
+                                    <span>⚠️</span>
+                                    <span>الرجاء إدخال رابط يوتيوب صالح (مثل: https://youtu.be/... أو https://youtube.com/watch?v=...) أو معرّف الفيديو (10-12 حرف).</span>
+                                  </div>
+                                );
+                              }
+                              return null;
+                            })()}
                       </div>
 
                       {/* Video access order */}

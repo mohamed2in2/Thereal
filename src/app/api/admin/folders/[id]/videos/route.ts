@@ -2,7 +2,7 @@ import { logAdminAction } from "@/lib/admin-auth";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { validateProviderId, type VideoProvider } from "@/lib/video-provider";
+import { cleanProviderVideoId, validateProviderId, type VideoProvider } from "@/lib/video-provider";
 import { parsePublishAt } from "@/lib/publish";
 import { getConfigNumber, getConfigNumberClamped } from "@/lib/config";
 import { triggerPlanSyncForCourse } from "@/lib/plan-lesson-matcher";
@@ -60,7 +60,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       ? (body.videoProvider as VideoProvider)
       : "vdocipher";
 
-    const providerVideoId = (body.providerVideoId ?? body.vdoCipherId ?? "").trim();
+    const rawProviderId = (body.providerVideoId ?? body.vdoCipherId ?? "").trim();
+    const providerVideoId = cleanProviderVideoId(videoProvider, rawProviderId);
 
     if (!title || typeof title !== "string" || !title.trim()) {
       return NextResponse.json({ error: "عنوان الفيديو مطلوب" }, { status: 400 });
@@ -72,7 +73,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       );
     }
 
-    const idError = validateProviderId(videoProvider, providerVideoId);
+    const idError = validateProviderId(videoProvider, rawProviderId);
     if (idError) {
       return NextResponse.json({ error: idError }, { status: 400 });
     }
