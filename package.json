@@ -12,6 +12,7 @@
     "lint": "eslint --cache",
     "test:verification": "node --import tsx scripts/run-verification-tests.ts",
     "test:security": "node --import tsx scripts/run-security-tests.mts",
+    "test:readiness": "node --import tsx scripts/test-production-readiness.ts",
     "validate:command-center": "node --import tsx scripts/validate-command-center.mts",
     "db:migrate": "prisma migrate dev",
     "db:generate": "node scripts/prisma-generate.js",

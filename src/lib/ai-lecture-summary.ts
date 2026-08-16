@@ -1,12 +1,12 @@
 import { prisma } from "./prisma";
 
 // XKiro (DeepSeek v4 Flash)
-const XKIRO_API_KEY = process.env.XKIRO_API_KEY || "sk-xt-b9ae85b5fc9d3c97d8b7d63cbedc67fc321556af974f61e4";
+const XKIRO_API_KEY = process.env.XKIRO_API_KEY || "";
 const XKIRO_BASE_URL = (process.env.XKIRO_BASE_URL || "https://api.xkiro.com/v1").replace(/\/+$/, "");
 const XKIRO_MODEL = process.env.XKIRO_MODEL || "deepseek/deepseek-v4-flash";
 
 // Groq
-const GROQ_API_KEY = process.env.GROQ_API_KEY || "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";
+const GROQ_API_KEY = process.env.GROQ_API_KEY || "";
 const GROQ_BASE_URL = "https://api.groq.com/openai/v1";
 const GROQ_MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
 

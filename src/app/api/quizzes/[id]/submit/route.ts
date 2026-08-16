@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { checkQuizAccess } from "@/lib/authorization";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
@@ -22,25 +23,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   if (!quiz) return NextResponse.json({ error: "الاختبار غير موجود" }, { status: 404 });
 
-  const canAccessAsTeacher = session.role === "teacher" && (
-    (quiz.folder?.course?.teacherId === session.id) ||
-    (quiz.planLessonId !== null)
-  );
+  const hasAccess = await checkQuizAccess(session.id, session.role, quizId);
+  if (!hasAccess) {
+    return NextResponse.json({ error: "لا يوجد صلاحية للوصول" }, { status: 403 });
+  }
 
-  let canAccessAsStudent = false;
   let planEnrollmentId: string | null = null;
-
-  if (quiz.folderId && quiz.folder) {
-    const hasCourseAccess = await prisma.accessCode.findFirst({
-      where: {
-        courseId: quiz.folder.courseId,
-        studentId: session.id,
-        isActive: true,
-      },
-      select: { id: true },
-    });
-    if (hasCourseAccess) canAccessAsStudent = true;
-  } else if (quiz.planLessonId && quiz.planLesson) {
+  if (quiz.planLessonId && quiz.planLesson) {
     const enrollment = await prisma.planEnrollment.findFirst({
       where: {
         planId: quiz.planLesson.planId,
@@ -50,13 +39,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       select: { id: true },
     });
     if (enrollment) {
-      canAccessAsStudent = true;
       planEnrollmentId = enrollment.id;
     }
-  }
-
-  if (!canAccessAsTeacher && !canAccessAsStudent) {
-    return NextResponse.json({ error: "لا يوجد صلاحية للوصول" }, { status: 403 });
   }
 
   const totalQ = quiz.questions.length;

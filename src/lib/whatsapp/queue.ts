@@ -232,8 +232,29 @@ class WhatsAppQueueManager {
     item.attempts++;
     try {
       if (!whatsappClient.isConnected()) {
-        // Attempt to auto-initialize if client is disconnected
-        await whatsappClient.initialize();
+        const isMainInstance = process.env.NODE_APP_INSTANCE === undefined || process.env.NODE_APP_INSTANCE === "0";
+        if (isMainInstance) {
+          // Attempt to auto-initialize if client is disconnected on main instance
+          await whatsappClient.initialize();
+        } else {
+          // In PM2 cluster mode on worker > 0, do not initialize a secondary Baileys socket
+          // to avoid corrupting shared on-disk auth state. Failover directly to Meta API.
+          logger.info("Worker instance > 0 detected with disconnected Baileys, routing to Meta Cloud API", {
+            queueId: item.id,
+            workerInstance: process.env.NODE_APP_INSTANCE,
+          });
+          const metaRes = await officialMetaProvider.sendMessage({
+            recipient: item.phoneE164,
+            content: item.content,
+            messageType: item.type === "OTP" ? "OTP" : "CUSTOM",
+          });
+          if (metaRes.success) {
+            this.queue.shift();
+            item.resolve({ success: true, messageId: metaRes.messageId });
+            return;
+          }
+        }
+
         if (!whatsappClient.isConnected()) {
           throw new Error("WhatsApp client is disconnected. Message held in queue.");
         }

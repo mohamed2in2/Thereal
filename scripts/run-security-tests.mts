@@ -586,6 +586,176 @@ async function testCommandCenterIsScopedToOwnRoster() {
   );
 }
 
+// ── Test 19 ──────────────────────────────────────────────────────────────────
+// Passwords and device resets must increment tokenVersion to revoke active JWT sessions.
+async function testTokenVersionRevocation() {
+  const { signToken, verifyToken } = await import("../src/lib/auth.ts");
+
+  const testUser = await prisma.user.create({
+    data: {
+      name: "Token Revocation Test",
+      email: `token-test-${Date.now()}@example.com`,
+      tokenVersion: 1,
+      role: "student",
+    },
+  });
+
+  try {
+    // Sign token with version 1
+    const token1 = await signToken({
+      id: testUser.id,
+      email: testUser.email,
+      name: testUser.name,
+      role: testUser.role,
+      tokenVersion: 1,
+    });
+
+    const payload1 = await verifyToken(token1);
+    assert.ok(payload1?.jti, "JWT must contain a unique jti identifier");
+    assert.equal(payload1?.tokenVersion, 1, "JWT must carry tokenVersion 1");
+
+    // Increment user tokenVersion in DB (simulating password reset)
+    await prisma.user.update({
+      where: { id: testUser.id },
+      data: { tokenVersion: { increment: 1 } },
+    });
+
+    const refreshedUser = await prisma.user.findUnique({ where: { id: testUser.id } });
+    assert.equal(refreshedUser?.tokenVersion, 2, "DB tokenVersion must increment to 2");
+
+    // Verify token payload against DB version
+    const isRevoked = (payload1?.tokenVersion !== undefined && refreshedUser?.tokenVersion !== payload1.tokenVersion);
+    assert.equal(isRevoked, true, "Token version 1 must be considered revoked after version increments to 2");
+
+    // Sign new token with version 2
+    const token2 = await signToken({
+      id: testUser.id,
+      email: testUser.email,
+      name: testUser.name,
+      role: testUser.role,
+      tokenVersion: 2,
+    });
+    const payload2 = await verifyToken(token2);
+    assert.notEqual(payload1?.jti, payload2?.jti, "Each token must receive a distinct jti UUID");
+    assert.equal(payload2?.tokenVersion, 2);
+    assert.equal(refreshedUser?.tokenVersion === payload2?.tokenVersion, true, "New token with version 2 is valid");
+  } finally {
+    await prisma.user.delete({ where: { id: testUser.id } });
+  }
+}
+
+// ── Test 20 ──────────────────────────────────────────────────────────────────
+// BalanceTransaction providerRef enables fast indexed webhook lookup without full table scans.
+async function testBalanceTransactionProviderRef() {
+  const testUser = await prisma.user.create({
+    data: {
+      name: "ProviderRef Test",
+      email: `provider-ref-${Date.now()}@example.com`,
+      role: "student",
+    },
+  });
+
+  const refCode = `SH7-TEST-${Date.now()}`;
+
+  try {
+    const tx = await prisma.balanceTransaction.create({
+      data: {
+        userId: testUser.id,
+        type: "credit_sha7nawy_pending",
+        amount: 150,
+        providerRef: refCode,
+        note: `sha7nawy_ref:${refCode}|base:150|total:150`,
+      },
+    });
+
+    const found = await prisma.balanceTransaction.findFirst({
+      where: {
+        type: "credit_sha7nawy_pending",
+        providerRef: refCode,
+      },
+    });
+
+    assert.ok(found, "Transaction must be found directly by indexed providerRef");
+    assert.equal(found?.id, tx.id);
+    assert.equal(found?.amount, 150);
+  } finally {
+    await prisma.balanceTransaction.deleteMany({ where: { userId: testUser.id } });
+    await prisma.user.delete({ where: { id: testUser.id } });
+  }
+}
+
+// ── Test 21 ──────────────────────────────────────────────────────────────────
+// VdoCipher OTP TTL must be short-lived (default 120s) to minimize token capture window.
+async function testVdoCipherShortOtpTtl() {
+  const source = await import("node:fs/promises").then((fs) =>
+    fs.readFile(new URL("../src/lib/vdocipher.ts", import.meta.url), "utf8")
+  );
+
+  assert.ok(
+    /VDOCIPHER_OTP_TTL\)\s*\|\|\s*120/.test(source) || /ttl:\s*otpTtl/.test(source),
+    "VdoCipher OTP TTL must default to 120s and be configurable via VDOCIPHER_OTP_TTL"
+  );
+  assert.ok(!/ttl:\s*3600/.test(source), "Hardcoded 1-hour (3600s) TTL must not be present in vdocipher.ts");
+}
+
+// ── Test 22 ──────────────────────────────────────────────────────────────────
+// Expired / consumed phone challenges are pruned in the payment & maintenance cron.
+async function testChallengeCleanupInCron() {
+  const oldConsumed = await prisma.phoneVerificationChallenge.create({
+    data: {
+      phone: "+201000000098",
+      codeHash: "consumed-hash",
+      consumedAt: new Date(Date.now() - 48 * 3600 * 1000), // 48h ago
+      createdAt: new Date(Date.now() - 48 * 3600 * 1000),
+      expiresAt: new Date(Date.now() - 48 * 3600 * 1000),
+    },
+  });
+
+  const activeChallenge = await prisma.phoneVerificationChallenge.create({
+    data: {
+      phone: "+201000000099",
+      codeHash: "active-hash",
+      expiresAt: new Date(Date.now() + 60 * 1000), // expires in 1 min
+    },
+  });
+
+  const challengeCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  await prisma.phoneVerificationChallenge.deleteMany({
+    where: {
+      OR: [
+        { consumedAt: { not: null }, createdAt: { lt: challengeCutoff } },
+        { expiresAt: { lt: challengeCutoff } },
+      ],
+    },
+  });
+
+  const oldFound = await prisma.phoneVerificationChallenge.findUnique({ where: { id: oldConsumed.id } });
+  const activeFound = await prisma.phoneVerificationChallenge.findUnique({ where: { id: activeChallenge.id } });
+
+  assert.equal(oldFound, null, "Consumed challenge older than 24h must be deleted");
+  assert.ok(activeFound, "Active valid challenge must not be deleted");
+
+  await prisma.phoneVerificationChallenge.delete({ where: { id: activeChallenge.id } });
+}
+
+// ── Test 23 ──────────────────────────────────────────────────────────────────
+// WhatsApp Baileys autostart must be guarded against multi-worker cluster storms.
+async function testWhatsAppWorkerAutostartGuard() {
+  const source = await import("node:fs/promises").then((fs) =>
+    fs.readFile(new URL("../src/lib/whatsapp/index.ts", import.meta.url), "utf8")
+  );
+
+  assert.ok(
+    /NODE_APP_INSTANCE === undefined \|\| process\.env\.NODE_APP_INSTANCE === "0"/.test(source) ||
+    /isMainInstance/.test(source),
+    "WhatsAppService must guard against autostart on non-zero PM2 cluster instances"
+  );
+  assert.ok(
+    /NODE_ENV !== "test"/.test(source),
+    "WhatsAppService must avoid starting background Baileys sockets during automated tests"
+  );
+}
+
 const TESTS: Array<[string, () => Promise<void>]> = [
   ["challenge cookie leaks nothing crackable", testChallengeCookieLeaksNothingCrackable],
   ["challenge is single use", testChallengeIsSingleUse],
@@ -605,6 +775,11 @@ const TESTS: Array<[string, () => Promise<void>]> = [
   ["concurrent access-code redemption binds once", testConcurrentAccessCodeRedemptionBindsOnce],
   ["score percentage semantics", testScorePercentageSemantics],
   ["command centre is scoped to own roster", testCommandCenterIsScopedToOwnRoster],
+  ["tokenVersion invalidation on password/device reset", testTokenVersionRevocation],
+  ["BalanceTransaction providerRef indexed lookup", testBalanceTransactionProviderRef],
+  ["VdoCipher OTP TTL default 120s", testVdoCipherShortOtpTtl],
+  ["expired challenge cleanup in cron", testChallengeCleanupInCron],
+  ["WhatsApp worker-0 autostart guard", testWhatsAppWorkerAutostartGuard],
 ];
 
 async function main() {

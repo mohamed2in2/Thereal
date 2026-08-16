@@ -59,7 +59,10 @@ export async function POST(req: NextRequest) {
     const hashed = await bcrypt.hash(String(newPassword), 10);
     await prisma.user.update({
       where: { id: user.id },
-      data: { password: hashed },
+      data: {
+        password: hashed,
+        tokenVersion: { increment: 1 },
+      },
     });
 
     await clearPhoneVerificationCookie();

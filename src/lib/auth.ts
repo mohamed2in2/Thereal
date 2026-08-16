@@ -23,6 +23,8 @@ export interface JWTPayload {
   /** True for the owner superadmin (Ahmed) and the break-glass master login. */
   isOwner?: boolean;
   deviceId?: string;
+  tokenVersion?: number;
+  jti?: string;
   iat?: number;
   exp?: number;
 }
@@ -77,7 +79,11 @@ function isSecureCookieContext() {
 
 export async function signToken(payload: Omit<JWTPayload, "iat" | "exp">) {
   const days = await getConfigNumberClamped("jwt_expiry_days", 1, 365); // was 7d; never 0/NaN
-  return new SignJWT(payload as Record<string, unknown>)
+  const tokenPayload = {
+    ...payload,
+    jti: payload.jti ?? crypto.randomUUID(),
+  };
+  return new SignJWT(tokenPayload as Record<string, unknown>)
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime(`${days}d`)
@@ -284,6 +290,12 @@ async function getJwtSession(): Promise<SessionUser | null> {
   });
 
   if (!user || !user.isActive || user.isDeleted) {
+    return null;
+  }
+
+  // Token revocation check: if token carries a tokenVersion and DB user has a
+  // different tokenVersion (due to password reset or device wipe), reject the token.
+  if (payload.tokenVersion !== undefined && user.tokenVersion !== undefined && user.tokenVersion !== payload.tokenVersion) {
     return null;
   }
 

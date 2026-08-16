@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { SHA7NAWY_PENDING_TYPE } from "@/lib/sha7nawy";
 import { SHAKEOUT_PENDING_TYPE } from "@/lib/shakeout";
 
-export async function GET(req: NextRequest) {
+async function handleCleanup(req: NextRequest) {
   try {
     const authHeader = req.headers.get("authorization");
     const cronSecret = process.env.CRON_SECRET;
@@ -14,8 +14,9 @@ export async function GET(req: NextRequest) {
 
     const sha7nawyCutoff = new Date(Date.now() - 72 * 60 * 60 * 1000); // 72 hours
     const shakeoutCutoff = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000); // 8 days (7-day invoice + 1 day grace)
+    const challengeCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000); // 24 hours
 
-    const [sha7nawyRes, shakeoutRes] = await Promise.all([
+    const [sha7nawyRes, shakeoutRes, challengeRes] = await Promise.all([
       prisma.balanceTransaction.updateMany({
         where: {
           type: SHA7NAWY_PENDING_TYPE,
@@ -34,6 +35,14 @@ export async function GET(req: NextRequest) {
           type: "credit_shakeout_expired",
         },
       }),
+      prisma.phoneVerificationChallenge.deleteMany({
+        where: {
+          OR: [
+            { consumedAt: { not: null }, createdAt: { lt: challengeCutoff } },
+            { expiresAt: { lt: challengeCutoff } },
+          ],
+        },
+      }),
     ]);
 
     const totalExpired = sha7nawyRes.count + shakeoutRes.count;
@@ -43,6 +52,7 @@ export async function GET(req: NextRequest) {
       expiredCount: totalExpired,
       sha7nawyExpired: sha7nawyRes.count,
       shakeoutExpired: shakeoutRes.count,
+      challengesCleaned: challengeRes.count,
       sha7nawyCutoff: sha7nawyCutoff.toISOString(),
       shakeoutCutoff: shakeoutCutoff.toISOString(),
     });
@@ -51,3 +61,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "حدث خطأ أثناء تنظيف الفواتير المنتهية" }, { status: 500 });
   }
 }
+
+export async function GET(req: NextRequest) {
+  return handleCleanup(req);
+}
+
+export async function POST(req: NextRequest) {
+  return handleCleanup(req);
+}
+

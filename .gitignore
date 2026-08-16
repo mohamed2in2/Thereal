@@ -44,10 +44,13 @@ yarn-error.log*
 next-env.d.ts
 
 /src/generated/prisma
+*.db
+*.db-journal
 /dev.db
 /dev.db-journal
+prisma/*.db
+prisma/*.db-journal
 prisma/backups/
-*.db
 
 # WhatsApp Baileys Auth & Logs
 whatsapp-auth/

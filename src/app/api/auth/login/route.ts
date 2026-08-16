@@ -88,7 +88,14 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const token = await signToken({ id: user.id, email: user.email, name: user.name, role: user.role, deviceId });
+    const token = await signToken({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      deviceId,
+      tokenVersion: user.tokenVersion ?? 0,
+    });
     await setAuthCookie(token);
     if (isNew) await setDeviceCookie(deviceId);
 

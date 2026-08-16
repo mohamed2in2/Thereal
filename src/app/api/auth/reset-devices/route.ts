@@ -51,6 +51,13 @@ export async function POST(req: NextRequest) {
 
     await clearFailedLogins(user.id);
 
+    // Invalidate all prior sessions across all devices
+    const updatedUser = await prisma.user.update({
+      where: { id: user.id },
+      data: { tokenVersion: { increment: 1 } },
+      select: { tokenVersion: true },
+    });
+
     // Remove all old registered devices for this user
     await prisma.device.deleteMany({ where: { userId: user.id } });
 
@@ -63,7 +70,14 @@ export async function POST(req: NextRequest) {
       data: { userId: user.id, deviceId, label: deviceLabelFromUA(userAgent), userAgent, ipAddress },
     });
 
-    const token = await signToken({ id: user.id, email: user.email, name: user.name, role: user.role, deviceId });
+    const token = await signToken({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      deviceId,
+      tokenVersion: updatedUser.tokenVersion,
+    });
     await setAuthCookie(token);
     if (isNew) await setDeviceCookie(deviceId);
 

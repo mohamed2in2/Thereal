@@ -316,6 +316,7 @@ export async function POST(req: NextRequest) {
           type: SHAKEOUT_PENDING_TYPE,
           amount: baseAmount,
           note: noteText,
+          providerRef: String(reference),
         },
       });
 
@@ -369,6 +370,7 @@ export async function POST(req: NextRequest) {
         type: SHA7NAWY_PENDING_TYPE,
         amount: baseAmount,
         note: noteText,
+        providerRef: String(reference),
       },
     });
 

@@ -1,3 +1,4 @@
+process.env.NODE_ENV = 'test';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 
@@ -116,7 +117,7 @@ async function testWhatsAppFallbackToSms() {
   process.env.WHATSAPP_PERMANENT_TOKEN = 'mock-whatsapp-token';
   process.env.WHATSAPP_PHONE_NUMBER_ID = 'mock-phone-id';
   process.env.WHATSAPP_OTP_TEMPLATE_NAME = 'codeup';
-  process.env.DEV_SKIP_SMS = 'false';
+  process.env.DEV_SKIP_SMS = 'true';
   process.env.TWILIO_ACCOUNT_SID = 'AC123';
   process.env.TWILIO_FROM_NUMBER = '+123';
   process.env.TWILIO_AUTH_TOKEN = 'token';

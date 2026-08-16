@@ -28,6 +28,7 @@ export async function getVdoCipherOtp(vdoCipherId: string): Promise<VdoCipherOtp
   }
 
   try {
+    const otpTtl = Number(process.env.VDOCIPHER_OTP_TTL) || 120; // 2 minutes default (player init window)
     const response = await fetch(`https://dev.vdocipher.com/api/videos/${vdoCipherId}/otp`, {
       method: "POST",
       headers: {
@@ -35,7 +36,7 @@ export async function getVdoCipherOtp(vdoCipherId: string): Promise<VdoCipherOtp
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        ttl: 3600 // 1 hour token expiration
+        ttl: otpTtl
       })
     });
 

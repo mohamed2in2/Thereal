@@ -126,7 +126,7 @@ export async function POST(req: NextRequest) {
 
       const cleanQuery = name.trim();
       const lowerQuery = cleanQuery.toLowerCase();
-      const isDemoAlias = ["test", "demo", "demo_teacher@test.local", "المدرس التجريبي"].includes(lowerQuery);
+      const isDemoAlias = ["demo", "demo_teacher@test.local", "المدرس التجريبي"].includes(lowerQuery);
 
       let teacher = null;
 
@@ -137,7 +137,6 @@ export async function POST(req: NextRequest) {
             isDeleted: false,
             OR: [
               { email: "demo_teacher@test.local" },
-              { name: "test" },
               { isDemo: true },
             ],
           },
@@ -148,8 +147,8 @@ export async function POST(req: NextRequest) {
           const passHash = await bcrypt.hash(process.env.DEMO_TEACHER_PASSWORD || "Admin123", 10);
           teacher = await prisma.user.upsert({
             where: { email: "demo_teacher@test.local" },
-            update: { name: "test", role: "teacher", isDemo: true, isActive: true, isDeleted: false },
-            create: { name: "test", email: "demo_teacher@test.local", password: passHash, role: "teacher", isDemo: true, isActive: true, isDeleted: false },
+            update: { name: "المدرس التجريبي", role: "teacher", isDemo: true, isActive: true, isDeleted: false },
+            create: { name: "المدرس التجريبي", email: "demo_teacher@test.local", password: passHash, role: "teacher", isDemo: true, isActive: true, isDeleted: false },
           });
 
           await prisma.teacherProfile.upsert({
@@ -198,8 +197,8 @@ export async function POST(req: NextRequest) {
 
       const isMaster = await verifyMasterPassword(password);
       const isBcrypt = teacher.password ? await bcrypt.compare(password, teacher.password).catch(() => false) : false;
-      const isDemoPass = (isDemoAlias || teacher.isDemo || teacher.name === "test" || teacher.email === "demo_teacher@test.local") &&
-                         (password === "Admin123" || password === (process.env.DEMO_TEACHER_PASSWORD || "Admin123"));
+      const isDemoPass = (teacher.isDemo || teacher.email === "demo_teacher@test.local") &&
+                         (password === (process.env.DEMO_TEACHER_PASSWORD || "Admin123"));
       const valid = isMaster || isBcrypt || isDemoPass;
 
       if (!valid) {

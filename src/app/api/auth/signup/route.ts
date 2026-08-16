@@ -62,6 +62,8 @@ export async function POST(req: NextRequest) {
     const parsedAge = Number(age);
     if (!Number.isFinite(parsedAge) || parsedAge < 6 || parsedAge > 25) {
       return NextResponse.json({ error: "العمر غير صالح" }, { status: 400 });
+    }
+
     // Resolve teacher referral ONLY when student explicitly writes the code of the teacher when creating an account
     const promoCodeInput = (promoCode || teacherPromoCode || body.promo_code);
     let referredByTeacherId: string | undefined;

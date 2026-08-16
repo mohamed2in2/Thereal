@@ -9,9 +9,18 @@ export interface WhatsAppFullStatus extends WhatsAppClientStatus {
 
 class WhatsAppService {
   constructor() {
-    // Autostart client on startup / server load
-    if (typeof window === "undefined") {
-      void this.initAutoStart();
+    // Autostart client on startup / server load only for the primary cluster instance.
+    // Under PM2 cluster mode (instances: "max"), only instance 0 initializes the Baileys
+    // socket to avoid on-disk auth credential races and continuous QR generation loops.
+    const isBuilding =
+      process.env.NEXT_PHASE === "phase-production-build" ||
+      process.env.npm_lifecycle_event === "build";
+
+    if (typeof window === "undefined" && process.env.NODE_ENV !== "test" && !isBuilding) {
+      const isMainInstance = process.env.NODE_APP_INSTANCE === undefined || process.env.NODE_APP_INSTANCE === "0";
+      if (isMainInstance && process.env.WHATSAPP_AUTOSTART !== "false") {
+        void this.initAutoStart();
+      }
     }
   }
 

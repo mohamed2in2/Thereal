@@ -24,6 +24,24 @@ export async function checkCourseEnrollment(userId: string, courseId: string, ro
   });
   if (code) return true;
 
+  const course = await prisma.course.findUnique({
+    where: { id: courseId },
+    select: { teacherId: true, isPaid: true, price: true },
+  });
+
+  if (course?.teacherId) {
+    const activeSub = await prisma.teacherSubscription.findFirst({
+      where: {
+        studentId: userId,
+        teacherId: course.teacherId,
+        status: "active",
+        expiresAt: { gt: new Date() },
+      },
+      select: { id: true },
+    });
+    if (activeSub) return true;
+  }
+
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { accountMode: true, testerCapabilities: true },
@@ -32,14 +50,120 @@ export async function checkCourseEnrollment(userId: string, courseId: string, ro
     return true;
   }
 
-  if (role) {
-    const course = await prisma.course.findUnique({
-      where: { id: courseId },
-      select: { teacherId: true },
-    });
-    if (course?.teacherId && (await canBypassPayment(role, course.teacherId, user?.accountMode))) {
+  if (role && course?.teacherId) {
+    if (await canBypassPayment(role, course.teacherId, user?.accountMode)) {
       return true;
     }
+  }
+
+  return false;
+}
+
+/**
+ * Checks if a user has access to a quiz.
+ * - Admin/Superadmin: full access.
+ * - Teacher: access if they created/own the course or plan lesson.
+ * - Student: access if they are enrolled in the course, subscribed to the teacher,
+ *   purchased the folder, or enrolled in the study plan containing the quiz.
+ */
+export async function checkQuizAccess(userId: string, role: string, quizId: string): Promise<boolean> {
+  if (role === "superadmin" || role === "admin") return true;
+
+  const quiz = await prisma.quiz.findUnique({
+    where: { id: quizId },
+    include: {
+      folder: {
+        select: {
+          id: true,
+          courseId: true,
+          course: { select: { teacherId: true, isPaid: true, price: true } },
+        },
+      },
+      planLesson: { select: { id: true, planId: true } },
+    },
+  });
+
+  if (!quiz) return false;
+
+  if (role === "teacher") {
+    return (
+      (quiz.folder?.course?.teacherId === userId) ||
+      (quiz.planLessonId !== null)
+    );
+  }
+
+  if (role !== "student") return false;
+
+  // QA Tester Check
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { accountMode: true },
+  });
+  if (user && user.accountMode === "TESTER") return true;
+
+  // 1. Plan Lesson Quiz
+  if (quiz.planLessonId && quiz.planLesson) {
+    const enrollment = await prisma.planEnrollment.findFirst({
+      where: {
+        planId: quiz.planLesson.planId,
+        studentId: userId,
+        expiresAt: { gt: new Date() },
+      },
+      select: { id: true },
+    });
+    if (enrollment) return true;
+  }
+
+  // 2. Folder-based Course Quiz
+  if (quiz.folderId && quiz.folder) {
+    const courseId = quiz.folder.courseId;
+    const teacherId = quiz.folder.course?.teacherId;
+
+    // Demo bypass
+    if (teacherId && (await canBypassPayment(role, teacherId, user?.accountMode))) {
+      return true;
+    }
+
+    // Active teacher subscription
+    if (teacherId) {
+      const activeSub = await prisma.teacherSubscription.findFirst({
+        where: {
+          studentId: userId,
+          teacherId,
+          status: "active",
+          expiresAt: { gt: new Date() },
+        },
+        select: { id: true },
+      });
+      if (activeSub) return true;
+    }
+
+    // Free course check
+    if (quiz.folder.course && (!quiz.folder.course.isPaid || (quiz.folder.course.price ?? 0) === 0)) {
+      return true;
+    }
+
+    // Course enrollment (AccessCode or direct CourseEnrollment or teacher subscription)
+    const isEnrolled = await checkCourseEnrollment(userId, courseId, role);
+    if (isEnrolled) return true;
+
+    // Folder purchase or folder-level access code
+    const hasFolderCode = await prisma.accessCode.findFirst({
+      where: {
+        folderId: quiz.folderId,
+        studentId: userId,
+        accessType: "FOLDER",
+        isActive: true,
+      },
+      select: { id: true },
+    });
+    if (hasFolderCode) return true;
+
+    const hasFolderPurchase = await prisma.folderPurchase.findUnique({
+      where: { studentId_folderId: { studentId: userId, folderId: quiz.folderId } },
+      select: { id: true },
+    });
+    if (hasFolderPurchase) return true;
   }
 
   return false;

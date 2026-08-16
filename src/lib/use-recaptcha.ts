@@ -39,6 +39,7 @@ declare global {
 
 export function useRecaptcha() {
   const [ready, setReady] = useState(false);
+  const [isBlocked, setIsBlocked] = useState(false);
   const scriptLoaded = useRef(false);
 
   /**
@@ -46,7 +47,7 @@ export function useRecaptcha() {
    * will be. Built in useState's lazy initializer so it is created exactly once
    * without touching a ref during render.
    */
-  const [readyGate] = useState(() => {
+  const [readyGate, setReadyGate] = useState(() => {
     let settle: (usable: boolean) => void = () => {};
     const promise = new Promise<boolean>((resolve) => {
       settle = resolve;
@@ -54,17 +55,16 @@ export function useRecaptcha() {
     return { promise, settle };
   });
 
-  useEffect(() => {
-    if (scriptLoaded.current) return;
-    scriptLoaded.current = true;
-
+  const loadScript = useCallback(() => {
     const markUsable = () => {
       if (typeof window !== "undefined" && window.grecaptcha?.enterprise) {
         window.grecaptcha.enterprise.ready(() => {
           setReady(true);
+          setIsBlocked(false);
           readyGate.settle(true);
         });
       } else {
+        setIsBlocked(true);
         readyGate.settle(false);
       }
     };
@@ -83,9 +83,31 @@ export function useRecaptcha() {
     script.onload = markUsable;
     // Blocked by an extension, a filtering ISP, or offline — settle rather than
     // leaving every caller waiting for the full timeout.
-    script.onerror = () => readyGate.settle(false);
+    script.onerror = () => {
+      setIsBlocked(true);
+      readyGate.settle(false);
+    };
     document.head.appendChild(script);
   }, [readyGate]);
+
+  useEffect(() => {
+    if (scriptLoaded.current) return;
+    scriptLoaded.current = true;
+    loadScript();
+  }, [loadScript]);
+
+  const retry = useCallback(() => {
+    const existing = document.querySelector(`script[src*="recaptcha/enterprise"]`);
+    if (existing) existing.remove();
+    scriptLoaded.current = false;
+    let settle: (usable: boolean) => void = () => {};
+    const promise = new Promise<boolean>((resolve) => {
+      settle = resolve;
+    });
+    setReadyGate({ promise, settle });
+    setIsBlocked(false);
+    setReady(false);
+  }, []);
 
   const execute = useCallback(async (action: string): Promise<string> => {
     if (!ready) {
@@ -94,6 +116,7 @@ export function useRecaptcha() {
         new Promise<boolean>((resolve) => setTimeout(() => resolve(false), READY_TIMEOUT_MS)),
       ]);
       if (!usable || !window.grecaptcha?.enterprise) {
+        setIsBlocked(true);
         console.warn("[reCAPTCHA] Unavailable after waiting; submitting without a token.");
         return "";
       }
@@ -102,10 +125,11 @@ export function useRecaptcha() {
     try {
       return await window.grecaptcha.enterprise.execute(SITE_KEY, { action });
     } catch (err) {
+      setIsBlocked(true);
       console.error("[reCAPTCHA] execute() failed:", err);
       return "";
     }
   }, [ready, readyGate]);
 
-  return { execute, ready };
+  return { execute, ready, isBlocked, retry };
 }

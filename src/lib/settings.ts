@@ -7,10 +7,41 @@ export const DEFAULT_TEACHER_GRACE_DAYS = 7;
 export const MIN_GRACE_DAYS = 1;
 export const MAX_GRACE_DAYS = 365;
 
+// ── 60-second in-memory cache to eliminate repetitive DB queries on SSR renders ──
+const settingsCache = new Map<string, { value: string; fetchedAt: number }>();
+const CACHE_TTL_MS = 60_000;
+
+async function getCachedSetting(key: string): Promise<string | null> {
+  const cached = settingsCache.get(key);
+  if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
+    return cached.value;
+  }
+  try {
+    const row = await prisma.appSetting.findUnique({ where: { key } });
+    const val = row?.value ?? null;
+    if (val !== null) {
+      settingsCache.set(key, { value: val, fetchedAt: Date.now() });
+    } else {
+      settingsCache.delete(key);
+    }
+    return val;
+  } catch {
+    return cached ? cached.value : null;
+  }
+}
+
+export function invalidateSettingsCache(key?: string) {
+  if (key) {
+    settingsCache.delete(key);
+  } else {
+    settingsCache.clear();
+  }
+}
+
 export async function getTeacherGraceDays(): Promise<number> {
   try {
-    const row = await prisma.appSetting.findUnique({ where: { key: TEACHER_GRACE_KEY } });
-    const n = row ? parseInt(row.value, 10) : NaN;
+    const val = await getCachedSetting(TEACHER_GRACE_KEY);
+    const n = val ? parseInt(val, 10) : NaN;
     if (Number.isFinite(n) && n >= MIN_GRACE_DAYS && n <= MAX_GRACE_DAYS) return n;
   } catch { /* table missing / db error → fall back */ }
   return DEFAULT_TEACHER_GRACE_DAYS;
@@ -23,6 +54,7 @@ export async function setTeacherGraceDays(days: number): Promise<number> {
     update: { value: String(clamped) },
     create: { key: TEACHER_GRACE_KEY, value: String(clamped) },
   });
+  invalidateSettingsCache(TEACHER_GRACE_KEY);
   return clamped;
 }
 
@@ -34,8 +66,8 @@ export const MAX_DEVICES = 10;
 
 export async function getStudentMaxDevices(): Promise<number> {
   try {
-    const row = await prisma.appSetting.findUnique({ where: { key: STUDENT_MAX_DEVICES_KEY } });
-    const n = row ? parseInt(row.value, 10) : NaN;
+    const val = await getCachedSetting(STUDENT_MAX_DEVICES_KEY);
+    const n = val ? parseInt(val, 10) : NaN;
     if (Number.isFinite(n) && n >= MIN_DEVICES && n <= MAX_DEVICES) return n;
   } catch { /* fall back */ }
   return DEFAULT_STUDENT_MAX_DEVICES;
@@ -48,6 +80,7 @@ export async function setStudentMaxDevices(n: number): Promise<number> {
     update: { value: String(clamped) },
     create: { key: STUDENT_MAX_DEVICES_KEY, value: String(clamped) },
   });
+  invalidateSettingsCache(STUDENT_MAX_DEVICES_KEY);
   return clamped;
 }
 
@@ -59,8 +92,8 @@ export const DEFAULT_MAINTENANCE_MESSAGE =
 
 export async function getMaintenanceMode(): Promise<boolean> {
   try {
-    const row = await prisma.appSetting.findUnique({ where: { key: MAINTENANCE_KEY } });
-    return row?.value === "on";
+    const val = await getCachedSetting(MAINTENANCE_KEY);
+    return val === "on";
   } catch {
     return false;
   }
@@ -72,13 +105,14 @@ export async function setMaintenanceMode(on: boolean): Promise<boolean> {
     update: { value: on ? "on" : "off" },
     create: { key: MAINTENANCE_KEY, value: on ? "on" : "off" },
   });
+  invalidateSettingsCache(MAINTENANCE_KEY);
   return on;
 }
 
 export async function getMaintenanceMessage(): Promise<string> {
   try {
-    const row = await prisma.appSetting.findUnique({ where: { key: MAINTENANCE_MSG_KEY } });
-    return row?.value?.trim() || DEFAULT_MAINTENANCE_MESSAGE;
+    const val = await getCachedSetting(MAINTENANCE_MSG_KEY);
+    return val?.trim() || DEFAULT_MAINTENANCE_MESSAGE;
   } catch {
     return DEFAULT_MAINTENANCE_MESSAGE;
   }
@@ -91,5 +125,6 @@ export async function setMaintenanceMessage(msg: string): Promise<string> {
     update: { value },
     create: { key: MAINTENANCE_MSG_KEY, value },
   });
+  invalidateSettingsCache(MAINTENANCE_MSG_KEY);
   return value;
 }

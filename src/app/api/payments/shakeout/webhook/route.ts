@@ -76,36 +76,57 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Verification status mismatch" }, { status: 400 });
     }
 
-    // Guard 2: Reference match with strict boundary check (prevents prefix collisions while supporting legacy formats)
-    const refPrefix = shakeOutRefNote(String(reference));
+    // Guard 2: Reference match with fast O(1) indexed lookup via providerRef, with fallback to legacy note prefix
+    const refStr = String(reference);
+    const refPrefix = shakeOutRefNote(refStr);
 
-    const candidates = await prisma.balanceTransaction.findMany({
+    let pendingTx = await prisma.balanceTransaction.findFirst({
       where: {
         type: SHAKEOUT_PENDING_TYPE,
-        note: { startsWith: refPrefix },
+        providerRef: refStr,
       },
       select: { id: true, userId: true, amount: true, note: true },
     });
 
-    let pendingTx = candidates.find(
-      (c) => c.note === refPrefix || c.note?.startsWith(`${refPrefix}|`) || c.note?.startsWith(`${refPrefix} `)
-    ) ?? null;
+    if (!pendingTx) {
+      const candidates = await prisma.balanceTransaction.findMany({
+        where: {
+          type: SHAKEOUT_PENDING_TYPE,
+          note: { startsWith: refPrefix },
+        },
+        select: { id: true, userId: true, amount: true, note: true },
+      });
+
+      pendingTx = candidates.find(
+        (c) => c.note === refPrefix || c.note?.startsWith(`${refPrefix}|`) || c.note?.startsWith(`${refPrefix} `)
+      ) ?? null;
+    }
 
     let targetType = SHAKEOUT_PENDING_TYPE;
     let isLatePayment = false;
 
     // B23b: Also search expired rows if no active pending row found
     if (!pendingTx) {
-      const expiredCandidates = await prisma.balanceTransaction.findMany({
+      let expiredTx = await prisma.balanceTransaction.findFirst({
         where: {
           type: "credit_shakeout_expired",
-          note: { startsWith: refPrefix },
+          providerRef: refStr,
         },
         select: { id: true, userId: true, amount: true, note: true },
       });
-      const expiredTx = expiredCandidates.find(
-        (c) => c.note === refPrefix || c.note?.startsWith(`${refPrefix}|`) || c.note?.startsWith(`${refPrefix} `)
-      ) ?? null;
+
+      if (!expiredTx) {
+        const expiredCandidates = await prisma.balanceTransaction.findMany({
+          where: {
+            type: "credit_shakeout_expired",
+            note: { startsWith: refPrefix },
+          },
+          select: { id: true, userId: true, amount: true, note: true },
+        });
+        expiredTx = expiredCandidates.find(
+          (c) => c.note === refPrefix || c.note?.startsWith(`${refPrefix}|`) || c.note?.startsWith(`${refPrefix} `)
+        ) ?? null;
+      }
 
       if (expiredTx) {
         pendingTx = expiredTx;
@@ -116,6 +137,18 @@ export async function POST(req: NextRequest) {
     }
 
     if (!pendingTx) {
+      const alreadyCreditedDirect = await prisma.balanceTransaction.findFirst({
+        where: {
+          type: SHAKEOUT_CREDITED_TYPE,
+          providerRef: refStr,
+        },
+        select: { id: true, note: true },
+      });
+
+      if (alreadyCreditedDirect) {
+        return NextResponse.json({ success: true, processed: false, reason: "Already credited" }, { status: 200 });
+      }
+
       const creditedCandidates = await prisma.balanceTransaction.findMany({
         where: {
           type: SHAKEOUT_CREDITED_TYPE,

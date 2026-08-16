@@ -35,7 +35,7 @@ export async function GET(
         },
         questions: {
           select: {
-            question: true,
+            questionText: true,
             correctOption: true,
           },
         },
@@ -58,7 +58,7 @@ export async function GET(
         folderName: video.folder?.name,
         durationMinutes: video.durationMinutes,
         questions: video.questions.map((q) => ({
-          question: q.question,
+          question: q.questionText,
           correctAnswer: q.correctOption,
         })),
       },

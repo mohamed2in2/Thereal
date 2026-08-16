@@ -1,5 +1,5 @@
 generator client {
-  provider = "prisma-client"
+  provider = "prisma-client-js"
   output   = "../src/generated/prisma"
 }
 
@@ -42,6 +42,8 @@ model User {
   // `lockout_minutes` platform config, which previously had no effect.
   failedLoginAttempts Int                      @default(0)
   lockedUntil         DateTime?
+  // Session revocation version: incrementing this invalidates all previously issued JWTs.
+  tokenVersion        Int                      @default(0)
   createdAt           DateTime                 @default(now())
   updatedAt           DateTime                 @updatedAt
   parentToken         ParentToken?
@@ -797,19 +799,21 @@ model Notification {
 
 /// Every credit/debit against a student's balance. Immutable audit trail.
 model BalanceTransaction {
-  id        String   @id @default(cuid())
-  userId    String
+  id          String   @id @default(cuid())
+  userId      String
   /// credit_admin | credit_code | debit_course
-  type      String
-  amount    Float // positive = credit, negative = debit
-  note      String? // admin note or code used
-  adminId   String? // who credited (if type=credit_admin)
-  createdAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        String
+  amount      Float // positive = credit, negative = debit
+  note        String? // admin note or code used
+  providerRef String? // Gateway transaction reference for O(1) indexed lookup & idempotency
+  adminId     String? // who credited (if type=credit_admin)
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([type])
   @@index([createdAt])
+  @@index([providerRef])
 }
 
 model TeacherSubscription {

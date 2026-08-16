@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getStudentSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { checkVideoAccess } from "@/lib/authorization";
 
 export async function GET() {
 
@@ -65,22 +66,7 @@ export async function POST(req: NextRequest) {
       const { videoId, watched = true } = await req.json();
       if (!videoId) return NextResponse.json({ error: "videoId مطلوب" }, { status: 400 });
 
-      const video = await prisma.video.findUnique({
-        where: { id: videoId },
-        include: { folder: { select: { courseId: true } } },
-      });
-
-      if (!video) return NextResponse.json({ error: "الفيديو غير موجود" }, { status: 404 });
-
-      const hasAccess = await prisma.accessCode.findFirst({
-        where: {
-          courseId: video.folder.courseId,
-          studentId: session.id,
-          isActive: true,
-        },
-        select: { id: true },
-      });
-
+      const hasAccess = await checkVideoAccess(session.id, session.role, videoId);
       if (!hasAccess) return NextResponse.json({ error: "لا يوجد صلاحية للوصول" }, { status: 403 });
 
       const progress = await prisma.progress.upsert({

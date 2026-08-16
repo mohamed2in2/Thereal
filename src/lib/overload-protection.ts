@@ -58,6 +58,20 @@ export interface OverloadProtectionState {
   memory: SystemMemoryStatus;
 }
 
+// ── 30-second in-memory cache for DB settings ──
+let cachedDbSettings: {
+  mode: "auto" | "on" | "off";
+  ramThresholdPct: number;
+  cooldownUntil: string | null;
+  message: string;
+  fetchedAt: number;
+} | null = null;
+const OVERLOAD_CACHE_TTL_MS = 30_000;
+
+export function invalidateOverloadCache() {
+  cachedDbSettings = null;
+}
+
 export async function getOverloadProtectionState(): Promise<OverloadProtectionState> {
   const memory = getSystemMemoryStatus();
 
@@ -66,43 +80,59 @@ export async function getOverloadProtectionState(): Promise<OverloadProtectionSt
   let cooldownUntil: string | null = null;
   let message = DEFAULT_OVERLOAD_MESSAGE;
 
-  try {
-    const rows = await prisma.appSetting.findMany({
-      where: {
-        key: {
-          in: [
-            OVERLOAD_MODE_KEY,
-            OVERLOAD_RAM_THRESHOLD_KEY,
-            OVERLOAD_COOLDOWN_UNTIL_KEY,
-            OVERLOAD_MSG_KEY,
-          ],
+  const now = Date.now();
+  if (cachedDbSettings && now - cachedDbSettings.fetchedAt < OVERLOAD_CACHE_TTL_MS) {
+    mode = cachedDbSettings.mode;
+    ramThresholdPct = cachedDbSettings.ramThresholdPct;
+    cooldownUntil = cachedDbSettings.cooldownUntil;
+    message = cachedDbSettings.message;
+  } else {
+    try {
+      const rows = await prisma.appSetting.findMany({
+        where: {
+          key: {
+            in: [
+              OVERLOAD_MODE_KEY,
+              OVERLOAD_RAM_THRESHOLD_KEY,
+              OVERLOAD_COOLDOWN_UNTIL_KEY,
+              OVERLOAD_MSG_KEY,
+            ],
+          },
         },
-      },
-    });
+      });
 
-    const map = new Map<string, string>(rows.map((r) => [r.key, r.value]));
+      const map = new Map<string, string>(rows.map((r) => [r.key, r.value]));
 
-    const modeVal = map.get(OVERLOAD_MODE_KEY);
-    if (modeVal === "on" || modeVal === "off" || modeVal === "auto") {
-      mode = modeVal;
+      const modeVal = map.get(OVERLOAD_MODE_KEY);
+      if (modeVal === "on" || modeVal === "off" || modeVal === "auto") {
+        mode = modeVal;
+      }
+
+      const threshVal = parseInt(map.get(OVERLOAD_RAM_THRESHOLD_KEY) || "", 10);
+      if (Number.isFinite(threshVal) && threshVal >= 50 && threshVal <= 98) {
+        ramThresholdPct = threshVal;
+      }
+
+      const cdVal = map.get(OVERLOAD_COOLDOWN_UNTIL_KEY);
+      if (cdVal && cdVal !== "0") {
+        cooldownUntil = cdVal;
+      }
+
+      const msgVal = map.get(OVERLOAD_MSG_KEY);
+      if (msgVal && msgVal.trim()) {
+        message = msgVal.trim();
+      }
+
+      cachedDbSettings = {
+        mode,
+        ramThresholdPct,
+        cooldownUntil,
+        message,
+        fetchedAt: now,
+      };
+    } catch {
+      // Fail open if database query fails
     }
-
-    const threshVal = parseInt(map.get(OVERLOAD_RAM_THRESHOLD_KEY) || "", 10);
-    if (Number.isFinite(threshVal) && threshVal >= 50 && threshVal <= 98) {
-      ramThresholdPct = threshVal;
-    }
-
-    const cdVal = map.get(OVERLOAD_COOLDOWN_UNTIL_KEY);
-    if (cdVal && cdVal !== "0") {
-      cooldownUntil = cdVal;
-    }
-
-    const msgVal = map.get(OVERLOAD_MSG_KEY);
-    if (msgVal && msgVal.trim()) {
-      message = msgVal.trim();
-    }
-  } catch {
-    // Fail open if database query fails
   }
 
   // Calculate if cooldown timer is currently active
@@ -155,6 +185,7 @@ export async function setOverloadMode(mode: "auto" | "on" | "off"): Promise<void
     update: { value: mode },
     create: { key: OVERLOAD_MODE_KEY, value: mode },
   });
+  invalidateOverloadCache();
 }
 
 export async function setOverloadRamThreshold(pct: number): Promise<void> {
@@ -164,6 +195,7 @@ export async function setOverloadRamThreshold(pct: number): Promise<void> {
     update: { value: String(clamped) },
     create: { key: OVERLOAD_RAM_THRESHOLD_KEY, value: String(clamped) },
   });
+  invalidateOverloadCache();
 }
 
 export async function setOverloadCooldownTime(isoUntil: string | null): Promise<void> {
@@ -173,6 +205,7 @@ export async function setOverloadCooldownTime(isoUntil: string | null): Promise<
     update: { value: val },
     create: { key: OVERLOAD_COOLDOWN_UNTIL_KEY, value: val },
   });
+  invalidateOverloadCache();
 }
 
 export async function addOverloadCooldownMinutes(additionalMinutes: number): Promise<string> {

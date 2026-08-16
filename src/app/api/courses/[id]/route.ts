@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { getConfigNumberClamped } from "@/lib/config";
 import { canBypassPayment } from "@/lib/demo";
+import { checkCourseEnrollment } from "@/lib/authorization";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -50,9 +51,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     let allowedVideoIds: string[] = [];
 
     if (role === "student") {
-      const access = await prisma.accessCode.findFirst({
-        where: { courseId: id, studentId: session.id },
-      });
+      const access = await checkCourseEnrollment(session.id, id, role);
       if (!access) {
         const enrolledPlans = await prisma.planEnrollment.findMany({
           where: {

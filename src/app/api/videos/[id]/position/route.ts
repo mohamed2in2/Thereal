@@ -75,11 +75,23 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (Number.isFinite(rawDelta) && rawDelta > 0) {
     const key = `${session.id}:${videoId}`;
     const now = Date.now();
-    const lastPing = lastPingMap.get(key) ?? 0;
+    let lastPing = lastPingMap.get(key) ?? 0;
+
+    // If not in local process memory (e.g. request routed to a different cluster worker),
+    // check the database positionUpdatedAt timestamp for this student/video pair.
+    if (lastPing === 0) {
+      const prevProgress = await prisma.progress.findUnique({
+        where: { studentId_videoId: { studentId: session.id, videoId } },
+        select: { positionUpdatedAt: true },
+      });
+      if (prevProgress?.positionUpdatedAt) {
+        lastPing = new Date(prevProgress.positionUpdatedAt).getTime();
+      }
+    }
 
     if (lastPing > 0) {
       const wallClockSeconds = (now - lastPing) / 1000;
-      safeDelta = Math.min(rawDelta, wallClockSeconds * 1.1);
+      safeDelta = Math.min(rawDelta, Math.max(0, wallClockSeconds * 1.1));
     } else {
       // First ping of this session — accept up to 10s (one interval)
       safeDelta = Math.min(rawDelta, 10);

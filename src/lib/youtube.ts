@@ -1,12 +1,14 @@
 /**
- * YouTube private/unlisted video embed integration & URL parser.
+ * YouTube unlisted video embed integration & URL parser.
  *
- * YouTube does not provide server-side signed URLs — protection comes from:
- * 1. Videos set to "Unlisted" (not findable via search, only via direct link)
- * 2. The player iframe has no-referrer + our domain allowlisted in YT Studio
- * 3. Our watch page disables right-click + DevTools keyboard shortcuts (client-side)
- * 4. The embed URL is never exposed directly to students; it's served via our API
- *    and only the iframe src is set in JS, so it's not in the page source.
+ * Security Note:
+ * YouTube unlisted embeds provide NO digital rights management (DRM) or cryptographic
+ * token authorization. The video ID and embed URL are returned in JSON API responses
+ * to authenticated clients and can be discovered in the browser Network tab or DevTools.
+ *
+ * YouTube unlisted embeds should only be used for free, promotional, or non-sensitive
+ * introductory content. For paid or proprietary coursework, use DRM-backed providers
+ * (e.g. VdoCipher with short-lived OTP tokens or Bunny with token authentication).
  */
 
 export const YT_NOCOOKIE_HOST = "https://www.youtube-nocookie.com";
