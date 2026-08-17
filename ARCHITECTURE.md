@@ -144,13 +144,31 @@ The database contains 78 models across educational, financial, security, messagi
     - Overlays real-time moving canvas watermarks displaying student full name, mobile number, and student code across the video frame.
     - Anti-screen recording hooks and DevTools inspection tripwires.
     - Enforces watch quotas (`maxWatchesPerUser`) and session duration limits.
-- **VdoCipher Integration (`src/lib/vdocipher.ts`)**:
+- **Bunny Stream Video CDN (`videoProvider: "bunny"`, `src/lib/bunny.ts`)**:
+  - **Enterprise 10k–100k+ Concurrency**: Routes high-traffic video streaming through Bunny Stream's global Tier 1 CDN network, offloading 100% of video bandwidth and storage from the VPS.
+  - **Cryptographic Token-Signed Embeds**:
+    - Calculates signed SHA-256 tokens: `token = SHA256(tokenKey + videoId + expiry)`.
+    - Generates 1-hour expiring player URLs via `iframe.mediadelivery.net` (`https://iframe.mediadelivery.net/embed/{libraryId}/{videoId}?token={token}&expires={expiry}`).
+    - Blocks raw `.m3u8` playlist access with `403 Forbidden` for unauthorized or direct link extractors.
+  - **Zero-Disk Streaming Ingestion (`createBunnyVideo` & `uploadStreamToBunny`)**:
+    - Allows programmatic creation and direct HTTP streaming of video binaries into Bunny Stream libraries without saving temporary files to VPS disks.
+- **VdoCipher Integration (`videoProvider: "vdocipher"`, `src/lib/vdocipher.ts`)**:
   - Server mints short-lived OTP tokens (default `120s` TTL via `VDOCIPHER_OTP_TTL`) on demand for authenticated students who hold valid course/plan enrollments.
   - Features real DRM encryption (Widevine / FairPlay) and dynamic forensic watermarking.
-- **Bunny Stream Integration (`src/lib/bunny.ts`)**:
-  - SHA-256 token authentication with expiring embed tokens for fast CDN-backed video delivery.
-- **YouTube Unlisted Embeds (`src/lib/youtube.ts`)**:
+- **YouTube Unlisted Embeds (`videoProvider: "youtube"`, `src/lib/youtube.ts`)**:
   - Reserved for free or public introductory content (documented honestly as non-DRM).
+
+### 4. Stage-Specific Booking & Registration Control
+- **Per-Grade Booking Toggles (`src/components/admin/TeacherPublicProfile.tsx`)**:
+  - Teachers can independently enable or disable registration for each educational stage (e.g. **أولى بكالوريا** / `sec_1` vs. **ثانية بكالوريا** / `sec_2`).
+  - Stored in the teacher's `stagePricing` JSON config under `[stage].bookingEnabled: boolean` (default `true`).
+- **Student UX & Booking Modal Feedback (`src/components/teacher/BookingModal.tsx`)**:
+  - Displays `(الحجز مغلق 🔒)` beside disabled stages in the grade selector dropdown.
+  - Shows a clear warning card alerting students that bookings for this stage are temporarily closed.
+  - Automatically disables checkout and wallet subscription buttons when a closed stage is selected.
+- **Server-Authoritative Enforcement (`src/lib/price-verifier.ts`)**:
+  - `verifyAuthoritativePrice()` parses `stagePricing` and immediately returns `{ valid: false, error: "عذراً، الحجز والاشتراك مغلق حالياً لهذه المرحلة الدراسية من قِبل المعلم" }` if `bookingEnabled === false`.
+  - Blocks forged or direct API subscription calls at the database verification layer.
 
 ---
 
@@ -309,10 +327,14 @@ CONFIG_ENCRYPTION_KEY="your-32-character-encryption-key-for-ai-providers"
 # ── Video Providers ─────────────────────────────────────────────────────────
 VDOCIPHER_API_SECRET="..."
 VDOCIPHER_OTP_TTL="120"
-BUNNY_LIBRARY_ID="..."
+BUNNY_LIBRARY_ID="730273"
 BUNNY_API_KEY="..."
 BUNNY_TOKEN_KEY="..."
-BUNNY_CDN_HOSTNAME="iframe.mediadelivery.net"
+BUNNY_CDN_HOSTNAME="vz-d91c75ba-4c6.b-cdn.net"
+BUNNY_STREAM_LIBRARY_ID="730273"
+BUNNY_STREAM_TOKEN_AUTH_KEY="..."
+BUNNY_EMBED_SIGNING_ENABLED="true"
+NEXT_PUBLIC_BUNNY_LIBRARY_ID="730273"
 
 # ── Google Cloud Service Account (Google Drive Ingestion Engine) ───────────
 GOOGLE_SERVICE_ACCOUNT_EMAIL="code-up-drive-downloader@gen-lang-client-0511580613.iam.gserviceaccount.com"

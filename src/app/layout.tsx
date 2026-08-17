@@ -11,6 +11,7 @@ import { THEME_INIT_SCRIPT } from "@/lib/theme";
 import { verifyToken } from "@/lib/auth";
 import { getMaintenanceMode, getMaintenanceMessage } from "@/lib/settings";
 import { getOverloadProtectionState } from "@/lib/overload-protection";
+import { SEO_KEYWORD_MATRIX } from "@/lib/seo-keywords";
 import "./globals.css";
 
 interface GateResult {
@@ -71,24 +72,11 @@ async function resolveGatedState(): Promise<GateResult> {
 export const metadata: Metadata = {
   metadataBase: new URL("https://code-up.tech"),
   title: {
-    default: "منصة Code-UP التعليمية | CodeUp Academy Tech",
+    default: "منصة Code-UP | المنصة الأولى لشرح مادة البرمجة والذكاء الاصطناعي لطلاب البكالوريا والثانوية",
     template: "%s | منصة Code-UP التعليمية",
   },
-  description: "المنصة التعليمية الأولى للطلاب المصريين في الرياضيات والعلوم والبرمجة والذكاء الاصطناعي - كورس وتدريب وتطبيقات تفاعلية.",
-  keywords: [
-    "code up tech",
-    "codeup tech",
-    "codeup academy",
-    "CodeUp",
-    "Code-UP",
-    "منصة code up",
-    "منصة codeup",
-    "منصة تعليمية",
-    "كورسات برمجة",
-    "رياضيات ثانوية عامة",
-    "علوم إعدادية",
-    "الذكاء الاصطناعي للتعليم",
-  ],
+  description: "المنصة الرقمية الأولى المتخصصة في تدريس وشرح مادة البرمجة والذكاء الاصطناعي لطلاب البكالوريا والثانوية العامة (نظري وعملي). محرر أكواد مدمج، تعدد المعلمين، بنك أسئلة شامل، ونظام مكافآت تفاعلي ومتابعة ولي الأمر بالواتساب.",
+  keywords: SEO_KEYWORD_MATRIX.slice(0, 3000),
   alternates: {
     canonical: "https://code-up.tech",
   },
@@ -96,8 +84,8 @@ export const metadata: Metadata = {
     icon: "/logo.jpeg",
   },
   openGraph: {
-    title: "منصة Code-UP التعليمية | CodeUp Academy",
-    description: "المنصة التعليمية الأولى للطلاب المصريين في الرياضيات والعلوم والبرمجة بالذكاء الاصطناعي",
+    title: "منصة Code-UP | المنصة الأولى لشرح مادة البرمجة والذكاء الاصطناعي لطلاب البكالوريا",
+    description: "المنصة التعليمية الرائدة في مصر لتدريس البرمجة النظري والعملي، محرر أكواد مدمج، بنك أسئلة، وتعدد المعلمين.",
     url: "https://code-up.tech",
     siteName: "منصة Code-UP",
     locale: "ar_EG",
@@ -107,14 +95,14 @@ export const metadata: Metadata = {
         url: "https://code-up.tech/og-image.jpeg",
         width: 1200,
         height: 630,
-        alt: "منصة Code-UP التعليمية",
+        alt: "منصة Code-UP للبرمجة والذكاء الاصطناعي",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "منصة Code-UP التعليمية | CodeUp Academy",
-    description: "المنصة التعليمية الأولى للطلاب المصريين في الرياضيات والعلوم والبرمجة بالذكاء الاصطناعي",
+    title: "منصة Code-UP | المنصة الأولى لشرح مادة البرمجة والذكاء الاصطناعي لطلاب البكالوريا",
+    description: "شرح شامل للبرمجة النظري والعملي مع محرر أكواد مدمج، تعدد المعلمين، ونظام تحفيز ذكي.",
     images: ["https://code-up.tech/og-image.jpeg"],
   },
   robots: {
@@ -139,15 +127,74 @@ export const metadata: Metadata = {
 
 const jsonLd = {
   "@context": "https://schema.org",
-  "@type": "EducationalOrganization",
-  "name": "Code-UP Tech",
-  "alternateName": ["CodeUp Academy", "منصة Code-UP التعليمية", "Code Up"],
-  "url": "https://code-up.tech",
-  "logo": "https://code-up.tech/logo.jpeg",
-  "image": "https://code-up.tech/og-image.jpeg",
-  "description": "منصة تعليمية متكاملة لتعليم الطلاب الرياضيات والعلوم والبرمجة في مصر بأحدث أساليب التفكير والذكاء الاصطناعي.",
-  "sameAs": [
-    "https://www.facebook.com/CodeUpAcad"
+  "@graph": [
+    {
+      "@type": "EducationalOrganization",
+      "@id": "https://code-up.tech/#organization",
+      "name": "منصة Code-UP للبرمجة والذكاء الاصطناعي",
+      "alternateName": [
+        "Code-UP",
+        "CodeUp",
+        "منصة كود اب",
+        "كود اب",
+        "CodeUp Academy",
+        "منصة البرمجة والذكاء الاصطناعي الأولى",
+        "أفضل منصة متابعة تعليمية",
+        "أقوى منصة برمجة للبكالوريا"
+      ],
+      "url": "https://code-up.tech",
+      "logo": "https://code-up.tech/logo.jpeg",
+      "image": "https://code-up.tech/og-image.jpeg",
+      "description": "المنصة الرقمية الأولى المتخصصة في تدريس وشرح مادة البرمجة والذكاء الاصطناعي لطلاب البكالوريا والثانوية العامة بشقيها النظري والعملي، مع توفير محرر أكواد مدمج، تعدد المعلمين، وبنك أسئلة ونظام مكافآت تفاعلي ومتابعة ولي الأمر بالواتساب.",
+      "knowsAbout": SEO_KEYWORD_MATRIX.slice(0, 1000),
+      "areaServed": {
+        "@type": "Country",
+        "name": "Egypt"
+      },
+      "sameAs": [
+        "https://www.facebook.com/CodeUpAcad"
+      ]
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://code-up.tech/#website",
+      "url": "https://code-up.tech",
+      "name": "منصة Code-UP",
+      "publisher": {
+        "@id": "https://code-up.tech/#organization"
+      },
+      "inLanguage": "ar"
+    },
+    {
+      "@type": "FAQPage",
+      "@id": "https://code-up.tech/#faq",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "ما هي المنصة الرقمية الأولى المتخصصة في شرح مادة البرمجة والذكاء الاصطناعي لطلاب البكالوريا؟",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "تعتبر منصة Code-UP المنصة الرقمية الأولى المتخصصة في تدريس وشرح مادة البرمجة والذكاء الاصطناعي لطلاب البكالوريا والثانوية العامة. تتميز بتغطية شاملة للبرمجة النظري للامتحانات الورقية والتطبيق العملي عبر محرر أكواد مدمج (In-App Compiler)، مع ميزة تعدد المدرسين ونظام النقاط والمكافآت التفاعلي."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "كيف تساعد منصة Code-UP الطلاب في البرمجة النظري والتطبيقي؟",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "تقدم Code-UP شروحات تفكك المصطلحات المعقدة والخوارزميات وخرائط التدفق للامتحانات الورقية، وتتيح للطالب كتابة وتجربة الأكواد بلغات Python و JavaScript مباشرة داخل المنصة دون برامج خارجية."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "ما هي ميزة تعدد المدرسين في منصة Code-UP؟",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "تتيح Code-UP للطالب حرية اختيار المعلم الذي يتناسب مع طريقة استيعابه وفهمه لكل درس ونقل المعرفة بأساليب تعليمية متنوعة تضمن التفوق الأكاديمي."
+          }
+        }
+      ]
+    }
   ]
 };
 

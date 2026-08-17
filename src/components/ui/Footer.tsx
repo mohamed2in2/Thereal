@@ -25,6 +25,7 @@ export function Footer() {
           <h4 className="text-xs font-bold mb-4 tracking-wider" style={{ color: "#5E7186" }}>المنصة</h4>
           <ul className="space-y-3">
             {[
+              { href: "/curriculum",  label: "دليل المنهج والبرمجة 🚀" },
               { href: "/courses",     label: "الكورسات" },
               { href: "/library",     label: "مكتبتي" },
               { href: "/environments", label: "بيئات التعلم" },

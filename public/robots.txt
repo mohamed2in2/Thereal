@@ -1,4 +1,26 @@
 User-agent: *
 Allow: /
+Disallow: /adminpanel/
+Disallow: /api/
+Disallow: /parent/
+Disallow: /student/
+Disallow: /account/
+Disallow: /demo
+Disallow: /courses/*/watch/
+
+User-agent: GPTBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
 
 Sitemap: https://code-up.tech/sitemap.xml
