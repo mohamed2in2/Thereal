@@ -9,6 +9,7 @@ interface VideoGuardProps {
   videoId?: string;
   onViolation?: (type: string, count: number) => void;
   onExit?: () => void;
+  disabled?: boolean;
 }
 
 export function VideoGuard({
@@ -18,6 +19,7 @@ export function VideoGuard({
   videoId,
   onViolation,
   onExit,
+  disabled = false,
 }: VideoGuardProps) {
   const [hasViolation, setHasViolation] = useState(false);
   const [violationType, setViolationType] = useState<string>("");
@@ -29,6 +31,7 @@ export function VideoGuard({
   // Report violation to backend API
   const reportViolation = useCallback(
     async (type: string, details?: string) => {
+      if (disabled) return;
       // Avoid spamming API for same violation repeatedly within short period
       const key = `${type}-${Math.floor(Date.now() / 5000)}`;
       if (reportedTypesRef.current.has(key)) return;
@@ -50,20 +53,22 @@ export function VideoGuard({
         return next;
       });
     },
-    [videoId, onViolation]
+    [videoId, onViolation, disabled]
   );
 
   const triggerViolationModal = useCallback(
     (type: string, details?: string) => {
+      if (disabled) return;
       setHasViolation(true);
       setViolationType(type);
       void reportViolation(type, details);
     },
-    [reportViolation]
+    [reportViolation, disabled]
   );
 
   // 1. DevTools Detection Mechanisms
   useEffect(() => {
+    if (disabled) return;
     let checkInterval: NodeJS.Timeout;
 
     const checkDevTools = () => {
@@ -93,6 +98,8 @@ export function VideoGuard({
 
   // 2. Keyboard & PrintScreen Shortcuts Prevention
   useEffect(() => {
+    if (disabled) return;
+
     const handleKeyDown = (e: KeyboardEvent) => {
       // F12
       if (e.key === "F12") {
@@ -160,16 +167,19 @@ export function VideoGuard({
       window.removeEventListener("keydown", handleKeyDown, true);
       window.removeEventListener("keyup", handleKeyUp, true);
     };
-  }, [triggerViolationModal]);
+  }, [triggerViolationModal, disabled]);
 
   // 3. Right Click Context Menu Blocker
   const handleContextMenu = (e: React.MouseEvent) => {
+    if (disabled) return;
     e.preventDefault();
     void reportViolation("CONTEXT_MENU", "Right click attempted");
   };
 
   // 4. Tab Visibility & Window Focus Loss Monitoring (Full Blur & Blackout Protection)
   useEffect(() => {
+    if (disabled) return;
+
     const handleVisibilityChange = () => {
       if (document.visibilityState === "hidden") {
         setIsTabHidden(true);
@@ -197,7 +207,11 @@ export function VideoGuard({
       window.removeEventListener("blur", handleWindowBlur);
       window.removeEventListener("focus", handleWindowFocus);
     };
-  }, [reportViolation]);
+  }, [reportViolation, disabled]);
+
+  if (disabled) {
+    return <div className="relative w-full">{children}</div>;
+  }
 
   return (
     <div

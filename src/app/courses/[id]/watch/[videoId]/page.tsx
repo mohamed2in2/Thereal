@@ -84,6 +84,7 @@ export default function VideoWatchPage() {
   const [resumeSeconds, setResumeSeconds] = useState(0);
   const [resumeLoaded, setResumeLoaded] = useState(false);
   const [showNotesModal, setShowNotesModal] = useState(false);
+  const [directDriveMode, setDirectDriveMode] = useState(false);
 
   // ── Smart Progress Sync Manager (Pillar 1: 30s Debounced Heartbeat + Event-based Flush) ──
   const lastSyncedSecondsRef = useRef<number>(0);
@@ -465,6 +466,7 @@ export default function VideoWatchPage() {
                 studentPhone={wmLabel}
                 videoId={videoId}
                 onExit={handleReturn}
+                disabled={directDriveMode}
               >
                 <SecurePlayer
                   embedUrl={iframeSrc}
@@ -475,6 +477,7 @@ export default function VideoWatchPage() {
                   onProgress={saveProgress}
                   onPause={() => flushProgress()}
                   onEnded={() => flushProgress()}
+                  noNativeSecurity={directDriveMode}
                 />
               </VideoGuard>
             ) : (
@@ -495,6 +498,21 @@ export default function VideoWatchPage() {
                 </p>
               </div>
               <div className="flex items-center gap-3">
+                {/* Direct Google Drive fallback mode switch */}
+                {(iframeSrc.includes("gdrive") || session.video.videoProvider === "alasly") && (
+                  <button
+                    type="button"
+                    onClick={() => setDirectDriveMode((prev) => !prev)}
+                    className={`px-3 py-2 text-xs font-bold rounded-xl transition-all border flex items-center gap-1.5 shrink-0 cursor-pointer ${
+                      directDriveMode
+                        ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                        : "bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-700"
+                    }`}
+                    title="تشغيل عبر Google Drive المباشر بدون قيود الأمان في حال واجهت مشكلة في البث"
+                  >
+                    <span>{directDriveMode ? "🛡️ المشغل الآمن" : "📁 مشغل Drive المباشر"}</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setShowNotesModal(true)}
