@@ -298,7 +298,8 @@ async function getJwtSession(): Promise<SessionUser | null> {
 
   // Token revocation check: if token carries a tokenVersion and DB user has a
   // different tokenVersion (due to password reset or device wipe), reject the token.
-  if (payload.tokenVersion !== undefined && user.tokenVersion !== undefined && user.tokenVersion !== payload.tokenVersion) {
+  const userTokenVer = (user as any)?.tokenVersion;
+  if (payload.tokenVersion !== undefined && userTokenVer !== undefined && userTokenVer !== payload.tokenVersion) {
     return null;
   }
 

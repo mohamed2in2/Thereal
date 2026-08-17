@@ -55,8 +55,8 @@ export async function POST(req: NextRequest) {
     // Invalidate all prior sessions across all devices
     const updatedUser = await prisma.user.update({
       where: { id: user.id },
-      data: { tokenVersion: { increment: 1 } },
-      select: { tokenVersion: true },
+      data: ({ tokenVersion: { increment: 1 } } as any),
+      select: ({ tokenVersion: true } as any),
     });
     invalidateUserSessionCache(user.id);
 
@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
       name: user.name,
       role: user.role,
       deviceId,
-      tokenVersion: updatedUser.tokenVersion,
+      tokenVersion: (updatedUser as any)?.tokenVersion ?? 0,
     });
     await setAuthCookie(token);
     if (isNew) await setDeviceCookie(deviceId);

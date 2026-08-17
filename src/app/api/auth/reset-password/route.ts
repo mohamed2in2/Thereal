@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
       data: {
         password: hashed,
         tokenVersion: { increment: 1 },
-      },
+      } as any,
     });
     invalidateUserSessionCache(user.id);
 
