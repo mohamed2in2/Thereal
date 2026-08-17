@@ -1,4 +1,4 @@
-import { Prisma } from "@/generated/prisma/client";
+import { Prisma } from "@/generated/prisma";
 import { PurchaseService } from "@/services/purchase/PurchaseService";
 import { PurchaseType } from "@/services/discount/DiscountService";
 

@@ -1,4 +1,4 @@
-import { Prisma } from "@/generated/prisma/client";
+import { Prisma } from "@/generated/prisma";
 
 const TRANSIENT_ERROR_CODES = new Set([
   "P2034", // Transaction failed due to a write conflict or a deadlock

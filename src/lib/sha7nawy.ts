@@ -215,15 +215,25 @@ export async function createSha7nawyPayment(
         details: params.details || "Code-UP Balance Top-up",
         webhook_url: params.webhook_url,
       }),
+      signal: AbortSignal.timeout(12000),
     });
 
     const data = await res.json().catch(() => ({}));
 
-    if (!res.ok) {
+    if (!res.ok || data.status === false) {
+      let rawMsg = String(data.message || data.error || "").trim();
+      let normalizedMsg = rawMsg;
+
+      if (!rawMsg || rawMsg.toLowerCase().includes("provider error") || rawMsg.toLowerCase().includes("internal server error")) {
+        normalizedMsg = "خدمة الخصم التلقائي للمحفظة تواجه صيانة مؤقتة لدى شبكة الاتصالات. يمكنك استخدام إنستاباي (InstaPay) أو فوري لإتمام الدفع فوراً.";
+      } else if (rawMsg.includes("Unauthorized") || rawMsg.includes("401")) {
+        normalizedMsg = "بوابة الدفع قيد التحديث المؤقت. يرجى اختيار وسيلة دفع بديلة مثل إنستاباي أو فوري.";
+      }
+
       return {
         status: false,
-        code: res.status,
-        message: data.message || data.error || `تعذر بدء عملية الدفع (${res.status})`,
+        code: res.status !== 200 ? res.status : 400,
+        message: normalizedMsg,
       };
     }
 
@@ -240,7 +250,7 @@ export async function createSha7nawyPayment(
     return {
       status: false,
       code: 500,
-      message: "تعذر الاتصال ببوابة الدفع الإلكتروني — حاول مرة أخرى لاحقاً",
+      message: "تعذر الاتصال بشبكة المحفظة الإلكترونية حالياً. يرجى تجربة إنستاباي أو فوري للإتمام الفوري.",
     };
   }
 }

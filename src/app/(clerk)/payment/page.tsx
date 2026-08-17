@@ -1071,7 +1071,21 @@ function PaymentContent() {
           <div className="space-y-4 animate-fadeIn">
             <ErrorState
               message={errors[0] || "تعذر إتمام عملية السداد"}
-              onRetry={() => setStep("checkout")}
+              onRetry={() => {
+                setErrors([]);
+                setStep("checkout");
+              }}
+              onSelectMethod={(methodId) => {
+                setErrors([]);
+                setSelectedMethodId(methodId);
+                setStep("checkout");
+                if (methodId === "instapay" || methodId === "fawry" || methodId === "wallet_balance") {
+                  handleCreatePayment(methodId);
+                }
+              }}
+              itemName={verifiedItemName || planLabelParam || contextParam || "اشتراك منصة Code-UP"}
+              amount={taxCalculation.totalAmount || rawItemPrice}
+              userName={user?.name}
             />
           </div>
         )}

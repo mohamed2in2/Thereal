@@ -352,7 +352,13 @@ export async function POST(req: NextRequest) {
     });
 
     if (!result.status) {
-      return NextResponse.json({ error: result.message }, { status: result.code || 400 });
+      return NextResponse.json(
+        {
+          error: result.message,
+          suggestedAlternatives: ["instapay", "fawry"],
+        },
+        { status: result.code || 400 }
+      );
     }
 
     const reference = result.data?.reference ? String(result.data.reference) : null;

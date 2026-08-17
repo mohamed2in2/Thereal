@@ -2,7 +2,7 @@ import { logAdminAction } from "@/lib/admin-auth";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { Prisma } from "@/generated/prisma/client";
+import { Prisma } from "@/generated/prisma";
 import { invalidateCourseCache } from "@/lib/cache";
 
 const MAX_TITLE_LENGTH = 100;

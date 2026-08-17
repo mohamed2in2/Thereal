@@ -162,12 +162,62 @@ export default function TeacherDashboardPage() {
   });
   const [newFolder, setNewFolder] = useState("");
   const [newFolderPublishAt, setNewFolderPublishAt] = useState("");
-  const [newVideo, setNewVideo] = useState({ title: "", videoProvider: "vdocipher", providerVideoId: "", durationMinutes: 0, maxWatchesPerUser: 3, publishAt: "", folderId: "" });
+  const [newVideo, setNewVideo] = useState({ title: "", videoProvider: "alasly", providerVideoId: "", durationMinutes: 0, maxWatchesPerUser: 3, publishAt: "", folderId: "" });
   const [nativeUploading, setNativeUploading] = useState(false);
   const [nativeProgress, setNativeProgress] = useState(0);
   const [nativeStatus, setNativeStatus] = useState("");
   const [lastUploadedVideoId, setLastUploadedVideoId] = useState<string | null>(null);
   const [lastCreatedVideoInfo, setLastCreatedVideoInfo] = useState<{ id: string; providerVideoId: string; title: string } | null>(null);
+
+  // 📥 Google Drive Import State & Handler
+  const [gdriveUrl, setGdriveUrl] = useState("");
+  const [gdriveImporting, setGdriveImporting] = useState(false);
+  const [gdriveStatus, setGdriveStatus] = useState("");
+  const [activeNativeTab, setActiveNativeTab] = useState<"gdrive" | "upload">("gdrive");
+
+  const handleGoogleDriveImport = async () => {
+    if (!gdriveUrl.trim()) {
+      notify("error", "يرجى إدخال رابط أو معرّف فيديو Google Drive");
+      return;
+    }
+
+    setGdriveImporting(true);
+    setGdriveStatus("جاري الاتصال بـ Google Drive والتحقق من الصلاحيات...");
+
+    try {
+      setGdriveStatus("جاري تنزيل الفيديو من Google Drive وحمايته بنظام Native Security...");
+      const res = await fetch("/api/teacher/gdrive-import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: gdriveUrl.trim(),
+          title: newVideo.title || undefined,
+          durationMinutes: newVideo.durationMinutes || undefined,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "فشل استيراد الفيديو من Google Drive");
+      }
+
+      setNewVideo((prev) => ({
+        ...prev,
+        videoProvider: "alasly",
+        providerVideoId: data.videoId,
+        title: prev.title || data.title,
+        durationMinutes: prev.durationMinutes || data.durationMinutes || 0,
+      }));
+      setLastUploadedVideoId(data.videoId);
+      setGdriveUrl("");
+      notify("success", data.message || "تم استيراد وتحميل الفيديو من Google Drive وحمايته بـ Native Security بنجاح! 🎉");
+    } catch (err: any) {
+      notify("error", err.message || "تعذر استيراد الفيديو من Google Drive");
+    } finally {
+      setGdriveImporting(false);
+      setGdriveStatus("");
+    }
+  };
 
   const handleNativeFileUpload = async (file: File) => {
     if (!file) return;
@@ -1760,47 +1810,149 @@ export default function TeacherDashboardPage() {
                               return null;
                             })()}
 
-                            {/* Native Video SaaS Direct Upload Button */}
+                            {/* Native Video SaaS Direct Upload & Google Drive Downloader */}
                             {newVideo.videoProvider === "alasly" && (
-                              <div className="mt-2.5 p-3 rounded-xl border border-sky-500/30 bg-sky-500/5 space-y-2">
-                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                                  <label className="text-xs font-bold text-[var(--ink)] flex items-center gap-1.5">
-                                    <span>⚡</span> رفع ملف فيديو مباشر إلى Native SaaS Engine:
-                                  </label>
-                                  <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-white text-xs font-bold transition-all cursor-pointer shrink-0">
-                                    <span>📁 اختر فيديو من جهازك</span>
-                                    <input
-                                      type="file"
-                                      accept="video/*"
-                                      disabled={nativeUploading}
-                                      className="hidden"
-                                      onChange={(e) => {
-                                        const file = e.target.files?.[0];
-                                        if (file) handleNativeFileUpload(file);
-                                      }}
-                                    />
-                                  </label>
+                              <div className="mt-2.5 p-3.5 rounded-2xl border border-sky-500/30 bg-sky-500/5 space-y-3">
+                                {/* Tab selector between Direct Upload & Google Drive */}
+                                <div className="flex items-center gap-2 p-1 rounded-xl bg-black/20 border border-white/5">
+                                  <button
+                                    type="button"
+                                    onClick={() => setActiveNativeTab("gdrive")}
+                                    className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                                      activeNativeTab === "gdrive"
+                                        ? "bg-sky-500 text-white shadow-sm"
+                                        : "text-[var(--ink-muted)] hover:text-[var(--ink)]"
+                                    }`}
+                                  >
+                                    <span>📥</span>
+                                    <span>استيراد وتنزيل من Google Drive</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setActiveNativeTab("upload")}
+                                    className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                                      activeNativeTab === "upload"
+                                        ? "bg-sky-500 text-white shadow-sm"
+                                        : "text-[var(--ink-muted)] hover:text-[var(--ink)]"
+                                    }`}
+                                  >
+                                    <span>📁</span>
+                                    <span>رفع ملف مباشر من الجهاز</span>
+                                  </button>
                                 </div>
 
-                                {nativeUploading && (
-                                  <div className="space-y-1.5 pt-1">
-                                    <div className="flex items-center justify-between text-[11px] font-bold text-sky-400">
-                                      <span>{nativeStatus}</span>
-                                      <span className="font-mono">{nativeProgress}%</span>
+                                {/* Google Drive Tab */}
+                                {activeNativeTab === "gdrive" && (
+                                  <div className="space-y-2.5">
+                                    <div className="flex items-center justify-between">
+                                      <label className="text-xs font-bold text-[var(--ink)] flex items-center gap-1.5">
+                                        <span>🔗</span> رابط فيديو Google Drive:
+                                      </label>
+                                      <span className="text-[10px] text-sky-400 font-bold">تنزيل مباشر لحماية Native ⚡</span>
                                     </div>
-                                    <div className="w-full h-2 rounded-full bg-[var(--border)] overflow-hidden">
-                                      <div
-                                        className="h-full bg-sky-500 transition-all duration-300"
-                                        style={{ width: `${nativeProgress}%` }}
+
+                                    <div className="flex flex-col sm:flex-row gap-2">
+                                      <input
+                                        type="url"
+                                        dir="ltr"
+                                        value={gdriveUrl}
+                                        onChange={(e) => setGdriveUrl(e.target.value)}
+                                        placeholder="https://drive.google.com/file/d/1a2b3c.../view"
+                                        disabled={gdriveImporting}
+                                        className={`${input} font-mono text-xs flex-1`}
                                       />
+                                      <button
+                                        type="button"
+                                        onClick={handleGoogleDriveImport}
+                                        disabled={gdriveImporting || !gdriveUrl.trim()}
+                                        className="px-4 py-2 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-black text-xs shadow-md transition-all disabled:opacity-50 flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
+                                      >
+                                        {gdriveImporting ? (
+                                          <>
+                                            <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                            <span>جاري التنزيل والحماية...</span>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <span>📥 تنزيل وحماية الفيديو</span>
+                                          </>
+                                        )}
+                                      </button>
+                                    </div>
+
+                                    {gdriveImporting && (
+                                      <div className="p-2.5 rounded-xl bg-sky-500/10 border border-sky-500/20 text-xs text-sky-300 flex items-center gap-2">
+                                        <span className="w-2 h-2 rounded-full bg-sky-400 animate-ping" />
+                                        <span>{gdriveStatus}</span>
+                                      </div>
+                                    )}
+
+                                    <div className="p-2.5 rounded-xl bg-black/30 border border-white/5 space-y-1.5 text-[11px] text-[var(--ink-muted)]">
+                                      <div className="flex items-center justify-between flex-wrap gap-1 font-bold text-[var(--ink)]">
+                                        <span>💡 تنبيه للملفات الخاصة:</span>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            navigator.clipboard.writeText("code-up-drive-downloader@gen-lang-client-0511580613.iam.gserviceaccount.com");
+                                            notify("success", "تم نسخ إيميل الـ Service Account للذاكرة!");
+                                          }}
+                                          className="text-sky-400 hover:underline text-[10px] flex items-center gap-1 cursor-pointer"
+                                        >
+                                          <span>📋 نسخ إيميل الـ Service Account</span>
+                                        </button>
+                                      </div>
+                                      <p className="m-0 leading-relaxed">
+                                        تأكد من مشاركة الفيديو في Google Drive مع الإيميل: <code className="font-mono text-sky-300 select-all px-1 bg-black/40 rounded">code-up-drive-downloader@gen-lang-client-0511580613.iam.gserviceaccount.com</code> أو جعل الرابط متاحاً لأي شخص يملك الرابط.
+                                      </p>
                                     </div>
                                   </div>
                                 )}
+
+                                {/* Direct File Upload Tab */}
+                                {activeNativeTab === "upload" && (
+                                  <div className="space-y-2">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                      <label className="text-xs font-bold text-[var(--ink)] flex items-center gap-1.5">
+                                        <span>⚡</span> رفع ملف فيديو من جهازك إلى Native Engine:
+                                      </label>
+                                      <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-white text-xs font-bold transition-all cursor-pointer shrink-0">
+                                        <span>📁 اختر فيديو من جهازك</span>
+                                        <input
+                                          type="file"
+                                          accept="video/*"
+                                          disabled={nativeUploading}
+                                          className="hidden"
+                                          onChange={(e) => {
+                                            const file = e.target.files?.[0];
+                                            if (file) handleNativeFileUpload(file);
+                                          }}
+                                        />
+                                      </label>
+                                    </div>
+
+                                    {nativeUploading && (
+                                      <div className="space-y-1.5 pt-1">
+                                        <div className="flex items-center justify-between text-[11px] font-bold text-sky-400">
+                                          <span>{nativeStatus}</span>
+                                          <span className="font-mono">{nativeProgress}%</span>
+                                        </div>
+                                        <div className="w-full h-2 rounded-full bg-[var(--border)] overflow-hidden">
+                                          <div
+                                            className="h-full bg-sky-500 transition-all duration-300"
+                                            style={{ width: `${nativeProgress}%` }}
+                                          />
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+
+                                {/* Success Video ID banner */}
                                 {lastUploadedVideoId && (
                                   <div className="mt-2.5 p-3 rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 space-y-2">
                                     <div className="flex items-center justify-between">
                                       <span className="text-xs font-bold text-emerald-400 flex items-center gap-1">
-                                        <span>🎉</span> تم رفع الفيديو المباشر بنجاح!
+                                        <span>🎉</span> تم تجهيز وحماية الفيديو بنجاح عبر Native Security!
                                       </span>
                                       <button
                                         type="button"
@@ -1818,7 +1970,7 @@ export default function TeacherDashboardPage() {
                                       <span className="text-white font-bold tracking-wider">{lastUploadedVideoId}</span>
                                     </div>
                                     <p className="text-[10px] text-emerald-300/80 m-0">
-                                      💡 تم إدخال المعرف تلقائياً في حقل "معرف درس Native" أعلاه. يمكنك استخدامه مباشرة أو نسخه للاستخدام لاحقاً.
+                                      💡 تم إدخال المعرف وتعيين الحماية تلقائياً. يمكنك الضغط على "إضافة الفيديو" بالأسفل لنشره في المحاضرة.
                                     </p>
                                   </div>
                                 )}

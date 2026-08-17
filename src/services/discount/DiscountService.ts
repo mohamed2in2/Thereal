@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { Prisma } from "@/generated/prisma/client";
+import { Prisma } from "@/generated/prisma";
 
 export type PurchaseType = "COURSE" | "FOLDER" | "VIDEO" | "PLAN" | "TEACHER_SUB";
 

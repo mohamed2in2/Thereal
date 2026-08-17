@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { Prisma } from "@/generated/prisma/client";
+import { Prisma } from "@/generated/prisma";
 import { POINTS } from "@/lib/points";
 
 export type ReferralStatus = "PENDING" | "QUALIFIED" | "REWARDED" | "INVALID";
