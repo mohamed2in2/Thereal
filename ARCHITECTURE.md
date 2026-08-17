@@ -4,7 +4,7 @@
 
 Code-UP is a premium Egyptian EdTech platform targeting secondary and primary students (4th Primary → 3rd Secondary) with an Arabic-first, RTL-native, dark-mode UI, educational intelligence, multi-provider secure video delivery (VdoCipher DRM, Bunny Token Auth, YouTube), dual-gateway payment integration (Sha7nawy Mobile Wallets & Shake-Out Invoicing), cryptographic parent monitoring, and an access-code/subscription model managed by teachers and superadmins.
 
-> **Last updated:** 2026-08-16. This document reflects the complete platform architecture, including **AI Engine Milestones 1–6**, **Unified Payment Gateways (Sha7nawy & Shake-Out)**, **Security & Session Revocation Subsystem**, **Multi-Worker WhatsApp Architecture**, **Permanent Parent Portal Links**, **Teacher Command Center**, and **23-Test Security Regression Suite**.
+> **Last updated:** 2026-08-17. This document reflects the complete platform architecture, including **AI Engine Milestones 1–6**, **Unified Payment Gateways (Sha7nawy & Shake-Out) with Adaptive Fallbacks**, **Google Drive to Native Security Video Ingestion Engine**, **Security & Session Revocation Subsystem**, **Multi-Worker WhatsApp Architecture**, **Permanent Parent Portal Links**, **Teacher Command Center**, and **23-Test Security Regression Suite**.
 
 ---
 
@@ -33,10 +33,13 @@ Code-UP is a premium Egyptian EdTech platform targeting secondary and primary st
 │              │                                           │                              │
 │              ▼                                           ▼                              │
 │  ┌───────────────────────┐   ┌───────────────────────────────────────────────────────┐  │
-│  │   Video Delivery      │   │               Payment & Messaging Infrastructure      │  │
-│  │   • VdoCipher (DRM)   │   │   • Sha7nawy (Vodafone/Orange/Etisalat Cash + 2% Tax) │  │
-│  │   • Bunny (Signed URL)│   │   • Shake-Out (Cards & Hosted Invoicing)              │  │
-│  │   • YouTube (Unlisted)│   │   • WhatsApp (Worker-0 Baileys + Meta Cloud API)      │  │
+│  │ Video Delivery Engine │   │         Resilient Payment & Messaging Subsystems      │  │
+│  │ • Native Security     │   │   • Sha7nawy (Mobile Wallets + 12s Timeout Guard)     │  │
+│  │   (Google Drive Auto- │   │   • Shake-Out / Fawry (Cards & Invoicing)             │  │
+│  │    Ingest & Stream)   │   │   • Adaptive 1-Click Fallback (InstaPay/Fawry/Wallet) │  │
+│  │ • VdoCipher (DRM)     │   │   • WhatsApp (Worker-0 Baileys + Meta Cloud API)      │  │
+│  │ • Bunny (Signed URL)  │   │                                                       │  │
+│  │ • YouTube (Unlisted)  │   │                                                       │  │
 │  └───────────────────────┘   └───────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -115,16 +118,31 @@ The database contains 78 models across educational, financial, security, messagi
   - `BalanceTransaction` stores `providerRef` with a dedicated database index (`@@index([providerRef])`).
   - Webhooks execute O(1) indexed lookups on `providerRef` and claim transitions (`credit_sha7nawy_pending` → `credit_sha7nawy_credited`) inside atomic database transactions.
   - Webhook signatures are verified using constant-time comparison (`secretsMatch` in `src/lib/secret-compare.ts`).
+- **Gateway Resilience & Adaptive Fallbacks (`src/lib/sha7nawy.ts` & `src/app/(clerk)/payment/page.tsx`)**:
+  - **12-Second Gateway Timeout Guard**: Outbound requests to third-party payment gateways (e.g. Sha7nawy mobile wallet endpoints) are bound with `AbortSignal.timeout(12000)` to prevent hanging client requests during telecom carrier maintenance.
+  - **Carrier Failure Recovery**: Intercepts `Provider error`, `ECONNRESET`, and upstream HTTP 500/502 errors and translates them into user-friendly guidance explaining carrier wallet maintenance.
+  - **Adaptive 1-Click Fallback UI**: On gateway failure, the checkout screen dynamically exposes instant 1-click fallback actions to alternative payment methods (**InstaPay**, **Fawry Pay / Shake-Out**, or **Wallet Balance**) without requiring page reloads or losing checkout state.
+  - **Pre-filled Contextual WhatsApp Support**: Generates a pre-filled WhatsApp link containing student name, target course/plan, amount, and exact error context for instantaneous support resolution.
+  - **Payload Normalization**: Normalizes incoming client payment requests across legacy naming formats (`vodafone_cash`, `orange_cash`, `etisalat_cash`, `we_cash`, `wallet` → `WALLET`; `phoneNumber` → `walletNumber`) with support for both single-course and monthly plan purchases.
 
-### 3. Video Protection & DRM
+### 3. Video Protection & Multi-Provider Video Pipeline
+- **Native Video Security Engine (`videoProvider: "alasly"`)**:
+  - **Google Drive Auto-Ingestion (`src/lib/google-drive.ts`)**:
+    - Teachers and superadmins can import videos directly from Google Drive links (`/file/d/{id}`, `?id={id}`, `/d/{id}`, or direct IDs).
+    - Authenticates with Google Cloud via a dedicated Service Account (`code-up-drive-downloader@...`).
+    - Uses server-side RS256 JWT signing via Node's native `crypto` module (zero external Google client SDK dependencies) and exchanges assertions at `https://oauth2.googleapis.com/token` with in-memory token caching.
+    - Employs a zero-memory-bloat streaming pipeline (`stream.pipeline` web-to-disk) writing directly into `uploads/videos/local_{timestamp}_{id}.mp4`.
+  - **Local Stream Authorization (`src/app/api/videos/stream/[id]/route.ts`)**:
+    - Serves chunked HTTP range requests (`206 Partial Content`) strictly after validating student authentication and active course/plan enrollment via `checkVideoAccess()`.
+  - **Dynamic Watermarking & Anti-Leak Protection (`src/components/video/VideoGuard.tsx`)**:
+    - Overlays real-time moving canvas watermarks displaying student full name, mobile number, and student code across the video frame.
+    - Anti-screen recording hooks and DevTools inspection tripwires.
+    - Enforces watch quotas (`maxWatchesPerUser`) and session duration limits.
 - **VdoCipher Integration (`src/lib/vdocipher.ts`)**:
   - Server mints short-lived OTP tokens (default `120s` TTL via `VDOCIPHER_OTP_TTL`) on demand for authenticated students who hold valid course/plan enrollments.
-  - Features real DRM encryption and dynamic forensic watermarking.
+  - Features real DRM encryption (Widevine / FairPlay) and dynamic forensic watermarking.
 - **Bunny Stream Integration (`src/lib/bunny.ts`)**:
-  - SHA-256 token authentication with expiring embed tokens.
-- **Local Stream Authorization (`src/app/api/videos/stream/[id]/route.ts`)**:
-  - Resolves video metadata and validates full student enrollment via `checkVideoAccess()` before streaming bytes.
-  - Fails closed on any provider outage.
+  - SHA-256 token authentication with expiring embed tokens for fast CDN-backed video delivery.
 - **YouTube Unlisted Embeds (`src/lib/youtube.ts`)**:
   - Reserved for free or public introductory content (documented honestly as non-DRM).
 
@@ -289,6 +307,11 @@ BUNNY_LIBRARY_ID="..."
 BUNNY_API_KEY="..."
 BUNNY_TOKEN_KEY="..."
 BUNNY_CDN_HOSTNAME="iframe.mediadelivery.net"
+
+# ── Google Cloud Service Account (Google Drive Ingestion Engine) ───────────
+GOOGLE_SERVICE_ACCOUNT_EMAIL="code-up-drive-downloader@gen-lang-client-0511580613.iam.gserviceaccount.com"
+GOOGLE_SERVICE_ACCOUNT_PROJECT_ID="gen-lang-client-0511580613"
+GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
 
 # ── Payment Gateways ────────────────────────────────────────────────────────
 SHA7NAWY_API_KEY="..."
