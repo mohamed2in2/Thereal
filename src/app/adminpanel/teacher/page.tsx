@@ -185,7 +185,7 @@ export default function TeacherDashboardPage() {
     setGdriveStatus("جاري الاتصال بـ Google Drive والتحقق من الصلاحيات...");
 
     try {
-      setGdriveStatus("جاري تنزيل الفيديو من Google Drive وحمايته بنظام Native Security...");
+      setGdriveStatus("جاري ربط وحماية الفيديو سحابياً بنظام Native Security (Zero VPS Storage)...");
       const res = await fetch("/api/teacher/gdrive-import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -193,7 +193,7 @@ export default function TeacherDashboardPage() {
           url: gdriveUrl.trim(),
           title: newVideo.title || undefined,
           durationMinutes: newVideo.durationMinutes || undefined,
-          mode: "download",
+          mode: "cloud",
         }),
       });
 

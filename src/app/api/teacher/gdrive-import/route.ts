@@ -108,14 +108,29 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ── 4. High-Speed Server-side Download & Native Security Processing ────────
-    const mode = body.mode || "download";
+    // ── 4. High-Speed Server-side Download or Zero-Storage Cloud Stream ────────
+    const mode = body.mode || "cloud";
     let downloadResult: any;
     if (mode === "cloud") {
       downloadResult = await importGoogleDriveVideo(fileId);
     } else {
-      // Server actively downloads video from Google Drive at cloud speeds to native video storage
-      downloadResult = await downloadGoogleDriveVideo(fileId);
+      try {
+        downloadResult = await downloadGoogleDriveVideo(fileId);
+      } catch (err: any) {
+        if (
+          err?.code === "ENOSPC" ||
+          err?.message?.includes("ENOSPC") ||
+          err?.message?.includes("no space")
+        ) {
+          console.warn(
+            "[Google Drive Import] Server disk full (ENOSPC), falling back to Zero-Storage Cloud Stream:",
+            err.message
+          );
+          downloadResult = await importGoogleDriveVideo(fileId);
+        } else {
+          throw err;
+        }
+      }
     }
 
     const videoTitle = (body.title || downloadResult.title || "درس فيديو جديد").trim();
