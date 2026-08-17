@@ -28,11 +28,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       where: {
         OR: [
           { id: safeFilename },
+          { id: rawId },
           { providerVideoId: safeFilename },
           { vdoCipherId: safeFilename },
           { providerVideoId: rawId },
           { vdoCipherId: rawId },
           { providerVideoId: `gdrive_${rawId}` },
+          { providerVideoId: { contains: rawId } },
+          { vdoCipherId: { contains: rawId } },
         ],
       },
       select: { id: true, providerVideoId: true, vdoCipherId: true },
