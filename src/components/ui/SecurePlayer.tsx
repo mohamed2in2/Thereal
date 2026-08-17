@@ -8,8 +8,19 @@ import { YouTubeSecurePlayer } from "./YouTubeSecurePlayer";
 import { useFullscreen } from "./useFullscreen";
 import { extractYouTubeVideoId } from "@/lib/youtube";
 
+function extractDriveFileId(url: string): string | null {
+  if (!url) return null;
+  if (url.includes("gdrive_")) {
+    const parts = url.split("gdrive_")[1];
+    return parts?.split("?")[0]?.split("/")[0] || null;
+  }
+  const match = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  return match?.[1] || null;
+}
+
 /**
- * Watermark-safe player. The iframe is a cross-origin embed (Bunny/VdoCipher) —
+ * Watermark-safe player with optional Google Drive direct fallback.
+ * The iframe is a cross-origin embed (Bunny/VdoCipher/Drive) —
  * a DOM overlay can't be injected into the iframe's OWN native fullscreen, so a
  * sibling watermark vanishes when it goes fullscreen. Fix: the iframe carries no
  * fullscreen permission (its internal FS button is inert) and our own button
@@ -50,10 +61,12 @@ export function SecurePlayer({
   onPlay?: () => void;
   className?: string;
   paused?: boolean;
-  /** When enabled, disables native screen capture block and window blur blackouts */
+  /** When enabled, disables native screen capture block and allows pure Google Drive embed */
   noNativeSecurity?: boolean;
   children?: React.ReactNode;
 }) {
+  const driveFileId = extractDriveFileId(embedUrl);
+  const [useDriveDirect, setUseDriveDirect] = useState(noNativeSecurity);
   const [streamError, setStreamError] = useState(false);
   const { ref: wrapRef, isFs, cssFs, toggle: toggleFs } = useFullscreen<HTMLDivElement>();
 
@@ -193,7 +206,7 @@ export function SecurePlayer({
 
   // PC Anti-Screenshot & Anti-Screen-Recording Protection Engine
   React.useEffect(() => {
-    if (noNativeSecurity) {
+    if (noNativeSecurity || useDriveDirect) {
       setScreenCaptured(false);
       return;
     }
@@ -279,7 +292,7 @@ export function SecurePlayer({
       window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [onPause, noNativeSecurity]);
+  }, [onPause, noNativeSecurity, useDriveDirect]);
 
   return (
     <div
@@ -294,8 +307,33 @@ export function SecurePlayer({
       }
       onContextMenu={(e) => e.preventDefault()}
     >
+      {/* Quick Google Drive Direct Fallback Switcher */}
+      {driveFileId && (
+        <button
+          type="button"
+          onClick={() => {
+            setUseDriveDirect((prev) => !prev);
+            setStreamError(false);
+          }}
+          title={useDriveDirect ? "العودة للمشغل السريع" : "تشغيل مباشر من Google Drive بدون حظر المتصفح"}
+          className="absolute top-3 left-3 z-30 flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg bg-black/70 hover:bg-black/90 text-white text-[10px] sm:text-[11px] font-bold backdrop-blur-md border border-white/15 transition-all shadow-md cursor-pointer"
+        >
+          {useDriveDirect ? (
+            <>
+              <span className="text-emerald-400">🛡️</span>
+              <span>المشغل الآمن</span>
+            </>
+          ) : (
+            <>
+              <span className="text-amber-400">📁</span>
+              <span>مشغل Drive المباشر</span>
+            </>
+          )}
+        </button>
+      )}
+
       {/* Screen capture / loss-of-focus protection black screen overlay */}
-      {!noNativeSecurity && screenCaptured && (
+      {!useDriveDirect && !noNativeSecurity && screenCaptured && (
         <div className="absolute inset-0 z-50 bg-black flex flex-col items-center justify-center p-6 text-center text-white backdrop-blur-3xl">
           <div className="w-12 h-12 rounded-full bg-rose-500/20 text-rose-500 flex items-center justify-center mb-3">
             <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
@@ -309,57 +347,32 @@ export function SecurePlayer({
         </div>
       )}
 
-      {isDirectVideo ? (
-        <>
-          <video
-            key={embedUrl}
-            src={embedUrl}
-            controls
-            controlsList="nodownload noplaybackrate"
-            className="absolute inset-0 w-full h-full object-contain"
-            onContextMenu={(e) => e.preventDefault()}
-            onPlay={() => {
-              setStreamError(false);
-              onPlay?.();
-            }}
-            onPause={() => onPause?.()}
-            onEnded={() => onEnded?.()}
-            onError={() => {
-              setStreamError(true);
-            }}
-            onTimeUpdate={(e) => onProgress?.((e.target as HTMLVideoElement).currentTime)}
-          />
-
-          {streamError && (
-            <div className="absolute inset-0 z-40 bg-slate-950/90 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center text-white space-y-4">
-              <div className="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-2xl">
-                ⚠️
-              </div>
-              <div className="space-y-1 max-w-sm">
-                <h4 className="text-base font-bold text-white">تعذر تشغيل بث الفيديو</h4>
-                <p className="text-xs text-slate-400">
-                  يرجى التأكد من اتصال الإنترنت ثم الضغط على زر إعادة المحاولة.
-                </p>
-              </div>
-              <div className="flex items-center justify-center gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setStreamError(false);
-                    const v = document.querySelector("video");
-                    if (v) {
-                      v.load();
-                      v.play().catch(() => {});
-                    }
-                  }}
-                  className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all shadow-md cursor-pointer"
-                >
-                  🔄 إعادة تحميل الفيديو
-                </button>
-              </div>
-            </div>
-          )}
-        </>
+      {driveFileId && useDriveDirect ? (
+        <iframe
+          src={`https://drive.google.com/file/d/${driveFileId}/preview`}
+          title={title}
+          className="absolute inset-0 w-full h-full border-0"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+          referrerPolicy="no-referrer-when-downgrade"
+        />
+      ) : isDirectVideo ? (
+        <video
+          src={embedUrl}
+          controls
+          controlsList="nodownload noplaybackrate"
+          className="absolute inset-0 w-full h-full object-contain"
+          onContextMenu={(e) => e.preventDefault()}
+          onPlay={() => onPlay?.()}
+          onPause={() => onPause?.()}
+          onEnded={() => onEnded?.()}
+          onError={() => {
+            setStreamError(true);
+            if (driveFileId) {
+              setUseDriveDirect(true);
+            }
+          }}
+          onTimeUpdate={(e) => onProgress?.((e.target as HTMLVideoElement).currentTime)}
+        />
       ) : (
         <iframe
           ref={iframeRef}

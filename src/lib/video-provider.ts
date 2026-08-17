@@ -17,38 +17,25 @@ export interface VideoEmbedResult {
   expiresInSeconds: number | null;
 }
 
-import { extractGoogleDriveFileId } from "./google-drive";
-
 /** Sanitizes and extracts clean provider video ID based on provider rules */
 export function cleanProviderVideoId(provider: VideoProvider, input: string): string {
   if (!input || typeof input !== "string") return "";
   const trimmed = input.trim();
 
-  // If input is YouTube URL, always extract YT ID
-  const ytExtracted = extractYouTubeVideoId(trimmed);
-  if (ytExtracted && provider === "youtube") {
-    return ytExtracted;
-  }
-
-  // If input is Google Drive URL for Alasly/Native provider, normalize to gdrive_ID
-  const driveId = extractGoogleDriveFileId(trimmed);
-  if (driveId && provider === "alasly") {
-    return `gdrive_${driveId}`;
-  }
-
   switch (provider) {
     case "youtube": {
-      return ytExtracted || trimmed;
+      const extracted = extractYouTubeVideoId(trimmed);
+      return extracted || trimmed;
     }
     case "bunny": {
+      // If full iframe/embed URL was pasted, extract the GUID:
+      // e.g. https://iframe.mediadelivery.net/embed/12345/382e703d-82d6-444a-a430-86ad178da857
       const guidMatch = trimmed.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
       if (guidMatch) return guidMatch[0];
       return trimmed;
     }
-    case "alasly": {
-      return driveId ? `gdrive_${driveId}` : trimmed;
-    }
     case "vdocipher":
+    case "alasly":
     default:
       return trimmed;
   }
@@ -63,21 +50,15 @@ export async function resolveEmbedUrl(video: {
   providerVideoId: string;
   vdoCipherId: string;
 }): Promise<VideoEmbedResult> {
-  const rawId = (video.providerVideoId || video.vdoCipherId || "").trim();
+  const provider = (video.videoProvider || "vdocipher") as VideoProvider;
+
+  // Legacy rows have providerVideoId="" and vdoCipherId set — fall back gracefully.
+  const rawId = video.providerVideoId || video.vdoCipherId;
 
   if (!rawId) {
     throw new Error("Video has no provider ID configured");
   }
 
-  // Auto-detect YouTube links even if provider was mistakenly set to alasly/vdocipher
-  const ytId = extractYouTubeVideoId(rawId);
-  if (ytId || video.videoProvider === "youtube") {
-    const cleanYt = ytId || rawId;
-    const result = getYouTubeEmbedUrl(cleanYt);
-    return { embedUrl: result.embedUrl, provider: "youtube", signed: false, expiresInSeconds: null };
-  }
-
-  const provider = (video.videoProvider || "vdocipher") as VideoProvider;
   const id = cleanProviderVideoId(provider, rawId);
 
   switch (provider) {
@@ -88,6 +69,10 @@ export async function resolveEmbedUrl(video: {
     case "bunny": {
       const result = await getBunnyEmbedUrl(id);
       return { embedUrl: result.embedUrl, provider, signed: result.signed, expiresInSeconds: result.expiresInSeconds };
+    }
+    case "youtube": {
+      const result = getYouTubeEmbedUrl(id);
+      return { embedUrl: result.embedUrl, provider, signed: false, expiresInSeconds: null };
     }
     case "vdocipher":
     default: {

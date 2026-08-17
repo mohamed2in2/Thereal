@@ -19,26 +19,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const safeFilename = path.basename(id);
 
     // ── Authorization ────────────────────────────────────────────────────────
-    // The path segment is a *provider asset id* or *video id*, so resolve
+    // The path segment is a *provider asset id*, not a Video row id, so resolve
     // the owning lesson first. Without this, any logged-in account could stream
     // any uploaded lesson simply by naming its file — enrollment, purchase and
     // plan gating were all bypassed for locally hosted video.
-    const rawId = safeFilename.replace(/^gdrive_/, "");
     const video = await prisma.video.findFirst({
-      where: {
-        OR: [
-          { id: safeFilename },
-          { id: rawId },
-          { providerVideoId: safeFilename },
-          { vdoCipherId: safeFilename },
-          { providerVideoId: rawId },
-          { vdoCipherId: rawId },
-          { providerVideoId: `gdrive_${rawId}` },
-          { providerVideoId: { contains: rawId } },
-          { vdoCipherId: { contains: rawId } },
-        ],
-      },
-      select: { id: true, providerVideoId: true, vdoCipherId: true },
+      where: { OR: [{ providerVideoId: safeFilename }, { vdoCipherId: safeFilename }] },
+      select: { id: true },
     });
 
     if (!video) {

@@ -39,6 +39,8 @@ function alaslyCredentials(): { apiKey: string; apiSecret: string } {
 }
 
 export async function getAlaslyPlaybackToken(lessonId: string, domain?: string): Promise<AlaslyPlaybackResult> {
+  const { apiKey, apiSecret } = alaslyCredentials();
+
   if (!lessonId) {
     throw new Error("Native/Alasly Video ID is required");
   }
@@ -59,8 +61,6 @@ export async function getAlaslyPlaybackToken(lessonId: string, domain?: string):
       title: "Native Video",
     };
   }
-
-  const { apiKey, apiSecret } = alaslyCredentials();
 
   const currentDomain = domain || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
