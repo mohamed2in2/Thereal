@@ -44,6 +44,24 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.9,
     }));
 
+  // Dynamic: published learning plans
+  let plans: { id: string; updatedAt: Date }[] = [];
+  try {
+    plans = await prisma.plan.findMany({
+      where: { status: "published" },
+      select: { id: true, updatedAt: true },
+    });
+  } catch (error) {
+    console.error("Failed to fetch plans for sitemap", error);
+  }
+
+  const planUrls: MetadataRoute.Sitemap = plans.map((p) => ({
+    url: `${baseUrl}/plans/${p.id}`,
+    lastModified: p.updatedAt ?? now,
+    changeFrequency: "weekly",
+    priority: 0.8,
+  }));
+
   // Public static routes. The /adminpanel area is intentionally EXCLUDED — those
   // are private, auth-gated pages and must not be advertised to crawlers.
   const staticRoutes = ([
@@ -52,6 +70,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${baseUrl}/curriculum/programming-and-ai`, changeFrequency: "weekly", priority: 1.0 },
     { url: `${baseUrl}/courses`, changeFrequency: "daily", priority: 0.9 },
     { url: `${baseUrl}/plans`, changeFrequency: "daily", priority: 0.9 },
+    { url: `${baseUrl}/leaderboard`, changeFrequency: "daily", priority: 0.8 },
+    { url: `${baseUrl}/payment-methods`, changeFrequency: "monthly", priority: 0.8 },
     { url: `${baseUrl}/environments`, changeFrequency: "weekly", priority: 0.8 },
     { url: `${baseUrl}/environments/programming`, changeFrequency: "weekly", priority: 0.8 },
     { url: `${baseUrl}/environments/programming/python`, changeFrequency: "weekly", priority: 0.7 },
@@ -64,5 +84,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${baseUrl}/terms`, changeFrequency: "yearly", priority: 0.2 },
   ] as const).map((r) => ({ ...r, lastModified: now })) as MetadataRoute.Sitemap;
 
-  return [...staticRoutes, ...teacherUrls, ...courseUrls];
+  return [...staticRoutes, ...teacherUrls, ...courseUrls, ...planUrls];
 }

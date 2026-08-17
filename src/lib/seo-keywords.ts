@@ -68,7 +68,27 @@ const STAGES = [
   "الشهادة الثانوية العامة بمصر"
 ];
 
-// 5. Parent & Feature Specific Phrases
+// 5. Franco-Arabic & Common Keyboard Slips / Typos (أخطاء الكتابة والفرانكو الشائعة)
+const FRANCO_AND_TYPOS = [
+  "codeup egypt", "code up thanawya", "code-up thanawya", "barmaja thanawya", "qureo egypt", "qureo platform",
+  "thanawya ai", "ai baccalaureate egypt", "thanawya amma programming", "qureo 1st sec", "codeup online",
+  "ضعقثخ", "ضعقثخ بخسف", "زخيث عح", "زخيث-عح", "ggf;hg,vdh", "hgtvlm hgthk,dm", "hgfvl[m", "ydv ضعقثخ",
+  "منصة كوداب", "كوداب منصة", "كود اب المنصة الاولى", "كوداب برمجة", "كود اب بكالوريا"
+];
+
+// 6. Long-Tail Search Queries (النية البحثية الدقيقة للطلاب وأولياء الأمور)
+const LONG_TAIL_INTENTS = [
+  "اضمن الدرجة النهائية في البرمجة النظري لطلاب البكالوريا والثانوية العامة",
+  "ازاي اذاكر البرمجة النظري للامتحان الورقي في أولى ثانوي",
+  "حل وتفكيك بنك أسئلة الوزارة في مادة البرمجة والذكاء الاصطناعي",
+  "تطبيق أكواد بايثون وجافاسكريبت من الموبايل بدون لابتوب ومحرر مدمج",
+  "طريقة كتابة خرائط التدفق Flowcharts وحل المسائل البرمجية للثانوي",
+  "أفضل طريقة لمتابعة مستوى ابني في الكورسات ودرجات الامتحانات بالواتساب",
+  "شرح منهج البرمجة الجديد بالكامل مع أفضل المدرسين في مصر",
+  "مراجعة ليلة الامتحان النهائية في مادة تكنولوجيا المعلومات والبرمجة"
+];
+
+// 7. Parent & Feature Specific Phrases
 const FEATURE_PHRASES = [
   "أفضل منصة متابعة لولي الأمر بالواتساب",
   "تقارير أداء الطلاب الأسبوعية لولي الأمر",
@@ -92,8 +112,10 @@ const FEATURE_PHRASES = [
 function generateKeywordMatrix(): string[] {
   const set = new Set<string>();
 
-  // Add brand terms
+  // Add brand, franco, typos, and long-tail intents
   BRAND_TERMS.forEach((b) => set.add(b));
+  FRANCO_AND_TYPOS.forEach((ft) => set.add(ft));
+  LONG_TAIL_INTENTS.forEach((lt) => set.add(lt));
   FEATURE_PHRASES.forEach((f) => set.add(f));
 
   // Combinations: [Modifier] + [Subject]

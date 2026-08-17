@@ -45,16 +45,29 @@ export async function generateMetadata({ params }: { params: Promise<{ teacherSl
   const p = await getProfile(teacherSlug);
   if (!p) return { title: "صفحة غير موجودة — Code-UP" };
   const name = p.displayName ?? p.teacher.name;
-  const description = p.bio ?? `كورسات ${name} على Code-UP`;
+  const description = p.bio ?? `كورسات وشروحات الأستاذ ${name} على منصة Code-UP التعليمية`;
+  const url = `https://code-up.tech/${p.slug}`;
+  const avatar = isSafe(p.photoUrl) ? p.photoUrl! : "https://code-up.tech/logo.jpeg";
+
   return {
-    title: `${name} — Code-UP`,
+    title: `${name} — كورسات وشروحات | Code-UP`,
     description,
-    openGraph: {
-      title: name,
-      description,
-      type: "profile",
+    alternates: {
+      canonical: url,
     },
-    twitter: { card: "summary_large_image", title: name, description },
+    openGraph: {
+      title: `${name} — Code-UP`,
+      description,
+      url,
+      type: "profile",
+      images: [{ url: avatar }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: `${name} — Code-UP`,
+      description,
+      images: [avatar],
+    },
   };
 }
 
@@ -88,6 +101,32 @@ export default async function TeacherPage({ params }: { params: Promise<{ teache
   try { socials = p.socials ? JSON.parse(p.socials) : {}; } catch { socials = {}; }
   const socialLinks = Object.entries(socials).filter(([, v]) => v) as [string, string][];
 
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Person",
+        "@id": `https://code-up.tech/${p.slug}#teacher`,
+        "name": name,
+        "description": p.bio || `معلم على منصة Code-UP التعليمية`,
+        "image": isSafe(p.photoUrl) ? p.photoUrl : "https://code-up.tech/logo.jpeg",
+        "worksFor": {
+          "@type": "EducationalOrganization",
+          "name": "Code-UP",
+          "url": "https://code-up.tech"
+        }
+      },
+      {
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          { "@type": "ListItem", "position": 1, "name": "الرئيسية", "item": "https://code-up.tech" },
+          { "@type": "ListItem", "position": 2, "name": "المعلمون", "item": "https://code-up.tech/courses" },
+          { "@type": "ListItem", "position": 3, "name": name, "item": `https://code-up.tech/${p.slug}` }
+        ]
+      }
+    ]
+  };
+
   const theme = {
     "--accent": p.accentColor ?? "#6366f1",
     "--nav": p.navColor ?? "#0b0f19",
@@ -95,6 +134,10 @@ export default async function TeacherPage({ params }: { params: Promise<{ teache
 
   return (
     <main dir="rtl" style={theme} className="min-h-screen bg-[var(--bg)] text-[var(--ink)]">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <DemoBanner show={isDemo} />
       <SetTeacherRefCookie teacherId={p.teacherId} />
       {/* Top bar */}
