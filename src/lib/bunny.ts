@@ -16,8 +16,9 @@ const BUNNY_TOKEN_KEY =
   process.env.BUNNY_TOKEN_KEY ||
   process.env.BUNNY_STREAM_TOKEN_AUTH_KEY ||
   "";
-// Base pull zone hostname — e.g. "iframe.mediadelivery.net"
-const BUNNY_CDN_HOSTNAME = process.env.BUNNY_CDN_HOSTNAME ?? "iframe.mediadelivery.net";
+// Base player embed hostname — "iframe.mediadelivery.net"
+const BUNNY_PLAYER_HOSTNAME = process.env.BUNNY_PLAYER_HOSTNAME || "iframe.mediadelivery.net";
+const BUNNY_CDN_HOSTNAME = process.env.BUNNY_CDN_HOSTNAME || "vz-d91c75ba-4c6.b-cdn.net";
 
 export interface BunnyEmbedResponse {
   embedUrl: string;
@@ -40,14 +41,14 @@ export async function getBunnyEmbedUrl(videoId: string): Promise<BunnyEmbedRespo
     if (!BUNNY_API_KEY && !BUNNY_LIBRARY_ID) {
       // Full mock: no env vars at all
       return {
-        embedUrl: `https://${BUNNY_CDN_HOSTNAME}/embed/${BUNNY_LIBRARY_ID || "0"}/${videoId}`,
+        embedUrl: `https://${BUNNY_PLAYER_HOSTNAME}/embed/${BUNNY_LIBRARY_ID || "0"}/${videoId}`,
         signed: false,
         expiresInSeconds: TTL_SECONDS,
       };
     }
     // Library ID set but no token key — return unsigned embed URL
     return {
-      embedUrl: `https://${BUNNY_CDN_HOSTNAME}/embed/${BUNNY_LIBRARY_ID}/${videoId}`,
+      embedUrl: `https://${BUNNY_PLAYER_HOSTNAME}/embed/${BUNNY_LIBRARY_ID}/${videoId}`,
       signed: false,
       expiresInSeconds: TTL_SECONDS,
     };
@@ -61,8 +62,64 @@ export async function getBunnyEmbedUrl(videoId: string): Promise<BunnyEmbedRespo
   const token = await hexSha256(new TextEncoder().encode(raw) as unknown as Uint8Array<ArrayBuffer>);
 
   const embedUrl =
-    `https://${BUNNY_CDN_HOSTNAME}/embed/${BUNNY_LIBRARY_ID}/${videoId}` +
+    `https://${BUNNY_PLAYER_HOSTNAME}/embed/${BUNNY_LIBRARY_ID}/${videoId}` +
     `?token=${token}&expires=${expiry}&autoplay=false`;
 
   return { embedUrl, signed: true, expiresInSeconds: TTL_SECONDS };
+}
+
+/**
+ * Creates a new video placeholder in Bunny Stream library.
+ */
+export async function createBunnyVideo(title: string): Promise<{ guid: string }> {
+  const libraryId = BUNNY_LIBRARY_ID;
+  const apiKey = BUNNY_API_KEY;
+  if (!libraryId || !apiKey) {
+    throw new Error("BUNNY_LIBRARY_ID / BUNNY_API_KEY غير مهيأة على السيرفر");
+  }
+
+  const res = await fetch(`https://video.bunnycdn.com/library/${libraryId}/videos`, {
+    method: "POST",
+    headers: {
+      AccessKey: apiKey,
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({ title: title || "درس فيديو جديد" }),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => "");
+    throw new Error(`فشل إنشاء فيديو جديد في Bunny Stream (${res.status}): ${errText}`);
+  }
+
+  const data = await res.json();
+  return { guid: data.guid };
+}
+
+/**
+ * Pipes a binary stream directly into a Bunny Stream video without saving to VPS disk.
+ */
+export async function uploadStreamToBunny(guid: string, stream: any): Promise<void> {
+  const libraryId = BUNNY_LIBRARY_ID;
+  const apiKey = BUNNY_API_KEY;
+  if (!libraryId || !apiKey) {
+    throw new Error("BUNNY_LIBRARY_ID / BUNNY_API_KEY غير مهيأة على السيرفر");
+  }
+
+  const res = await fetch(`https://video.bunnycdn.com/library/${libraryId}/videos/${guid}`, {
+    method: "PUT",
+    headers: {
+      AccessKey: apiKey,
+      "Content-Type": "application/octet-stream",
+    },
+    body: stream,
+    // @ts-ignore
+    duplex: "half",
+  });
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => "");
+    throw new Error(`فشل رفع الفيديو إلى Bunny Stream (${res.status}): ${errText}`);
+  }
 }
