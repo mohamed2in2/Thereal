@@ -1848,7 +1848,7 @@ export default function TeacherDashboardPage() {
                                       <label className="text-xs font-bold text-[var(--ink)] flex items-center gap-1.5">
                                         <span>🔗</span> رابط فيديو Google Drive:
                                       </label>
-                                      <span className="text-[10px] text-sky-400 font-bold">تنزيل مباشر لحماية Native ⚡</span>
+                                      <span className="text-[10px] text-sky-400 font-bold">⚡ تنزيل مباشر لسيرفر المنصة (يدعم حتى 6GB)</span>
                                     </div>
 
                                     <div className="flex flex-col sm:flex-row gap-2">
@@ -1889,7 +1889,7 @@ export default function TeacherDashboardPage() {
 
                                     <div className="p-2.5 rounded-xl bg-black/30 border border-white/5 space-y-1.5 text-[11px] text-[var(--ink-muted)]">
                                       <div className="flex items-center justify-between flex-wrap gap-1 font-bold text-[var(--ink)]">
-                                        <span>💡 تنبيه للملفات الخاصة:</span>
+                                        <span>💡 تنبيه للملفات الكبيرة والخاصة (3GB / 5GB+):</span>
                                         <button
                                           type="button"
                                           onClick={() => {
@@ -1902,7 +1902,7 @@ export default function TeacherDashboardPage() {
                                         </button>
                                       </div>
                                       <p className="m-0 leading-relaxed">
-                                        تأكد من مشاركة الفيديو في Google Drive مع الإيميل: <code className="font-mono text-sky-300 select-all px-1 bg-black/40 rounded">code-up-drive-downloader@gen-lang-client-0511580613.iam.gserviceaccount.com</code> أو جعل الرابط متاحاً لأي شخص يملك الرابط.
+                                        يتم تنزيل الملفات الكبيرة (حتى 6 جيجابايت) مباشرة عبر Stream Pipeline محمي خاص بالمعلمين فقط. تأكد من مشاركة الفيديو في Google Drive مع الإيميل: <code className="font-mono text-sky-300 select-all px-1 bg-black/40 rounded">code-up-drive-downloader@gen-lang-client-0511580613.iam.gserviceaccount.com</code> أو جعل الرابط متاحاً لأي شخص يملك الرابط (Anyone with the link).
                                       </p>
                                     </div>
                                   </div>

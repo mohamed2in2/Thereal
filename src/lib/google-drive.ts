@@ -206,21 +206,41 @@ export async function downloadGoogleDriveVideo(
   // 1. Verify metadata & access
   const metadata = await getGoogleDriveFileMetadata(fileId);
 
-  const maxBytes = options?.maxSizeBytes || 2 * 1024 * 1024 * 1024; // 2 GB default limit
+  // Configurable size limit: Default 6 GB (to easily handle 3GB & 5GB teacher videos)
+  const envMaxGb = Number(process.env.GOOGLE_DRIVE_MAX_FILE_SIZE_GB) || 6;
+  const maxBytes = options?.maxSizeBytes || envMaxGb * 1024 * 1024 * 1024;
   const fileSize = Number(metadata.size) || 0;
   if (fileSize > maxBytes) {
-    const sizeMB = Math.round(fileSize / (1024 * 1024));
-    const maxMB = Math.round(maxBytes / (1024 * 1024));
-    throw new Error(`حجم الفيديو (${sizeMB} ميجابايت) يتجاوز الحد الأقصى المسموح (${maxMB} ميجابايت).`);
+    const sizeGB = (fileSize / (1024 * 1024 * 1024)).toFixed(2);
+    const maxGB = (maxBytes / (1024 * 1024 * 1024)).toFixed(0);
+    throw new Error(`حجم الفيديو (${sizeGB} جيجابايت) يتجاوز الحد الأقصى المسموح به (${maxGB} جيجابايت).`);
   }
 
-  // 2. Determine extension and target filename
+  // 2. Validate MIME type & file extension (strictly allow only video formats)
+  const mime = (metadata.mimeType || "").toLowerCase();
   const originalName = metadata.name || "video.mp4";
   let ext = path.extname(originalName).toLowerCase();
+
+  const isVideoMime =
+    mime.startsWith("video/") ||
+    mime === "application/octet-stream" ||
+    mime === "application/x-matroska" ||
+    mime === "application/mp4";
+
+  const allowedExtensions = [".mp4", ".webm", ".mov", ".mkv", ".m4v", ".avi", ".ts"];
+  const hasValidExt = ext && allowedExtensions.includes(ext);
+
+  if (!isVideoMime && !hasValidExt) {
+    throw new Error(
+      `نوع الملف (${mime || "غير معروف"}) ليس ملف فيديو صالحاً. يُسمح فقط بملفات الفيديو (MP4, WebM, MOV, MKV).`
+    );
+  }
+
   if (!ext || ext.length < 2) {
-    if (metadata.mimeType?.includes("mp4")) ext = ".mp4";
-    else if (metadata.mimeType?.includes("webm")) ext = ".webm";
-    else if (metadata.mimeType?.includes("quicktime") || metadata.mimeType?.includes("mov")) ext = ".mov";
+    if (mime.includes("mp4")) ext = ".mp4";
+    else if (mime.includes("webm")) ext = ".webm";
+    else if (mime.includes("quicktime") || mime.includes("mov")) ext = ".mov";
+    else if (mime.includes("matroska") || mime.includes("mkv")) ext = ".mkv";
     else ext = ".mp4";
   }
 

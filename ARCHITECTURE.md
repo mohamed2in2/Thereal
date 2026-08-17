@@ -128,10 +128,14 @@ The database contains 78 models across educational, financial, security, messagi
 ### 3. Video Protection & Multi-Provider Video Pipeline
 - **Native Video Security Engine (`videoProvider: "alasly"`)**:
   - **Google Drive Auto-Ingestion (`src/lib/google-drive.ts`)**:
-    - Teachers and superadmins can import videos directly from Google Drive links (`/file/d/{id}`, `?id={id}`, `/d/{id}`, or direct IDs).
-    - Authenticates with Google Cloud via a dedicated Service Account (`code-up-drive-downloader@...`).
-    - Uses server-side RS256 JWT signing via Node's native `crypto` module (zero external Google client SDK dependencies) and exchanges assertions at `https://oauth2.googleapis.com/token` with in-memory token caching.
-    - Employs a zero-memory-bloat streaming pipeline (`stream.pipeline` web-to-disk) writing directly into `uploads/videos/local_{timestamp}_{id}.mp4`.
+    - Teachers and superadmins can import large videos directly from Google Drive links (`/file/d/{id}`, `?id={id}`, `/d/{id}`, or direct IDs).
+    - **Large File Support (Up to 6 GB)**: Fully supports **3 GB**, **5 GB**, and up to **6 GB** single video files via a streaming pipeline (`stream.pipeline` web-to-disk) writing directly into `uploads/videos/local_{timestamp}_{id}.mp4` without Node.js RAM bloat.
+    - **Strict Teacher/Superadmin Perimeter & Anti-Abuse Defense (`src/app/api/teacher/gdrive-import/route.ts`)**:
+      - Rejects any unauthenticated or `student`-role requests with explicit `401` / `403 Forbidden` barriers and security audit logging.
+      - **In-Memory Concurrency Locks**: Restricts each teacher account to a maximum of 2 simultaneous active downloads to prevent server I/O exhaustion.
+      - **Hourly Rate Limiting**: Caps each teacher account at 20 downloads/hour.
+      - **Strict MIME & Extension Whitelisting**: Strictly restricts downloads to valid video containers (`.mp4`, `.webm`, `.mov`, `.mkv`, `.m4v`, `.avi`, `.ts`).
+    - Authenticates with Google Cloud via a dedicated Service Account (`code-up-drive-downloader@...`) using server-side RS256 JWT signing via Node's native `crypto` module (zero external Google client SDK dependencies) and caches OAuth2 access tokens in-memory.
   - **Local Stream Authorization (`src/app/api/videos/stream/[id]/route.ts`)**:
     - Serves chunked HTTP range requests (`206 Partial Content`) strictly after validating student authentication and active course/plan enrollment via `checkVideoAccess()`.
   - **Dynamic Watermarking & Anti-Leak Protection (`src/components/video/VideoGuard.tsx`)**:
