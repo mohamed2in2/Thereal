@@ -164,7 +164,15 @@ export function BookingButton({
   };
 
   // Extract per-grade pricing config from stagePricing JSON
+  let parsedStageMap: Record<string, any> = {};
+  if (stagePricing) {
+    try {
+      parsedStageMap = JSON.parse(stagePricing) || {};
+    } catch {}
+  }
+
   let stageConfig = {
+    bookingEnabled: true,
     priceMonthly: priceMonthly ?? 180,
     priceTermly: priceTermly ?? 750,
     priceYearly: priceYearly ?? 1200,
@@ -176,25 +184,23 @@ export function BookingButton({
     discountYearly: discountYearly ?? null,
   };
 
-  if (stagePricing) {
-    try {
-      const parsedMap = JSON.parse(stagePricing);
-      if (parsedMap && parsedMap[studentGrade]) {
-        const g = parsedMap[studentGrade];
-        stageConfig = {
-          priceMonthly: g.priceMonthly ?? priceMonthly ?? 180,
-          priceTermly: g.priceTermly ?? priceTermly ?? 750,
-          priceYearly: g.priceYearly ?? priceYearly ?? 1200,
-          priceLanguagesMonthly: g.priceLanguagesMonthly ?? priceLanguagesMonthly ?? 0,
-          priceLanguagesTermly: g.priceLanguagesTermly ?? priceLanguagesTermly ?? 0,
-          priceLanguagesYearly: g.priceLanguagesYearly ?? priceLanguagesYearly ?? 0,
-          discountMonthly: g.discountMonthly ?? discountMonthly ?? null,
-          discountTermly: g.discountTermly ?? discountTermly ?? null,
-          discountYearly: g.discountYearly ?? discountYearly ?? null,
-        };
-      }
-    } catch {}
+  if (parsedStageMap && parsedStageMap[studentGrade]) {
+    const g = parsedStageMap[studentGrade];
+    stageConfig = {
+      bookingEnabled: typeof g.bookingEnabled === "boolean" ? g.bookingEnabled : true,
+      priceMonthly: g.priceMonthly ?? priceMonthly ?? 180,
+      priceTermly: g.priceTermly ?? priceTermly ?? 750,
+      priceYearly: g.priceYearly ?? priceYearly ?? 1200,
+      priceLanguagesMonthly: g.priceLanguagesMonthly ?? priceLanguagesMonthly ?? 0,
+      priceLanguagesTermly: g.priceLanguagesTermly ?? priceLanguagesTermly ?? 0,
+      priceLanguagesYearly: g.priceLanguagesYearly ?? priceLanguagesYearly ?? 0,
+      discountMonthly: g.discountMonthly ?? discountMonthly ?? null,
+      discountTermly: g.discountTermly ?? discountTermly ?? null,
+      discountYearly: g.discountYearly ?? discountYearly ?? null,
+    };
   }
+
+  const isCurrentStageDisabled = stageConfig.bookingEnabled === false;
 
   const baseMonthly = stageConfig.priceMonthly > 0 ? stageConfig.priceMonthly : 180;
   const baseTermly = stageConfig.priceTermly > 0 ? stageConfig.priceTermly : 750;
@@ -380,13 +386,16 @@ export function BookingButton({
                   <select
                     value={studentGrade}
                     onChange={(e) => setStudentGrade(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-[var(--border,rgba(255,255,255,0.1))] bg-[var(--surface,#1a1f2e)] text-[var(--ink,#fff)] text-sm focus:outline-none focus:border-emerald-500"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-[var(--border,rgba(255,255,255,0.1))] bg-[var(--surface,#1a1f2e)] text-[var(--ink,#fff)] text-sm focus:outline-none focus:border-emerald-500 font-bold"
                   >
-                    {STAGE_OPTIONS.map((st) => (
-                      <option key={st.value} value={st.value}>
-                        {st.label}
-                      </option>
-                    ))}
+                    {STAGE_OPTIONS.map((st) => {
+                      const isStageClosed = parsedStageMap[st.value]?.bookingEnabled === false;
+                      return (
+                        <option key={st.value} value={st.value}>
+                          {st.label} {isStageClosed ? " (الحجز مغلق 🔒)" : ""}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
 
@@ -422,6 +431,19 @@ export function BookingButton({
                   </div>
                 )}
               </div>
+
+              {/* Stage Disabled Banner */}
+              {isCurrentStageDisabled && (
+                <div className="mb-6 p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs sm:text-sm space-y-1.5 animate-fadeIn">
+                  <div className="flex items-center gap-2 font-black text-rose-400">
+                    <span className="text-base">🔒</span>
+                    <span>الحجز والتسجيل مغلق حالياً لطلاب {gradeLabel}</span>
+                  </div>
+                  <p className="text-xs text-[var(--ink-muted)] leading-relaxed">
+                    عذراً، قام الأستاذ {teacherName} بإيقاف استقبال حجوزات واشتراكات جديدة لهذه المرحلة الدراسية مؤقتاً. يمكنك التواصل مع المعلم للاستفسار.
+                  </p>
+                </div>
+              )}
 
               {/* Plans Selection */}
               <div className="space-y-3 mb-6">
@@ -511,68 +533,88 @@ export function BookingButton({
 
               {/* Payment CTA Section */}
               <div className="space-y-3 pt-4 border-t border-[var(--border,rgba(255,255,255,0.1))]">
-                {isLoggedIn && userBalance !== null && userBalance >= activePlan.price && (
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      try {
-                        const res = await fetch("/api/teacher/subscribe-balance", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({
-                            teacherId,
-                            planType: activePlan.type,
-                            languageTrack,
-                            studentGrade,
-                          }),
+                {isCurrentStageDisabled ? (
+                  <div className="space-y-3">
+                    <div className="w-full py-4 px-6 rounded-2xl font-bold text-sm sm:text-base text-center bg-rose-500/10 border border-rose-500/30 text-rose-300 flex items-center justify-center gap-2">
+                      <span>🔒 الحجز والاشتراك مغلق حالياً لطلاب {gradeLabel}</span>
+                    </div>
+
+                    {bookingContactUrl && (
+                      <button
+                        type="button"
+                        onClick={() => handleBookViaWhatsApp(activePlan)}
+                        className="w-full py-3 px-4 rounded-xl text-xs font-bold text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        <span>💬 استفسار عبر واتساب المعلم</span>
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    {isLoggedIn && userBalance !== null && userBalance >= activePlan.price && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            const res = await fetch("/api/teacher/subscribe-balance", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                teacherId,
+                                planType: activePlan.type,
+                                languageTrack,
+                                studentGrade,
+                              }),
+                            });
+                            const data = await res.json();
+                            if (data.success) {
+                              alert(data.message || "تم حجز وتفعيل الاشتراك بنجاح! 🎉");
+                              setIsOpen(false);
+                              window.location.reload();
+                            } else {
+                              alert(data.error || "حدث خطأ أثناء الخصم من الرصيد");
+                            }
+                          } catch {
+                            alert("تعذر الاتصال بالخادم لإتمام العملية");
+                          }
+                        }}
+                        className="w-full py-3.5 px-6 rounded-2xl font-black text-sm sm:text-base text-white bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 shadow-lg shadow-teal-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        <span>⚡ اشترك الآن فوراً برصيدك المتاح ({userBalance} جنيه)</span>
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const params = new URLSearchParams({
+                          amount: String(activePlan.price),
+                          teacherId: teacherId || "",
+                          teacherName: teacherName || "",
+                          planType: activePlan.type,
+                          planLabel: activePlan.label,
+                          grade: studentGrade,
+                          languageTrack,
+                          context: `حجز ${activePlan.label} — ${gradeLabel} مع الأستاذ ${teacherName}`,
                         });
-                        const data = await res.json();
-                        if (data.success) {
-                          alert(data.message || "تم حجز وتفعيل الاشتراك بنجاح! 🎉");
-                          setIsOpen(false);
-                          window.location.reload();
-                        } else {
-                          alert(data.error || "حدث خطأ أثناء الخصم من الرصيد");
-                        }
-                      } catch {
-                        alert("تعذر الاتصال بالخادم لإتمام العملية");
-                      }
-                    }}
-                    className="w-full py-3.5 px-6 rounded-2xl font-black text-sm sm:text-base text-white bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 shadow-lg shadow-teal-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    <span>⚡ اشترك الآن فوراً برصيدك المتاح ({userBalance} جنيه)</span>
-                  </button>
-                )}
+                        window.location.href = `/payment?${params.toString()}`;
+                      }}
+                      className="w-full py-4 px-6 rounded-2xl font-black text-base sm:text-lg text-white bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 shadow-xl shadow-emerald-500/25 transition-all flex items-center justify-center gap-3 cursor-pointer transform active:scale-98"
+                    >
+                      <span>ادفع وسدد الآن 💳</span>
+                      <span className="bg-white/20 px-3.5 py-1 rounded-xl text-sm font-mono">{activePlan.price} جنيه</span>
+                    </button>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    const params = new URLSearchParams({
-                      amount: String(activePlan.price),
-                      teacherId: teacherId || "",
-                      teacherName: teacherName || "",
-                      planType: activePlan.type,
-                      planLabel: activePlan.label,
-                      grade: studentGrade,
-                      languageTrack,
-                      context: `حجز ${activePlan.label} — ${gradeLabel} مع الأستاذ ${teacherName}`,
-                    });
-                    window.location.href = `/payment?${params.toString()}`;
-                  }}
-                  className="w-full py-4 px-6 rounded-2xl font-black text-base sm:text-lg text-white bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 shadow-xl shadow-emerald-500/25 transition-all flex items-center justify-center gap-3 cursor-pointer transform active:scale-98"
-                >
-                  <span>ادفع وسدد الآن 💳</span>
-                  <span className="bg-white/20 px-3.5 py-1 rounded-xl text-sm font-mono">{activePlan.price} جنيه</span>
-                </button>
-
-                {bookingContactUrl && (
-                  <button
-                    type="button"
-                    onClick={() => handleBookViaWhatsApp(activePlan)}
-                    className="w-full py-3 px-4 rounded-xl text-xs font-bold text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 transition-all flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    <span>💬 أو التواصل المباشر عبر واتساب المعلم</span>
-                  </button>
+                    {bookingContactUrl && (
+                      <button
+                        type="button"
+                        onClick={() => handleBookViaWhatsApp(activePlan)}
+                        className="w-full py-3 px-4 rounded-xl text-xs font-bold text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        <span>💬 أو التواصل المباشر عبر واتساب المعلم</span>
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
             </motion.div>

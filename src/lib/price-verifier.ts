@@ -96,17 +96,26 @@ export async function verifyAuthoritativePrice(params: {
 
     let planPrice = rawPriceMap[planType];
 
-    // Check stage-specific pricing override
+    // Check stage-specific pricing override & booking availability
     if (profile.stagePricing && grade) {
       try {
         const parsedMap = JSON.parse(profile.stagePricing);
         if (parsedMap && parsedMap[grade]) {
+          const stageConfig = parsedMap[grade];
+          if (stageConfig.bookingEnabled === false) {
+            return {
+              valid: false,
+              expectedPrice: 0,
+              itemName: `اشتراك المعلم (${grade})`,
+              error: "عذراً، الحجز والاشتراك مغلق حالياً لهذه المرحلة الدراسية من قِبل المعلم",
+            };
+          }
           const keyMap: Record<string, string> = {
             monthly: "priceMonthly",
             termly: "priceTermly",
             yearly: "priceYearly",
           };
-          const stageVal = parsedMap[grade][keyMap[planType]];
+          const stageVal = stageConfig[keyMap[planType]];
           if (typeof stageVal === "number" && stageVal > 0) {
             planPrice = stageVal;
           }

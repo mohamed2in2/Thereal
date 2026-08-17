@@ -88,6 +88,7 @@ export function TeacherPublicProfile() {
 
     const stageConfig = parsedMap[stage] || {};
     return {
+      bookingEnabled: typeof stageConfig.bookingEnabled === "boolean" ? stageConfig.bookingEnabled : true,
       priceMonthly: typeof stageConfig.priceMonthly === "number" ? stageConfig.priceMonthly : 180,
       priceTermly: typeof stageConfig.priceTermly === "number" ? stageConfig.priceTermly : 750,
       priceYearly: typeof stageConfig.priceYearly === "number" ? stageConfig.priceYearly : 1200,
@@ -100,7 +101,7 @@ export function TeacherPublicProfile() {
     };
   };
 
-  const updateStageField = (field: string, val: number | null) => {
+  const updateStageField = (field: string, val: any) => {
     if (!p) return;
     let parsedMap: Record<string, any> = {};
     try {
@@ -400,8 +401,42 @@ export function TeacherPublicProfile() {
           return (
             <div className="space-y-4">
               <div className="px-3 py-2 rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-400 text-xs font-bold flex items-center justify-between">
-                <span>📍 أسعار باقة: {stageName}</span>
+                <span>📍 إعدادات وباقات: {stageName}</span>
                 <span className="text-[10px] text-[var(--ink-muted)]">التعديلات أدناه تنطبق على طلاب {stageName} فقط</span>
+              </div>
+
+              {/* Booking Availability & Registration Toggle for Stage */}
+              <div className={`p-4 rounded-xl border transition-all ${currentP.bookingEnabled !== false ? 'bg-emerald-500/5 border-emerald-500/30' : 'bg-rose-500/10 border-rose-500/40'}`}>
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">{currentP.bookingEnabled !== false ? "🟢" : "🔒"}</span>
+                      <h4 className="font-bold text-sm text-[var(--ink)]">
+                        حالة الحجز والتسجيل لـ {stageName}
+                      </h4>
+                      <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${currentP.bookingEnabled !== false ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'}`}>
+                        {currentP.bookingEnabled !== false ? "متاح ومفتوح للطلاب" : "الحجز مغلق مؤقتاً"}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-[var(--ink-muted)] mt-1">
+                      {currentP.bookingEnabled !== false
+                        ? `يمكن لطلاب ${stageName} حجز والاشتراك في باقات الكورس الآن.`
+                        : `تم إيقاف الحجز لـ ${stageName}. لن يتمكن الطلاب من إرسال طلبات حجز أو الاشتراك في هذه المرحلة حتى تقوم بإعادة تفعيلها.`}
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => updateStageField("bookingEnabled", currentP.bookingEnabled === false ? true : false)}
+                    className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-2 shrink-0 shadow-sm ${
+                      currentP.bookingEnabled !== false
+                        ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30 hover:bg-rose-500/25'
+                        : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30'
+                    }`}
+                  >
+                    {currentP.bookingEnabled !== false ? "🚫 إيقاف الحجز لـ " + stageName : "✅ فتح وتفعيل الحجز لـ " + stageName}
+                  </button>
+                </div>
               </div>
 
               {/* Languages Track (GB 🇬🇧) Custom Pricing Config */}
