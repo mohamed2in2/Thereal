@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import {
   extractGoogleDriveFileId,
   importGoogleDriveVideo,
+  downloadGoogleDriveVideo,
 } from "@/lib/google-drive";
 import { getConfigNumber, getConfigNumberClamped } from "@/lib/config";
 import { triggerPlanSyncForCourse } from "@/lib/plan-lesson-matcher";
@@ -92,6 +93,7 @@ export async function POST(req: NextRequest) {
       title?: string;
       folderId?: string;
       durationMinutes?: number;
+      mode?: "download" | "cloud";
     };
 
     const rawUrl = body.url || body.driveUrl || "";
@@ -106,8 +108,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ── 4. Import Google Drive Video directly into Native Security (Zero VPS Disk Space) ───
-    const downloadResult = await importGoogleDriveVideo(fileId);
+    // ── 4. High-Speed Server-side Download & Native Security Processing ────────
+    const mode = body.mode || "download";
+    let downloadResult: any;
+    if (mode === "cloud") {
+      downloadResult = await importGoogleDriveVideo(fileId);
+    } else {
+      // Server actively downloads video from Google Drive at cloud speeds to native video storage
+      downloadResult = await downloadGoogleDriveVideo(fileId);
+    }
 
     const videoTitle = (body.title || downloadResult.title || "درس فيديو جديد").trim();
     const durationMinutes =

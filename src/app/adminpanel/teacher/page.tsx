@@ -193,6 +193,7 @@ export default function TeacherDashboardPage() {
           url: gdriveUrl.trim(),
           title: newVideo.title || undefined,
           durationMinutes: newVideo.durationMinutes || undefined,
+          mode: "download",
         }),
       });
 

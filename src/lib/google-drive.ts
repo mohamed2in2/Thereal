@@ -248,20 +248,55 @@ export async function downloadGoogleDriveVideo(
   const filename = `local_${Date.now()}_${randomId}${ext}`;
   const targetPath = path.join(UPLOAD_DIR, filename);
 
-  // 3. Stream download from Google Drive API
-  const token = await getGoogleDriveAccessToken();
-  const downloadUrl = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`;
+  // 3. Stream download from Google Drive API with resilient fallbacks
+  let response: Response | null = null;
+  try {
+    const token = await getGoogleDriveAccessToken();
+    const downloadUrl = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`;
 
-  const response = await fetch(downloadUrl, {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
+    const res = await fetch(downloadUrl, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
 
-  if (!response.ok || !response.body) {
-    const errText = await response.text().catch(() => "");
-    throw new Error(`فشل تحميل محتوى الفيديو من Google Drive: ${errText || response.statusText}`);
+    if (res.ok && res.body) {
+      response = res;
+    }
+  } catch (err: any) {
+    console.warn("[downloadGoogleDriveVideo] Service Account download attempt fallback:", err?.message || err);
+  }
+
+  // Fallback to public endpoints if service account is not shared
+  if (!response) {
+    const publicUrls = [
+      `https://drive.usercontent.google.com/download?id=${encodeURIComponent(fileId)}&export=download&confirm=t`,
+      `https://drive.google.com/uc?export=download&id=${encodeURIComponent(fileId)}&confirm=t`,
+      `https://docs.google.com/uc?id=${encodeURIComponent(fileId)}&export=download`,
+    ];
+
+    for (const pUrl of publicUrls) {
+      try {
+        const res = await fetch(pUrl, {
+          method: "GET",
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          },
+          redirect: "follow",
+        });
+
+        if (res.ok && res.body) {
+          response = res;
+          break;
+        }
+      } catch {}
+    }
+  }
+
+  if (!response || !response.body) {
+    const errText = response ? await response.text().catch(() => "") : "";
+    throw new Error(`فشل تحميل محتوى الفيديو من Google Drive: ${errText || "تأكد من مشاركة الفيديو في Google Drive"}`);
   }
 
   // Pipe web readable stream directly to disk write stream
