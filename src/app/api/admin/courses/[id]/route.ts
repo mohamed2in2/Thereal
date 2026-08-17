@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma/client";
+import { invalidateCourseCache } from "@/lib/cache";
 
 const MAX_TITLE_LENGTH = 100;
 const MAX_DESCRIPTION_LENGTH = 1000;
@@ -99,6 +100,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     await prisma.course.delete({
       where: { id },
     });
+    invalidateCourseCache(id);
 
     return NextResponse.json({ success: true, message: "تم حذف الكورس بنجاح" });
   } catch (error) {
@@ -191,6 +193,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       where: { id },
       data: updateData,
     });
+    invalidateCourseCache(id);
 
     return NextResponse.json({ course: updated });
   } catch (error) {

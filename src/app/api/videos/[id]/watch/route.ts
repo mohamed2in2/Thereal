@@ -40,6 +40,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       where: { teacherId: video.folder.course.teacherId },
       select: { slug: true },
     });
+    const embedResult = await resolveEmbedUrl(video);
     return NextResponse.json({
       videoId,
       sessionToken,
@@ -52,11 +53,16 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       usedWatches: 0,
       teacherSlug: profile?.slug ?? "",
       studentPlan: "course",
+      embedUrl: embedResult.embedUrl,
+      provider: embedResult.provider,
+      resumeSeconds: 0,
+      watermark: session.phone || session.name || "",
       video: {
         id: video.id,
         title: video.title,
         courseId: video.folder.course.id,
         courseTitle: video.folder.course.title,
+        videoProvider: video.videoProvider,
       },
     });
   }
@@ -151,6 +157,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 
   const isTesterUser = session?.accountMode === "TESTER";
+  const embedResult = await resolveEmbedUrl(video);
+  const progress = await prisma.progress.findUnique({
+    where: { studentId_videoId: { studentId: session.id, videoId } },
+    select: { lastPositionSeconds: true },
+  });
 
   return NextResponse.json({
     videoId,
@@ -165,11 +176,16 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     usedWatches: usedWatchCount,
     teacherSlug,
     studentPlan,
+    embedUrl: embedResult.embedUrl,
+    provider: embedResult.provider,
+    resumeSeconds: progress?.lastPositionSeconds ?? 0,
+    watermark: session.phone || session.name || "",
     video: {
       id: video.id,
       title: video.title,
       courseId: course.id,
       courseTitle: course.title,
+      videoProvider: video.videoProvider,
     },
   });
 }
@@ -231,6 +247,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       usedWatches: 0,
       embedUrl: embedResult.embedUrl,
       provider: embedResult.provider,
+      resumeSeconds: 0,
+      watermark: session ? (session.phone || session.name || "") : "",
+      video: {
+        id: video.id,
+        title: video.title,
+        courseId: course.id,
+        courseTitle: course.title,
+        videoProvider: video.videoProvider,
+      },
       free: true,
     });
   }
@@ -254,6 +279,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       usedWatches: 0,
       embedUrl: embedResult.embedUrl,
       provider: embedResult.provider,
+      resumeSeconds: 0,
+      watermark: session.phone || session.name || "",
+      video: {
+        id: video.id,
+        title: video.title,
+        courseId: course.id,
+        courseTitle: course.title,
+        videoProvider: video.videoProvider,
+      },
       preview: true,
     });
   }
@@ -388,6 +422,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       }
     }
 
+    const progress = await prisma.progress.findUnique({
+      where: { studentId_videoId: { studentId: session.id, videoId } },
+      select: { lastPositionSeconds: true },
+    });
+
     return NextResponse.json({
       sessionToken: activeSession.sessionToken,
       sessionId: activeSession.id,
@@ -398,6 +437,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       usedWatches: activeUsedWatchCount,
       embedUrl: embedResult.embedUrl,
       provider: embedResult.provider,
+      resumeSeconds: progress?.lastPositionSeconds ?? 0,
+      watermark: session.phone || session.name || "",
+      video: {
+        id: video.id,
+        title: video.title,
+        courseId: course.id,
+        courseTitle: course.title,
+        videoProvider: video.videoProvider,
+      },
       reused: true,
       teacherSlug,
       studentPlan,
@@ -500,6 +548,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     const embedResult = await resolveEmbedUrl(video);
+    const progress = await prisma.progress.findUnique({
+      where: { studentId_videoId: { studentId: session.id, videoId } },
+      select: { lastPositionSeconds: true },
+    });
+
     return NextResponse.json({
       sessionToken,
       sessionId: ws.id,
@@ -511,6 +564,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       usedWatches: used + 1,
       embedUrl: embedResult.embedUrl,
       provider: embedResult.provider,
+      resumeSeconds: progress?.lastPositionSeconds ?? 0,
+      watermark: session.phone || session.name || "",
+      video: {
+        id: video.id,
+        title: video.title,
+        courseId: course.id,
+        courseTitle: course.title,
+        videoProvider: video.videoProvider,
+      },
       teacherSlug,
       studentPlan,
     });

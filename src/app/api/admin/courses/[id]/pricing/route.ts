@@ -2,6 +2,7 @@ import { logAdminAction } from "@/lib/admin-auth";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { invalidateCourseCache } from "@/lib/cache";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
@@ -53,6 +54,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     data: { isPaid, price, discountPercent, discountExpiresAt, allowDirectInstall },
     select: { id: true, isPaid: true, price: true, discountPercent: true, discountExpiresAt: true, allowDirectInstall: true },
   });
+  invalidateCourseCache(id);
 
   return NextResponse.json({ course: updated });
 }

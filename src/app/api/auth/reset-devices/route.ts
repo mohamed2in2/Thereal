@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { signToken, setAuthCookie } from "@/lib/auth";
 import { normalizeEgyptPhone } from "@/lib/phone";
 import { readDeviceId, setDeviceCookie, deviceLabelFromUA } from "@/lib/devices";
+import { invalidateUserSessionCache } from "@/lib/cache";
 import {
   clearFailedLogins,
   enforceCaptcha,
@@ -57,6 +58,7 @@ export async function POST(req: NextRequest) {
       data: { tokenVersion: { increment: 1 } },
       select: { tokenVersion: true },
     });
+    invalidateUserSessionCache(user.id);
 
     // Remove all old registered devices for this user
     await prisma.device.deleteMany({ where: { userId: user.id } });

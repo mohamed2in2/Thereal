@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { SecurePlayer } from "@/components/ui/SecurePlayer";
@@ -85,172 +85,132 @@ export default function VideoWatchPage() {
   const [resumeLoaded, setResumeLoaded] = useState(false);
   const [showNotesModal, setShowNotesModal] = useState(false);
 
-  useEffect(() => {
-    fetch("/api/auth/me")
-      .then((r) => r.json())
-      .then((d) => setWmLabel(d.user ? (d.user.phone || d.user.name || "") : ""))
-      .catch(() => setWmLabel(""));
-  }, []);
+  // ── Smart Progress Sync Manager (Pillar 1: 30s Debounced Heartbeat + Event-based Flush) ──
+  const lastSyncedSecondsRef = useRef<number>(0);
+  const lastSyncTimeRef = useRef<number>(0);
+  const currentPlaybackSecondsRef = useRef<number>(0);
 
-  // Resume playback: load the saved position before the player mounts so the
-  // YouTube player can seek to it on ready.
-  useEffect(() => {
-    if (!videoId) return;
-    let cancelled = false;
-    fetch(`/api/videos/${videoId}/position`, { credentials: "include" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d: { seconds?: number } | null) => {
-        if (!cancelled) setResumeSeconds(d?.seconds ?? 0);
-      })
-      .catch(() => {})
-      .finally(() => { if (!cancelled) setResumeLoaded(true); });
-    return () => { cancelled = true; };
-  }, [videoId]);
-
-  // Save the current position (throttled by the player to ~5s + a final flush).
-  const saveProgress = useCallback(
-    (seconds: number) => {
+  const flushProgress = useCallback(
+    (forcedSeconds?: number) => {
       if (!videoId) return;
+      const sec = forcedSeconds !== undefined ? forcedSeconds : currentPlaybackSecondsRef.current;
+      if (sec <= 0 && lastSyncedSecondsRef.current <= 0) return;
+
+      const rounded = Math.round(sec);
+      // Avoid redundant writes if position hasn't changed meaningfully
+      if (Math.abs(rounded - lastSyncedSecondsRef.current) < 2) return;
+
+      lastSyncedSecondsRef.current = rounded;
+      lastSyncTimeRef.current = Date.now();
+
       fetch(`/api/videos/${videoId}/position`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ seconds }),
+        body: JSON.stringify({ seconds: rounded }),
         keepalive: true,
       }).catch(() => {});
     },
     [videoId]
   );
 
+  // Throttled progress handler during normal continuous playback (sync every 30s)
+  const saveProgress = useCallback(
+    (seconds: number) => {
+      if (!videoId || seconds < 0) return;
+      currentPlaybackSecondsRef.current = seconds;
+
+      const now = Date.now();
+      const timeSinceLastSync = now - lastSyncTimeRef.current;
+      const distanceSinceLastSync = Math.abs(seconds - lastSyncedSecondsRef.current);
+
+      if (distanceSinceLastSync >= 30 || timeSinceLastSync >= 30000) {
+        flushProgress(seconds);
+      }
+    },
+    [videoId, flushProgress]
+  );
+
+  // Flush playback progress on page unload or tab visibility change
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        flushProgress();
+      }
+    };
+
+    const handleBeforeUnload = () => {
+      flushProgress();
+    };
+
+    document.addEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      flushProgress();
+    };
+  }, [flushProgress]);
+
+  // ── Unified Video Session Loader (Pillar 2: Single-Roundtrip Startup) ──
   const loadSession = useCallback(async () => {
     setLoading(true);
     setError("");
 
     try {
-      // If token is in URL, verify existing session first (don't consume another watch)
-      if (tokenFromUrl) {
-        const verifyRes = await fetch(
-          `/api/videos/${videoId}/watch?token=${encodeURIComponent(tokenFromUrl)}`
-        );
-        const verifyData = await verifyRes.json();
+      // Single atomic request: mints token, gets embed URL, watermark, and saved resume position in 1 trip
+      const endpoint = tokenFromUrl
+        ? `/api/videos/${videoId}/watch?token=${encodeURIComponent(tokenFromUrl)}`
+        : `/api/videos/${videoId}/watch`;
 
-        if (!verifyRes.ok) {
-          setError(verifyData.error || "الجلسة غير صالحة — يرجى بدء مشاهدة جديدة");
-          setLoading(false);
-          return;
-        }
-
-        // Session is valid — use it, no new watch consumed
-        setSession({
-          sessionId: verifyData.sessionId,
-          sessionToken: verifyData.sessionToken,
-          videoId: verifyData.videoId,
-          video: {
-            ...verifyData.video,
-            videoProvider: verifyData.video?.videoProvider ?? "vdocipher",
-            providerVideoId: verifyData.video?.providerVideoId ?? verifyData.video?.vdoCipherId ?? "",
-          },
-          expiresAt: verifyData.expiresAt,
-          isExpired: verifyData.isExpired,
-          remainingWatches: verifyData.remainingWatches,
-          totalWatches: verifyData.totalWatches,
-          usedWatches: verifyData.usedWatches,
-          teacherSlug: verifyData.teacherSlug,
-          studentPlan: verifyData.studentPlan,
-        });
-
-        // Get secure embed URL (read-only, doesn't consume a watch)
-        const secureRes = await fetch(
-          `/api/videos/${videoId}/secure-url?token=${encodeURIComponent(tokenFromUrl)}`
-        );
-        const secureData = await secureRes.json();
-
-        if (!secureRes.ok) {
-          setError(secureData.error || "تعذر تحميل الفيديو");
-          setLoading(false);
-          return;
-        }
-
-        setIframeSrc(secureData.embedUrl || "");
-        setCountdown(formatCountdown(verifyData.expiresAt));
-        setLoading(false);
-        return;
-      }
-
-      // No token — create a new session (consumes a watch slot)
-      // Step 1: fetch full course data to get video title
-      const courseRes = await fetch(`/api/courses/${courseId}`);
-      const courseData = await courseRes.json();
-
-      if (!courseRes.ok) {
-        setError(courseData.error || "تعذر تحميل بيانات الكورس");
-        setLoading(false);
-        return;
-      }
-
-      // Find the video's title from course folders
-      let videoTitle = "محاضرة";
-      let videoFound = false;
-
-      for (const folder of courseData.course?.folders ?? []) {
-        for (const v of folder.videos ?? []) {
-          if ((v as { id?: string }).id === videoId) {
-            videoTitle = v.title;
-            videoFound = true;
-            break;
-          }
-        }
-        if (videoFound) break;
-      }
-
-      // Step 2: fetch watch count
-      const wcRes = await fetch(`/api/courses/${courseId}/watch-count`);
-      const wcData = await wcRes.json();
-
-      if (!wcRes.ok || wcData.remainingWatches <= 0) {
-        setError(wcData.error || "استنفدت جميع محاولات المشاهدة — تواصل مع المعلم");
-        setLoading(false);
-        return;
-      }
-
-      // Step 3: POST to start a new watch session (consumes 1 watch slot)
-      const watchRes = await fetch(`/api/videos/${videoId}/watch`, {
-        method: "POST",
+      const res = await fetch(endpoint, {
+        method: tokenFromUrl ? "GET" : "POST",
         credentials: "include",
       });
-      const watchData = await watchRes.json();
+      const data = await res.json();
 
-      if (!watchRes.ok) {
-        setError(watchData.error || "تعذر بدء جلسة المشاهدة");
+      if (!res.ok) {
+        setError(data.error || "تعذر تحميل جلسة المشاهدة");
         setLoading(false);
         return;
       }
 
-      const expiresAt = new Date(watchData.expiresAt);
+      const expiresAt = new Date(data.expiresAt);
 
       setSession({
-        sessionId: watchData.sessionId,
-        sessionToken: watchData.sessionToken,
+        sessionId: data.sessionId,
+        sessionToken: data.sessionToken,
         videoId,
         video: {
           id: videoId,
-          title: videoTitle,
+          title: data.video?.title || "محاضرة",
           vdoCipherId: "",
-          videoProvider: (watchData.provider ?? "vdocipher") as VideoProvider,
+          videoProvider: (data.provider || data.video?.videoProvider || "vdocipher") as VideoProvider,
           providerVideoId: "",
           courseId,
-          courseTitle: courseData.course?.title ?? "",
+          courseTitle: data.video?.courseTitle || "",
         },
         expiresAt: expiresAt.toISOString(),
-        isExpired: false,
-        remainingWatches: watchData.remainingWatches,
-        totalWatches: watchData.totalWatches,
-        usedWatches: watchData.usedWatches,
-        teacherSlug: watchData.teacherSlug,
-        studentPlan: watchData.studentPlan,
+        isExpired: data.isExpired ?? false,
+        remainingWatches: data.remainingWatches,
+        totalWatches: data.totalWatches,
+        usedWatches: data.usedWatches,
+        teacherSlug: data.teacherSlug,
+        studentPlan: data.studentPlan,
       });
 
-      setIframeSrc(watchData.embedUrl || "");
+      if (data.watermark) {
+        setWmLabel(data.watermark);
+      }
+
+      const savedSec = data.resumeSeconds ?? 0;
+      setResumeSeconds(savedSec);
+      lastSyncedSecondsRef.current = savedSec;
+      currentPlaybackSecondsRef.current = savedSec;
+      setResumeLoaded(true);
+
+      setIframeSrc(data.embedUrl || "");
       setCountdown(formatCountdown(expiresAt.toISOString()));
     } catch (err) {
       setError(err instanceof Error ? err.message : "حدث خطأ أثناء تحميل جلسة المشاهدة");
@@ -513,6 +473,8 @@ export default function VideoWatchPage() {
                   provider={session.video.videoProvider}
                   startSeconds={resumeSeconds}
                   onProgress={saveProgress}
+                  onPause={() => flushProgress()}
+                  onEnded={() => flushProgress()}
                 />
               </VideoGuard>
             ) : (

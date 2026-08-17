@@ -1,10 +1,11 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { SignJWT, jwtVerify } from "jose";
-import { isPhoneVerificationBypassed } from "@/lib/aws-sms";
 import { cookies } from "next/headers";
+import { isPhoneVerificationBypassed } from "@/lib/aws-sms";
 import { prisma } from "./prisma";
 import { normalizeEgyptPhone } from "@/lib/phone";
 import { getConfigNumberClamped } from "./config";
+import { getCachedUserSession, invalidateUserSessionCache } from "./cache";
 
 if (!process.env.JWT_SECRET) {
   throw new Error("JWT_SECRET environment variable is not set. Please configure it in your .env file.");
@@ -285,8 +286,10 @@ async function getJwtSession(): Promise<SessionUser | null> {
     };
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id: payload.id },
+  const user = await getCachedUserSession(payload.id, async () => {
+    return prisma.user.findUnique({
+      where: { id: payload.id },
+    });
   });
 
   if (!user || !user.isActive || user.isDeleted) {

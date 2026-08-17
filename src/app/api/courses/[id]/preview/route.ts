@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { getCachedCourseOutline } from "@/lib/cache";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -8,17 +9,19 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     // `id` may be the cuid OR the SEO slug — resolve either so professional
     // /courses/<slug> URLs work without breaking old /courses/<id> links.
-    const course = await prisma.course.findFirst({
-      where: { OR: [{ id }, { slug: id }] },
-      include: {
-        teacher: { select: { id: true, name: true } },
-        folders: {
-          orderBy: { order: "asc" },
-          include: {
-            _count: { select: { videos: true, quizzes: true } },
+    const course = await getCachedCourseOutline(id, async () => {
+      return prisma.course.findFirst({
+        where: { OR: [{ id }, { slug: id }] },
+        include: {
+          teacher: { select: { id: true, name: true } },
+          folders: {
+            orderBy: { order: "asc" },
+            include: {
+              _count: { select: { videos: true, quizzes: true } },
+            },
           },
         },
-      },
+      });
     });
 
     if (!course) return NextResponse.json({ error: "الكورس غير موجود" }, { status: 404 });

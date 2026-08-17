@@ -7,6 +7,7 @@ import {
   verifyPhoneVerificationCookie,
 } from "@/lib/auth";
 import { isPhoneVerificationBypassed } from "@/lib/aws-sms";
+import { invalidateUserSessionCache } from "@/lib/cache";
 
 export async function POST(req: NextRequest) {
   try {
@@ -64,6 +65,7 @@ export async function POST(req: NextRequest) {
         tokenVersion: { increment: 1 },
       },
     });
+    invalidateUserSessionCache(user.id);
 
     await clearPhoneVerificationCookie();
 
