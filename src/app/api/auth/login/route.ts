@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
       name: user.name,
       role: user.role,
       deviceId,
-      tokenVersion: user.tokenVersion ?? 0,
+      tokenVersion: (user as { tokenVersion?: number | null }).tokenVersion ?? 0,
     });
     await setAuthCookie(token);
     if (isNew) await setDeviceCookie(deviceId);
