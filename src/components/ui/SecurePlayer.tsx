@@ -348,31 +348,100 @@ export function SecurePlayer({
       )}
 
       {driveFileId && useDriveDirect ? (
-        <iframe
-          src={`https://drive.google.com/file/d/${driveFileId}/preview`}
-          title={title}
-          className="absolute inset-0 w-full h-full border-0"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
-          referrerPolicy="no-referrer-when-downgrade"
-        />
+        <div className="absolute inset-0 w-full h-full">
+          <iframe
+            src={`https://drive.google.com/file/d/${driveFileId}/preview`}
+            title={title}
+            className="w-full h-full border-0"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+            sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-presentation"
+          />
+          {/* Quick link if browser shields block third-party iframe */}
+          <div className="absolute bottom-3 left-3 z-30 flex items-center gap-2">
+            <a
+              href={`https://drive.google.com/file/d/${driveFileId}/view`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3 py-1.5 rounded-lg bg-black/80 hover:bg-black text-amber-300 text-[11px] font-bold backdrop-blur-md border border-amber-500/30 flex items-center gap-1.5 shadow-lg no-underline transition-all"
+            >
+              <span>↗️</span>
+              <span>فتح في Google Drive مباشرة</span>
+            </a>
+          </div>
+        </div>
       ) : isDirectVideo ? (
-        <video
-          src={embedUrl}
-          controls
-          controlsList="nodownload noplaybackrate"
-          className="absolute inset-0 w-full h-full object-contain"
-          onContextMenu={(e) => e.preventDefault()}
-          onPlay={() => onPlay?.()}
-          onPause={() => onPause?.()}
-          onEnded={() => onEnded?.()}
-          onError={() => {
-            setStreamError(true);
-            if (driveFileId) {
-              setUseDriveDirect(true);
-            }
-          }}
-          onTimeUpdate={(e) => onProgress?.((e.target as HTMLVideoElement).currentTime)}
-        />
+        <>
+          <video
+            key={embedUrl}
+            src={embedUrl}
+            controls
+            controlsList="nodownload noplaybackrate"
+            className="absolute inset-0 w-full h-full object-contain"
+            onContextMenu={(e) => e.preventDefault()}
+            onPlay={() => {
+              setStreamError(false);
+              onPlay?.();
+            }}
+            onPause={() => onPause?.()}
+            onEnded={() => onEnded?.()}
+            onError={() => {
+              setStreamError(true);
+            }}
+            onTimeUpdate={(e) => onProgress?.((e.target as HTMLVideoElement).currentTime)}
+          />
+
+          {streamError && (
+            <div className="absolute inset-0 z-40 bg-slate-950/90 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center text-white space-y-4">
+              <div className="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-2xl">
+                ⚠️
+              </div>
+              <div className="space-y-1 max-w-sm">
+                <h4 className="text-base font-bold text-white">تعذر تشغيل بث الفيديو من الخادم</h4>
+                <p className="text-xs text-slate-400">
+                  قد يكون هناك انقطاع في الاتصال أو أن المتصفح حجب البث. يمكنك تجربة الخيارات التالية:
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStreamError(false);
+                    const v = document.querySelector("video");
+                    if (v) {
+                      v.load();
+                      v.play().catch(() => {});
+                    }
+                  }}
+                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all shadow-md cursor-pointer"
+                >
+                  🔄 إعادة المحاولة
+                </button>
+                {driveFileId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUseDriveDirect(true);
+                      setStreamError(false);
+                    }}
+                    className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold transition-all shadow-md cursor-pointer"
+                  >
+                    📁 مشغل Google Drive
+                  </button>
+                )}
+                {driveFileId && (
+                  <a
+                    href={`https://drive.google.com/file/d/${driveFileId}/view`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-slate-700 transition-all no-underline"
+                  >
+                    ↗️ فتح في نافذة مستقلة
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
+        </>
       ) : (
         <iframe
           ref={iframeRef}
