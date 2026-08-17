@@ -127,15 +127,17 @@ The database contains 78 models across educational, financial, security, messagi
 
 ### 3. Video Protection & Multi-Provider Video Pipeline
 - **Native Video Security Engine (`videoProvider: "alasly"`)**:
-  - **Google Drive Auto-Ingestion (`src/lib/google-drive.ts`)**:
-    - Teachers and superadmins can import large videos directly from Google Drive links (`/file/d/{id}`, `?id={id}`, `/d/{id}`, or direct IDs).
-    - **Large File Support (Up to 6 GB)**: Fully supports **3 GB**, **5 GB**, and up to **6 GB** single video files via a streaming pipeline (`stream.pipeline` web-to-disk) writing directly into `uploads/videos/local_{timestamp}_{id}.mp4` without Node.js RAM bloat.
+  - **Google Drive Direct Cloud Stream & Zero VPS Storage (`src/lib/google-drive.ts`)**:
+    - **Zero VPS Disk Footprint**: Eliminates `ENOSPC: no space left on device` by removing the need to store 3 GB–5 GB video files locally on the hosting server.
+    - **Instant 1-Second Import**: The backend validates metadata, calculates duration, and registers the video immediately with `videoId: "gdrive_" + fileId` without waiting for long download times.
+    - **On-Demand Secure Streaming (`/api/videos/stream/gdrive_[id]`)**:
+      - When an authorized student requests playback, the server authenticates with Google Drive API v3 using the Service Account and proxies the chunked byte-range stream (`206 Partial Content`) in real-time.
+      - **100% Native Security Preserved**: Dynamic student canvas watermarks (name, phone, code), anti-recording protection, and watch quota gating (`VideoGuard.tsx`) remain fully active on the client. The student never sees or receives the raw Google Drive URL or token.
     - **Strict Teacher/Superadmin Perimeter & Anti-Abuse Defense (`src/app/api/teacher/gdrive-import/route.ts`)**:
       - Rejects any unauthenticated or `student`-role requests with explicit `401` / `403 Forbidden` barriers and security audit logging.
-      - **In-Memory Concurrency Locks**: Restricts each teacher account to a maximum of 2 simultaneous active downloads to prevent server I/O exhaustion.
-      - **Hourly Rate Limiting**: Caps each teacher account at 20 downloads/hour.
-      - **Strict MIME & Extension Whitelisting**: Strictly restricts downloads to valid video containers (`.mp4`, `.webm`, `.mov`, `.mkv`, `.m4v`, `.avi`, `.ts`).
-    - Authenticates with Google Cloud via a dedicated Service Account (`code-up-drive-downloader@...`) using server-side RS256 JWT signing via Node's native `crypto` module (zero external Google client SDK dependencies) and caches OAuth2 access tokens in-memory.
+      - **In-Memory Concurrency Locks**: Restricts each teacher account to a maximum of 2 simultaneous active imports.
+      - **Hourly Rate Limiting**: Caps each teacher account at 20 imports/hour.
+      - **Strict MIME & Extension Whitelisting**: Strictly restricts imports to valid video containers (`.mp4`, `.webm`, `.mov`, `.mkv`, `.m4v`, `.avi`, `.ts`).
   - **Local Stream Authorization (`src/app/api/videos/stream/[id]/route.ts`)**:
     - Serves chunked HTTP range requests (`206 Partial Content`) strictly after validating student authentication and active course/plan enrollment via `checkVideoAccess()`.
   - **Dynamic Watermarking & Anti-Leak Protection (`src/components/video/VideoGuard.tsx`)**:

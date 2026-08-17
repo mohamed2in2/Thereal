@@ -37,9 +37,21 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: "لا يوجد صلاحية للوصول لهذا الفيديو" }, { status: 403 });
     }
 
+    // ── Google Drive Direct Cloud Stream ──────────────────────────────────────
+    if (safeFilename.startsWith("gdrive_")) {
+      const fileId = safeFilename.replace(/^gdrive_/, "");
+      const { streamGoogleDriveVideo } = await import("@/lib/google-drive");
+      return await streamGoogleDriveVideo(fileId, req.headers.get("range"));
+    }
+
     const filePath = path.join(UPLOAD_DIR, safeFilename);
 
     if (!fs.existsSync(filePath)) {
+      // If not on local disk, check if it's a raw Google Drive file ID
+      if (/^[a-zA-Z0-9_-]{20,60}$/.test(safeFilename)) {
+        const { streamGoogleDriveVideo } = await import("@/lib/google-drive");
+        return await streamGoogleDriveVideo(safeFilename, req.headers.get("range"));
+      }
       return NextResponse.json({ error: "الفيديو غير موجود" }, { status: 404 });
     }
 

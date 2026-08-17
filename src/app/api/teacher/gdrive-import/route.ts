@@ -3,7 +3,7 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import {
   extractGoogleDriveFileId,
-  downloadGoogleDriveVideo,
+  importGoogleDriveVideo,
 } from "@/lib/google-drive";
 import { getConfigNumber, getConfigNumberClamped } from "@/lib/config";
 import { triggerPlanSyncForCourse } from "@/lib/plan-lesson-matcher";
@@ -106,8 +106,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ── 4. Download from Google Drive into Native Security Storage ───────────
-    const downloadResult = await downloadGoogleDriveVideo(fileId);
+    // ── 4. Import Google Drive Video directly into Native Security (Zero VPS Disk Space) ───
+    const downloadResult = await importGoogleDriveVideo(fileId);
 
     const videoTitle = (body.title || downloadResult.title || "درس فيديو جديد").trim();
     const durationMinutes =

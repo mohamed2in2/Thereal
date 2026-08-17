@@ -1848,7 +1848,7 @@ export default function TeacherDashboardPage() {
                                       <label className="text-xs font-bold text-[var(--ink)] flex items-center gap-1.5">
                                         <span>🔗</span> رابط فيديو Google Drive:
                                       </label>
-                                      <span className="text-[10px] text-sky-400 font-bold">⚡ تنزيل مباشر لسيرفر المنصة (يدعم حتى 6GB)</span>
+                                      <span className="text-[10px] text-sky-400 font-bold">⚡ استيراد سحابي فوري (Zero VPS Storage - يدعم حتى 6GB)</span>
                                     </div>
 
                                     <div className="flex flex-col sm:flex-row gap-2">
@@ -1870,11 +1870,11 @@ export default function TeacherDashboardPage() {
                                         {gdriveImporting ? (
                                           <>
                                             <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                            <span>جاري التنزيل والحماية...</span>
+                                            <span>جاري الاستيراد والحماية...</span>
                                           </>
                                         ) : (
                                           <>
-                                            <span>📥 تنزيل وحماية الفيديو</span>
+                                            <span>📥 استيراد وحماية الفيديو</span>
                                           </>
                                         )}
                                       </button>

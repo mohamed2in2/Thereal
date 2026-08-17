@@ -303,3 +303,133 @@ export async function downloadGoogleDriveVideo(
     videoProvider: "alasly",
   };
 }
+
+/**
+ * Instantly imports a Google Drive video into Code-UP's Native Security pipeline
+ * without saving to disk (Zero VPS Disk Usage).
+ * Video is securely streamed on-demand to authorized students via Service Account.
+ */
+export async function importGoogleDriveVideo(
+  fileId: string,
+  options?: { maxSizeBytes?: number }
+): Promise<GoogleDriveDownloadResult & { isCloudStream: boolean; sizeFormatted: string }> {
+  // 1. Verify metadata & access with Google Drive API v3
+  const metadata = await getGoogleDriveFileMetadata(fileId);
+
+  // Configurable size limit: Default 6 GB (to easily handle 3GB & 5GB teacher videos)
+  const envMaxGb = Number(process.env.GOOGLE_DRIVE_MAX_FILE_SIZE_GB) || 6;
+  const maxBytes = options?.maxSizeBytes || envMaxGb * 1024 * 1024 * 1024;
+  const fileSize = Number(metadata.size) || 0;
+  if (fileSize > maxBytes) {
+    const sizeGB = (fileSize / (1024 * 1024 * 1024)).toFixed(2);
+    const maxGB = (maxBytes / (1024 * 1024 * 1024)).toFixed(0);
+    throw new Error(`حجم الفيديو (${sizeGB} جيجابايت) يتجاوز الحد الأقصى المسموح به (${maxGB} جيجابايت).`);
+  }
+
+  // 2. Validate MIME type & file extension
+  const mime = (metadata.mimeType || "").toLowerCase();
+  const originalName = metadata.name || "video.mp4";
+  const ext = path.extname(originalName).toLowerCase();
+
+  const isVideoMime =
+    mime.startsWith("video/") ||
+    mime === "application/octet-stream" ||
+    mime === "application/x-matroska" ||
+    mime === "application/mp4";
+
+  const allowedExtensions = [".mp4", ".webm", ".mov", ".mkv", ".m4v", ".avi", ".ts"];
+  const hasValidExt = ext && allowedExtensions.includes(ext);
+
+  if (!isVideoMime && !hasValidExt) {
+    throw new Error(
+      `نوع الملف (${mime || "غير معروف"}) ليس ملف فيديو صالحاً. يُسمح فقط بملفات الفيديو (MP4, WebM, MOV, MKV).`
+    );
+  }
+
+  // Calculate duration in minutes if provided in metadata
+  let durationMinutes = 0;
+  if (metadata.videoMediaMetadata?.durationMillis) {
+    const millis = Number(metadata.videoMediaMetadata.durationMillis);
+    if (!isNaN(millis) && millis > 0) {
+      durationMinutes = Math.ceil(millis / 60000);
+    }
+  }
+
+  const cleanTitle = originalName.replace(/\.[^/.]+$/, "").trim() || "درس فيديو";
+  const videoId = `gdrive_${fileId}`;
+
+  const sizeFormatted =
+    fileSize >= 1024 * 1024 * 1024
+      ? `${(fileSize / (1024 * 1024 * 1024)).toFixed(2)} جيجابايت`
+      : `${(fileSize / (1024 * 1024)).toFixed(1)} ميجابايت`;
+
+  return {
+    success: true,
+    videoId,
+    filename: videoId,
+    title: cleanTitle,
+    durationMinutes,
+    sizeBytes: fileSize,
+    sizeFormatted,
+    mimeType: metadata.mimeType || "video/mp4",
+    videoProvider: "alasly",
+    isCloudStream: true,
+  };
+}
+
+/**
+ * Proxies partial byte-range requests directly from Google Drive API to authorized students.
+ * Supports seek/scrubbing and HTTP 206 Partial Content with zero local disk footprint.
+ */
+export async function streamGoogleDriveVideo(
+  fileId: string,
+  rangeHeader?: string | null
+): Promise<Response> {
+  const token = await getGoogleDriveAccessToken();
+  const downloadUrl = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`;
+
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${token}`,
+  };
+
+  if (rangeHeader) {
+    headers["Range"] = rangeHeader;
+  }
+
+  const driveRes = await fetch(downloadUrl, {
+    method: "GET",
+    headers,
+  });
+
+  if (!driveRes.ok && driveRes.status !== 206) {
+    const errText = await driveRes.text().catch(() => "");
+    throw new Error(`خطأ في تشغيل الفيديو من Google Drive (${driveRes.status}): ${errText}`);
+  }
+
+  const responseHeaders = new Headers();
+  const forwardHeaders = [
+    "content-type",
+    "content-length",
+    "content-range",
+    "accept-ranges",
+    "content-duration",
+  ];
+
+  for (const h of forwardHeaders) {
+    const val = driveRes.headers.get(h);
+    if (val) responseHeaders.set(h, val);
+  }
+
+  if (!responseHeaders.has("content-type")) {
+    responseHeaders.set("content-type", "video/mp4");
+  }
+  if (!responseHeaders.has("accept-ranges")) {
+    responseHeaders.set("accept-ranges", "bytes");
+  }
+  responseHeaders.set("Cache-Control", "no-store, private");
+
+  return new Response(driveRes.body, {
+    status: driveRes.status,
+    headers: responseHeaders,
+  });
+}

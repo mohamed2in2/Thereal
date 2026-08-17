@@ -45,14 +45,20 @@ export async function getAlaslyPlaybackToken(lessonId: string, domain?: string):
     throw new Error("Native/Alasly Video ID is required");
   }
 
-  // Handle local video server streaming
-  if (lessonId.startsWith("local_") || lessonId.endsWith(".mp4") || lessonId.endsWith(".webm") || lessonId.endsWith(".mov")) {
+  // Handle local video server streaming and Google Drive direct stream proxying
+  if (
+    lessonId.startsWith("local_") ||
+    lessonId.startsWith("gdrive_") ||
+    lessonId.endsWith(".mp4") ||
+    lessonId.endsWith(".webm") ||
+    lessonId.endsWith(".mov")
+  ) {
     return {
       token: "local",
       expiresInSeconds: 86400,
       expiresAt: new Date(Date.now() + 86400 * 1000).toISOString(),
       embedUrl: `/api/videos/stream/${encodeURIComponent(lessonId)}`,
-      title: "Local Native Video",
+      title: "Native Video",
     };
   }
 
