@@ -377,33 +377,72 @@ export async function importGoogleDriveVideo(
   };
 }
 
-/**
- * Proxies partial byte-range requests directly from Google Drive API to authorized students.
- * Supports seek/scrubbing and HTTP 206 Partial Content with zero local disk footprint.
- */
 export async function streamGoogleDriveVideo(
   fileId: string,
   rangeHeader?: string | null
 ): Promise<Response> {
-  const token = await getGoogleDriveAccessToken();
-  const downloadUrl = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`;
+  let driveRes: Response | null = null;
 
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${token}`,
-  };
+  // 1. Primary path: Service Account authorized streaming
+  try {
+    const token = await getGoogleDriveAccessToken();
+    const downloadUrl = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`;
 
-  if (rangeHeader) {
-    headers["Range"] = rangeHeader;
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${token}`,
+    };
+    if (rangeHeader) {
+      headers["Range"] = rangeHeader;
+    }
+
+    const res = await fetch(downloadUrl, {
+      method: "GET",
+      headers,
+    });
+
+    if (res.ok || res.status === 206) {
+      driveRes = res;
+    }
+  } catch (err: any) {
+    console.warn("[Google Drive Stream] Service Account stream fallback:", err?.message || err);
   }
 
-  const driveRes = await fetch(downloadUrl, {
-    method: "GET",
-    headers,
-  });
+  // 2. Secondary path: Direct public CDN stream fallback (if file has link sharing)
+  if (!driveRes) {
+    const publicEndpoints = [
+      `https://drive.usercontent.google.com/download?id=${encodeURIComponent(fileId)}&export=download&confirm=t`,
+      `https://drive.google.com/uc?export=download&id=${encodeURIComponent(fileId)}&confirm=t`,
+      `https://docs.google.com/uc?id=${encodeURIComponent(fileId)}&export=download`,
+    ];
 
-  if (!driveRes.ok && driveRes.status !== 206) {
-    const errText = await driveRes.text().catch(() => "");
-    throw new Error(`خطأ في تشغيل الفيديو من Google Drive (${driveRes.status}): ${errText}`);
+    for (const ep of publicEndpoints) {
+      try {
+        const epHeaders: Record<string, string> = {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        };
+        if (rangeHeader) {
+          epHeaders["Range"] = rangeHeader;
+        }
+
+        const res = await fetch(ep, {
+          method: "GET",
+          headers: epHeaders,
+          redirect: "follow",
+        });
+
+        if (res.ok || res.status === 206) {
+          driveRes = res;
+          break;
+        }
+      } catch {
+        // continue to next endpoint
+      }
+    }
+  }
+
+  if (!driveRes || (!driveRes.ok && driveRes.status !== 206)) {
+    const errText = driveRes ? await driveRes.text().catch(() => "") : "";
+    throw new Error(`خطأ في تشغيل الفيديو من Google Drive: ${errText || "يرجى التأكد من صلاحيات الفيديو"}`);
   }
 
   const responseHeaders = new Headers();

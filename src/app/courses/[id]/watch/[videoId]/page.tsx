@@ -498,8 +498,8 @@ export default function VideoWatchPage() {
                 </p>
               </div>
               <div className="flex items-center gap-3">
-                {/* Direct Google Drive fallback mode switch */}
-                {(iframeSrc.includes("gdrive") || session.video.videoProvider === "alasly") && (
+                {/* Relaxed focus mode switch */}
+                {session.video.videoProvider === "alasly" && (
                   <button
                     type="button"
                     onClick={() => setDirectDriveMode((prev) => !prev)}
@@ -508,9 +508,9 @@ export default function VideoWatchPage() {
                         ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
                         : "bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-700"
                     }`}
-                    title="تشغيل عبر Google Drive المباشر بدون قيود الأمان في حال واجهت مشكلة في البث"
+                    title="إلغاء الإيقاف المؤقت عند التنقل بين النوافذ"
                   >
-                    <span>{directDriveMode ? "🛡️ المشغل الآمن" : "📁 مشغل Drive المباشر"}</span>
+                    <span>{directDriveMode ? "🛡️ وضع الحماية الكامل" : "⚡ وضع المشاهدة المرن"}</span>
                   </button>
                 )}
                 <button
