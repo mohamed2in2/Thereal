@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
       where: {
         type: SHA7NAWY_PENDING_TYPE,
         providerRef: refStr,
-      },
+      } as any,
       select: { id: true, userId: true, amount: true, note: true },
     });
 
@@ -116,7 +116,7 @@ export async function POST(req: NextRequest) {
         where: {
           type: "credit_sha7nawy_expired",
           providerRef: refStr,
-        },
+        } as any,
         select: { id: true, userId: true, amount: true, note: true },
       });
 
@@ -146,7 +146,7 @@ export async function POST(req: NextRequest) {
         where: {
           type: SHA7NAWY_CREDITED_TYPE,
           providerRef: refStr,
-        },
+        } as any,
         select: { id: true, note: true },
       });
 

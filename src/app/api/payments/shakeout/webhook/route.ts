@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
       where: {
         type: SHAKEOUT_PENDING_TYPE,
         providerRef: refStr,
-      },
+      } as any,
       select: { id: true, userId: true, amount: true, note: true },
     });
 
@@ -111,7 +111,7 @@ export async function POST(req: NextRequest) {
         where: {
           type: "credit_shakeout_expired",
           providerRef: refStr,
-        },
+        } as any,
         select: { id: true, userId: true, amount: true, note: true },
       });
 
@@ -141,7 +141,7 @@ export async function POST(req: NextRequest) {
         where: {
           type: SHAKEOUT_CREDITED_TYPE,
           providerRef: refStr,
-        },
+        } as any,
         select: { id: true, note: true },
       });
 

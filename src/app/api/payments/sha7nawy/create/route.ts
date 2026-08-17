@@ -317,7 +317,7 @@ export async function POST(req: NextRequest) {
           amount: baseAmount,
           note: noteText,
           providerRef: String(reference),
-        },
+        } as any,
       });
 
       const finalCheckoutUrl = soCheckoutUrl || `https://dash.shake-out.com/invoice/${reference}`;
@@ -371,7 +371,7 @@ export async function POST(req: NextRequest) {
         amount: baseAmount,
         note: noteText,
         providerRef: String(reference),
-      },
+      } as any,
     });
 
     return NextResponse.json({
