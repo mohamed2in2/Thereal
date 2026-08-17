@@ -182,10 +182,10 @@ export default function TeacherDashboardPage() {
     }
 
     setGdriveImporting(true);
-    setGdriveStatus("جاري الاتصال بـ Google Drive والتحقق من الصلاحيات...");
+    setGdriveStatus("جاري الاتصال بـ Google Drive وتهيئة الرفع إلى Bunny Stream CDN...");
 
     try {
-      setGdriveStatus("جاري ربط وحماية الفيديو سحابياً بنظام Native Security (Zero VPS Storage)...");
+      setGdriveStatus("جاري سحب الفيديو من Google Drive ورفعه مباشرة إلى Bunny Stream CDN (أعلى سرعة وبدون استهلاك مساحة السيرفر)...");
       const res = await fetch("/api/teacher/gdrive-import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -193,27 +193,27 @@ export default function TeacherDashboardPage() {
           url: gdriveUrl.trim(),
           title: newVideo.title || undefined,
           durationMinutes: newVideo.durationMinutes || undefined,
-          mode: "cloud",
+          mode: "bunny",
         }),
       });
 
       const data = await res.json();
       if (!res.ok || !data.success) {
-        throw new Error(data.error || "فشل استيراد الفيديو من Google Drive");
+        throw new Error(data.error || "فشل رفع الفيديو إلى Bunny Stream");
       }
 
       setNewVideo((prev) => ({
         ...prev,
-        videoProvider: "alasly",
+        videoProvider: "bunny",
         providerVideoId: data.videoId,
         title: prev.title || data.title,
         durationMinutes: prev.durationMinutes || data.durationMinutes || 0,
       }));
       setLastUploadedVideoId(data.videoId);
       setGdriveUrl("");
-      notify("success", data.message || "تم استيراد وتحميل الفيديو من Google Drive وحمايته بـ Native Security بنجاح! 🎉");
+      notify("success", data.message || "تم رفع الفيديو من Google Drive إلى Bunny Stream CDN بنجاح! 🚀");
     } catch (err: any) {
-      notify("error", err.message || "تعذر استيراد الفيديو من Google Drive");
+      notify("error", err.message || "تعذر رفع الفيديو إلى Bunny Stream");
     } finally {
       setGdriveImporting(false);
       setGdriveStatus("");
@@ -1811,8 +1811,8 @@ export default function TeacherDashboardPage() {
                               return null;
                             })()}
 
-                            {/* Native Video SaaS Direct Upload & Google Drive Downloader */}
-                            {newVideo.videoProvider === "alasly" && (
+                            {/* Direct Video Upload & Google Drive to Bunny Stream Downloader */}
+                            {(newVideo.videoProvider === "alasly" || newVideo.videoProvider === "bunny") && (
                               <div className="mt-2.5 p-3.5 rounded-2xl border border-sky-500/30 bg-sky-500/5 space-y-3">
                                 {/* Tab selector between Direct Upload & Google Drive */}
                                 <div className="flex items-center gap-2 p-1 rounded-xl bg-black/20 border border-white/5">
@@ -1825,8 +1825,8 @@ export default function TeacherDashboardPage() {
                                         : "text-[var(--ink-muted)] hover:text-[var(--ink)]"
                                     }`}
                                   >
-                                    <span>📥</span>
-                                    <span>استيراد وتنزيل من Google Drive</span>
+                                    <span>🐰</span>
+                                    <span>سحب من Google Drive إلى Bunny Stream</span>
                                   </button>
                                   <button
                                     type="button"
@@ -1842,14 +1842,14 @@ export default function TeacherDashboardPage() {
                                   </button>
                                 </div>
 
-                                {/* Google Drive Tab */}
+                                {/* Google Drive to Bunny Stream Tab */}
                                 {activeNativeTab === "gdrive" && (
                                   <div className="space-y-2.5">
                                     <div className="flex items-center justify-between">
                                       <label className="text-xs font-bold text-[var(--ink)] flex items-center gap-1.5">
                                         <span>🔗</span> رابط فيديو Google Drive:
                                       </label>
-                                      <span className="text-[10px] text-sky-400 font-bold">⚡ استيراد سحابي فوري (Zero VPS Storage - يدعم حتى 6GB)</span>
+                                      <span className="text-[10px] text-sky-400 font-bold">⚡ سحب ورفع سحابي إلى Bunny CDN (Zero VPS Storage)</span>
                                     </div>
 
                                     <div className="flex flex-col sm:flex-row gap-2">
@@ -1871,11 +1871,11 @@ export default function TeacherDashboardPage() {
                                         {gdriveImporting ? (
                                           <>
                                             <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                            <span>جاري الاستيراد والحماية...</span>
+                                            <span>جاري الرفع إلى Bunny...</span>
                                           </>
                                         ) : (
                                           <>
-                                            <span>📥 استيراد وحماية الفيديو</span>
+                                            <span>🚀 رفع إلى Bunny Stream</span>
                                           </>
                                         )}
                                       </button>

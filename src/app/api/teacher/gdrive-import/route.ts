@@ -108,10 +108,22 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ── 4. High-Speed Server-side Download or Zero-Storage Cloud Stream ────────
-    const mode = body.mode || "cloud";
+    // ── 4. Direct Upload from Google Drive to Bunny Stream / Cloud / Local ───
+    const mode = body.mode || "bunny";
     let downloadResult: any;
-    if (mode === "cloud") {
+
+    if (mode === "bunny") {
+      const { transferGoogleDriveToBunny } = await import("@/lib/bunny");
+      const bunnyRes = await transferGoogleDriveToBunny(fileId, body.title);
+      downloadResult = {
+        videoId: bunnyRes.guid,
+        title: bunnyRes.title,
+        durationMinutes: bunnyRes.durationMinutes,
+        sizeBytes: bunnyRes.sizeBytes,
+        videoProvider: "bunny",
+        isCloudStream: true,
+      };
+    } else if (mode === "cloud") {
       downloadResult = await importGoogleDriveVideo(fileId);
     } else {
       try {
@@ -123,10 +135,19 @@ export async function POST(req: NextRequest) {
           err?.message?.includes("no space")
         ) {
           console.warn(
-            "[Google Drive Import] Server disk full (ENOSPC), falling back to Zero-Storage Cloud Stream:",
+            "[Google Drive Import] Server disk full (ENOSPC), transferring directly to Bunny Stream:",
             err.message
           );
-          downloadResult = await importGoogleDriveVideo(fileId);
+          const { transferGoogleDriveToBunny } = await import("@/lib/bunny");
+          const bunnyRes = await transferGoogleDriveToBunny(fileId, body.title);
+          downloadResult = {
+            videoId: bunnyRes.guid,
+            title: bunnyRes.title,
+            durationMinutes: bunnyRes.durationMinutes,
+            sizeBytes: bunnyRes.sizeBytes,
+            videoProvider: "bunny",
+            isCloudStream: true,
+          };
         } else {
           throw err;
         }
@@ -172,7 +193,7 @@ export async function POST(req: NextRequest) {
       createdVideo = await prisma.video.create({
         data: {
           title: videoTitle,
-          videoProvider: "alasly",
+          videoProvider: downloadResult.videoProvider || "bunny",
           providerVideoId: downloadResult.videoId,
           vdoCipherId: "",
           durationMinutes,
@@ -186,25 +207,27 @@ export async function POST(req: NextRequest) {
     }
 
     // Format human-readable size
-    const sizeBytes = downloadResult.sizeBytes;
+    const sizeBytes = downloadResult.sizeBytes || 0;
     const sizeFormatted =
       sizeBytes >= 1024 * 1024 * 1024
         ? `${(sizeBytes / (1024 * 1024 * 1024)).toFixed(2)} جيجابايت`
         : `${(sizeBytes / (1024 * 1024)).toFixed(1)} ميجابايت`;
 
+    const providerLabel = downloadResult.videoProvider === "bunny" ? "Bunny Stream CDN" : "Native Security";
+
     return NextResponse.json({
       success: true,
-      isLocal: true,
+      isLocal: downloadResult.videoProvider === "alasly",
       videoId: downloadResult.videoId,
       assetId: downloadResult.videoId,
-      filename: downloadResult.filename,
+      filename: downloadResult.videoId,
       title: videoTitle,
       durationMinutes,
       sizeBytes: downloadResult.sizeBytes,
       sizeFormatted,
-      videoProvider: "alasly",
+      videoProvider: downloadResult.videoProvider || "bunny",
       video: createdVideo,
-      message: `تم استيراد وتحميل الفيديو (${sizeFormatted}) وحمايته بنظام Native Security بنجاح! 🚀`,
+      message: `تم رفع الفيديو (${sizeFormatted}) إلى ${providerLabel} ومعالجته بنجاح! 🚀`,
     });
   } catch (error: any) {
     console.error("[Google Drive Import API] Error:", error.message || error);
