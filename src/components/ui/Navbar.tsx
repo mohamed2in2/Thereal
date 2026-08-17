@@ -198,7 +198,7 @@ export function Navbar({ user: propUser }: NavbarProps) {
 
   return (
     <>
-      <ParentVerificationBanner />
+      <ParentVerificationBanner isStudent={user?.role === "student"} />
       <header
         className="sticky top-0 z-[var(--z-sticky)] bg-[var(--surface)] border-b border-[var(--border)]"
         style={{ boxShadow: "var(--shadow-sm)" }}
@@ -306,9 +306,9 @@ export function Navbar({ user: propUser }: NavbarProps) {
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
                 </svg>
-                <span className="hidden sm:inline text-[13px] text-[var(--ink-3)] font-medium">بحث...</span>
+                <span className="hidden sm:inline text-[13px] text-[var(--ink-2)] font-medium">بحث...</span>
               </div>
-              <kbd className="hidden sm:inline-flex h-5 select-none items-center gap-0.5 rounded border border-[var(--border)] bg-[var(--surface)] px-1.5 font-mono text-[10px] font-bold text-[var(--ink-3)]">
+              <kbd className="hidden sm:inline-flex h-5 select-none items-center gap-0.5 rounded border border-[var(--border)] bg-[var(--surface)] px-1.5 font-mono text-[10px] font-bold text-[var(--ink)]">
                 ⌘K
               </kbd>
             </button>

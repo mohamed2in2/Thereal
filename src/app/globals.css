@@ -41,8 +41,8 @@
   --shadow-lg:     0 30px 70px -30px rgba(19, 36, 58, .30);
 
   /* Fonts */
-  --font-body:     'IBM Plex Sans Arabic', 'Cairo', sans-serif;
-  --font-head:     'Tajawal', 'Cairo', sans-serif;
+  --font-body:     var(--font-ibm-plex), 'IBM Plex Sans Arabic', 'Cairo', sans-serif;
+  --font-head:     var(--font-tajawal), 'Tajawal', 'Cairo', sans-serif;
 
   /* Semantic aliases — kept for backward compat */
   --ink-muted:     var(--ink-2);

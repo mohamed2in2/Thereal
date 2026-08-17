@@ -18,6 +18,8 @@ export function BrandLogo({
       <img
         src="/logo.jpeg"
         alt="Code-UP Logo"
+        width={Math.round(size * 1.2)}
+        height={Math.round(size * 1.2)}
         className="shrink-0 rounded-xl object-cover transition-transform hover:scale-105 shadow-sm"
         style={{ width: Math.round(size * 1.2), height: Math.round(size * 1.2) }}
       />

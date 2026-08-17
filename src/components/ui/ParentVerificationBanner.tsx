@@ -3,13 +3,18 @@
 import { useState, useEffect } from "react";
 import { useToast } from "@/components/ui/Toast";
 
-export function ParentVerificationBanner() {
+export function ParentVerificationBanner({ isStudent = false }: { isStudent?: boolean }) {
   const { success: toastSuccess, error: toastError } = useToast();
   const [showBanner, setShowBanner] = useState(false);
   const [parentPhone, setParentPhone] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
+    if (!isStudent) {
+      setShowBanner(false);
+      return;
+    }
+
     fetch("/api/student/stats", { credentials: "include" })
       .then((res) => (res.ok ? res.json() : null))
       .then((data: { parentVerificationStatus?: string; parentVerified?: boolean; parentPhone?: string } | null) => {
@@ -21,7 +26,7 @@ export function ParentVerificationBanner() {
         }
       })
       .catch(() => {});
-  }, []);
+  }, [isStudent]);
 
   if (!showBanner) return null;
 
