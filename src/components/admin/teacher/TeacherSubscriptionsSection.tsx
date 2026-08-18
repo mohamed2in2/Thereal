@@ -281,12 +281,17 @@ export function TeacherSubscriptionsSection() {
                         </span>
                       </td>
                       <td className="p-4">
-                        <span
-                          className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold"
-                          style={{ background: badge.bg, color: badge.color }}
-                        >
-                          {badge.label} ({sub.amount} ج.م)
-                        </span>
+                        <div>
+                          <span
+                            className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold"
+                            style={{ background: badge.bg, color: badge.color }}
+                          >
+                            {badge.label}
+                          </span>
+                          <div className="text-[11px] font-mono font-bold text-emerald-400 mt-1">
+                            💰 المسدد: {sub.amount} ج.م
+                          </div>
+                        </div>
                       </td>
                       <td className="p-4 font-mono text-[11px] dir-ltr text-right">
                         <div>📱 الطالب: {phone}</div>

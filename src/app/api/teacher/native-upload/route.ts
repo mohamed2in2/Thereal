@@ -68,12 +68,22 @@ export async function POST(req: NextRequest) {
     const action = body.action || "init";
 
     if (action === "init") {
+      const title = body.title || body.filename || "درس جديد";
+      const external_ref = body.external_ref || body.lesson_id || `lesson_${Date.now()}`;
+      const playback_kind = body.playback_kind || "mp4";
       const filename = body.filename || "video.mp4";
       const fileContentType = body.contentType || "video/mp4";
       const size = Number(body.size) || 0;
 
       try {
-        const result = await initAlaslyUpload(filename, fileContentType, size);
+        const result = await initAlaslyUpload({
+          title,
+          external_ref,
+          playback_kind,
+          filename,
+          contentType: fileContentType,
+          size,
+        });
         return NextResponse.json({ success: true, isLocal: false, ...result });
       } catch (err: any) {
         console.warn("[Native Upload] Cloud SaaS init failed, using local server upload fallback:", err.message);
@@ -96,8 +106,20 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: true, isLocal: true, videoId: assetId, assetId, status: "ready" });
       }
 
+      const duration = typeof body.duration === "number" ? body.duration : undefined;
+      const size_bytes =
+        typeof body.size_bytes === "number"
+          ? body.size_bytes
+          : typeof body.size === "number"
+          ? body.size
+          : undefined;
+
       try {
-        const result = await completeAlaslyUpload(assetId);
+        const result = await completeAlaslyUpload({
+          assetId,
+          duration,
+          size_bytes,
+        });
         return NextResponse.json({ success: true, isLocal: false, ...result });
       } catch (err: any) {
         return NextResponse.json({ success: true, isLocal: true, videoId: assetId, assetId, status: "ready" });

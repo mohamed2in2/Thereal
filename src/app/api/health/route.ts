@@ -88,14 +88,16 @@ function checkCron(): Check {
 }
 
 function checkVideoProvider(): Check {
-  const configured = Boolean(process.env.ALASLY_API_KEY && process.env.ALASLY_API_SECRET);
+  const apiKey = process.env.VIDEO_API_KEY || process.env.ALASLY_API_KEY;
+  const apiSecret = process.env.VIDEO_API_SECRET || process.env.ALASLY_API_SECRET;
+  const configured = Boolean(apiKey && apiSecret);
   if (!configured) {
-    return { state: "degraded", detail: "Native video credentials unset — those lessons cannot resolve playback" };
+    return { state: "degraded", detail: "Alasly video credentials unset — those lessons cannot resolve playback" };
   }
   // The literals that were previously committed to the repository.
   const leaked =
-    process.env.ALASLY_API_KEY === "alk_06a5ofogdqo11inzwoqn186jukk0bh7o" ||
-    process.env.ALASLY_API_SECRET === "als_ga4xg1zjs8h94ksv4rgbrc6yb4cjngf4pl0u7evxc106k7lq";
+    apiKey === "alk_06a5ofogdqo11inzwoqn186jukk0bh7o" ||
+    apiSecret === "als_ga4xg1zjs8h94ksv4rgbrc6yb4cjngf4pl0u7evxc106k7lq";
   if (leaked) {
     return { state: "degraded", detail: "using the previously published credentials — rotate them" };
   }

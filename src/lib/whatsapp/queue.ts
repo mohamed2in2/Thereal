@@ -4,306 +4,467 @@ import { rateLimiter } from "./rateLimiter";
 import { normalizePhoneToJid, validateMessageContent, formatOTPMessage } from "./formatter";
 import { logger } from "./logger";
 import { officialMetaProvider } from "./officialMetaProvider";
+import { circuitBreaker } from "./circuitBreaker";
 
-export interface QueueItem {
+export type PriorityBand = "P0" | "P1" | "P2" | "P3";
+export type FallbackPolicy = "META" | "NONE";
+export type JobCategory = "OTP" | "PAYMENT" | "PARENT_LINK" | "NOTIFICATION" | "BULK" | "CUSTOM";
+
+export interface WhatsAppJob {
   id: string;
-  type: "TEXT" | "OTP";
-  phoneE164: string;
+  idempotencyKey: string;
+  priority: PriorityBand;
+  category: JobCategory;
+  recipient: string; // E.164 phone
   jid: string;
   content: string;
   otpCode?: string;
+  expiresAt: number; // TTL timestamp in ms
+  fallbackPolicy: FallbackPolicy;
   attempts: number;
   maxAttempts: number;
   enqueuedAt: number;
-  resolve: (value: { success: boolean; messageId?: string; error?: string }) => void;
+  resolve: (value: { success: boolean; messageId?: string; provider?: string; error?: string }) => void;
   reject: (reason: Error) => void;
 }
 
-class WhatsAppQueueManager {
-  private queue: QueueItem[] = [];
-  private isProcessing: boolean = false;
-  private lastGlobalSendTime: number = 0;
-  private lastOTPSendTime: number = 0;
+export interface EnqueueJobOptions {
+  recipient: string;
+  content: string;
+  priority?: PriorityBand;
+  category?: JobCategory;
+  idempotencyKey?: string;
+  expiresInSeconds?: number;
+  fallbackPolicy?: FallbackPolicy;
+  otpCode?: string;
+}
 
-  // Delays per requirements
-  private GLOBAL_COOLDOWN_MS = 5000; // 5 seconds between any message
-  private OTP_COOLDOWN_MS = 10000;   // 10 seconds between OTP messages
+/**
+ * Computes Gaussian-distributed jitter for queue pacing and burst smoothing.
+ * Prevents accidental micro-bursts and smooths CPU/socket load.
+ */
+export function getGaussianJitter(meanMs: number, stdDevMs: number, minMs: number = 200): number {
+  const u = 1 - Math.random();
+  const v = Math.random();
+  const z = Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+  return Math.max(minMs, Math.floor(meanMs + z * stdDevMs));
+}
+
+class WhatsAppQueueManager {
+  // 4 Isolated Priority Queues
+  private p0Queue: WhatsAppJob[] = []; // OTP & Auth (Highest Priority)
+  private p1Queue: WhatsAppJob[] = []; // Financial & Payment Receipts
+  private p2Queue: WhatsAppJob[] = []; // Notifications & Parent Links
+  private p3Queue: WhatsAppJob[] = []; // Bulk Announcements & Sync
+
+  private isProcessing: boolean = false;
+  private lastSendTimes: Record<PriorityBand, number> = {
+    P0: 0,
+    P1: 0,
+    P2: 0,
+    P3: 0,
+  };
+
+  // Mean Pacing Targets (with Gaussian Jitter)
+  private readonly PACING_CONFIG = {
+    P0: { meanMs: 0, stdDevMs: 0 },       // Immediate dispatch when socket is available
+    P1: { meanMs: 2000, stdDevMs: 400 },  // ~2s spacing for payment receipts
+    P2: { meanMs: 5000, stdDevMs: 1000 }, // ~5s spacing for parent/student notifications
+    P3: { meanMs: 12000, stdDevMs: 2500 },// ~12s spacing for bulk broadcasts
+  };
+
+  // Idempotency tracking (deduplicate duplicate requests in memory)
+  private completedJobs: Map<string, { success: boolean; messageId?: string; timestamp: number }> = new Map();
+  private inFlightJobs: Map<string, Promise<{ success: boolean; messageId?: string; provider?: string }>> = new Map();
+
+  constructor() {
+    // Periodically prune completed jobs older than 10 minutes
+    if (typeof setInterval !== "undefined") {
+      const timer = setInterval(() => this.pruneCompletedJobs(), 5 * 60 * 1000);
+      if (timer && typeof timer.unref === "function") {
+        timer.unref();
+      }
+    }
+  }
+
+  private pruneCompletedJobs() {
+    const cutoff = Date.now() - 10 * 60 * 1000;
+    for (const [key, val] of this.completedJobs.entries()) {
+      if (val.timestamp < cutoff) {
+        this.completedJobs.delete(key);
+      }
+    }
+  }
 
   public getQueueLength(): number {
-    return this.queue.length;
+    return this.p0Queue.length + this.p1Queue.length + this.p2Queue.length + this.p3Queue.length;
+  }
+
+  public getQueueLengthsByBand(): Record<PriorityBand, number> {
+    return {
+      P0: this.p0Queue.length,
+      P1: this.p1Queue.length,
+      P2: this.p2Queue.length,
+      P3: this.p3Queue.length,
+    };
   }
 
   /**
-   * Calculates the estimated wait time in milliseconds for a message entering the queue.
+   * Calculates the estimated wait time in milliseconds for a job entering the specified priority band.
    */
-  public getEstimatedWaitTimeMs(isOtp: boolean = false): number {
-    const now = Date.now();
+  public getEstimatedWaitTimeMs(priority: PriorityBand = "P2"): number {
+    const p0Time = this.p0Queue.length * 500; // P0 is fast sub-second
+    const p1Time = this.p1Queue.length * 2000;
+    const p2Time = this.p2Queue.length * 5000;
+    const p3Time = this.p3Queue.length * 12000;
 
-    const timeSinceGlobal = now - this.lastGlobalSendTime;
-    const globalWait = Math.max(0, this.GLOBAL_COOLDOWN_MS - timeSinceGlobal);
-
-    let otpWait = 0;
-    if (isOtp) {
-      const timeSinceOTP = now - this.lastOTPSendTime;
-      otpWait = Math.max(0, this.OTP_COOLDOWN_MS - timeSinceOTP);
+    switch (priority) {
+      case "P0":
+        return p0Time;
+      case "P1":
+        return p0Time + p1Time;
+      case "P2":
+        return p0Time + p1Time + p2Time;
+      case "P3":
+        return p0Time + p1Time + p2Time + p3Time;
+      default:
+        return p0Time + p1Time + p2Time;
     }
-
-    const initialWait = Math.max(globalWait, otpWait);
-
-    const queuedItemsWait = this.queue.reduce((acc, item) => {
-      const itemCost = item.type === "OTP" ? this.OTP_COOLDOWN_MS : this.GLOBAL_COOLDOWN_MS;
-      return acc + itemCost;
-    }, 0);
-
-    return initialWait + queuedItemsWait;
-  }
-
-  public enqueue(rawPhone: string, text: string, isOtp: boolean = false): Promise<{ success: boolean; messageId?: string; error?: string }> {
-    if (isOtp) {
-      return this.enqueueOTP(rawPhone, text);
-    }
-    return this.enqueueMessage(rawPhone, text);
   }
 
   /**
-   * Enqueues a standard text message.
+   * Universal Job Enqueue method with priority, idempotency, deadline TTL, and fallback policies.
    */
-  public enqueueMessage(rawPhone: string, text: string): Promise<{ success: boolean; messageId?: string; error?: string }> {
-    const { phoneE164, jid } = normalizePhoneToJid(rawPhone);
-    validateMessageContent(text);
+  public enqueueJob(options: EnqueueJobOptions): Promise<{ success: boolean; messageId?: string; provider?: string; error?: string }> {
+    const {
+      recipient,
+      content,
+      priority = "P2",
+      category = "NOTIFICATION",
+      idempotencyKey = `${priority}-${category}-${recipient.replace(/\D/g, "")}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      expiresInSeconds = priority === "P0" ? 300 : 1800, // 5 min for P0, 30 min for P1/P2
+      fallbackPolicy = priority === "P0" ? "META" : "NONE",
+      otpCode,
+    } = options;
 
-    const estimatedWaitMs = this.getEstimatedWaitTimeMs(false);
-    if (estimatedWaitMs > 10000) {
-      const waitSec = Math.round(estimatedWaitMs / 1000);
-      logger.warn("Baileys queue wait time exceeds 10s threshold. Routing to Meta API.", {
-        phone: phoneE164,
-        estimatedWaitMs,
-        waitSec,
-      });
-      return Promise.reject(
-        new Error(`Baileys queue wait time exceeds 10s threshold (${waitSec}s queued). Routing to Meta API.`)
-      );
+    // Check Idempotency Cache
+    const existingCompleted = this.completedJobs.get(idempotencyKey);
+    if (existingCompleted) {
+      logger.info("WhatsApp duplicate request resolved via idempotency cache", { idempotencyKey, recipient });
+      return Promise.resolve({ success: existingCompleted.success, messageId: existingCompleted.messageId, provider: "IDEMPOTENT_CACHE" });
     }
 
-    return new Promise((resolve, reject) => {
-      const item: QueueItem = {
-        id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-        type: "TEXT",
-        phoneE164,
-        jid,
-        content: text,
-        attempts: 0,
-        maxAttempts: 3,
-        enqueuedAt: Date.now(),
-        resolve,
-        reject,
-      };
-
-      this.queue.push(item);
-      logger.info("Enqueued message into FIFO queue", {
-        queueId: item.id,
-        phone: phoneE164,
-        queueSize: this.queue.length,
-      });
-
-      this.processNext();
-    });
-  }
-
-  /**
-   * Enqueues an OTP message with rate-limiting validation.
-   */
-  public enqueueOTP(rawPhone: string, otpCode: string, customTemplate?: string): Promise<{ success: boolean; messageId?: string; error?: string }> {
-    const { phoneE164, jid } = normalizePhoneToJid(rawPhone);
-    
-    // Check per-phone rate limits before enqueuing
-    const limitCheck = rateLimiter.checkOTPRateLimit(phoneE164);
-    if (!limitCheck.allowed) {
-      logger.warn("OTP request blocked by rate limiter", { phone: phoneE164, reason: limitCheck.reason });
-      return Promise.reject(new Error(limitCheck.reason || "OTP rate limit exceeded."));
+    const inFlight = this.inFlightJobs.get(idempotencyKey);
+    if (inFlight) {
+      logger.info("WhatsApp in-flight request joined via idempotency key", { idempotencyKey, recipient });
+      return inFlight;
     }
 
-    const estimatedWaitMs = this.getEstimatedWaitTimeMs(true);
-    if (estimatedWaitMs > 10000) {
-      const waitSec = Math.round(estimatedWaitMs / 1000);
-      logger.warn("Baileys OTP queue wait time exceeds 10s threshold. Routing to Meta API.", {
-        phone: phoneE164,
-        estimatedWaitMs,
-        waitSec,
-      });
-      return Promise.reject(
-        new Error(`Baileys queue wait time exceeds 10s threshold (${waitSec}s queued). Routing to Meta API.`)
-      );
-    }
-
-    const content = formatOTPMessage(otpCode, customTemplate);
+    const { phoneE164, jid } = normalizePhoneToJid(recipient);
     validateMessageContent(content);
 
-    return new Promise((resolve, reject) => {
-      const item: QueueItem = {
-        id: `otp-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-        type: "OTP",
-        phoneE164,
-        jid,
-        content,
-        otpCode,
-        attempts: 0,
-        maxAttempts: 3,
-        enqueuedAt: Date.now(),
-        resolve,
-        reject,
-      };
-
-      this.queue.push(item);
-      logger.info("Enqueued OTP message into FIFO queue", {
-        queueId: item.id,
-        phone: phoneE164,
-        queueSize: this.queue.length,
-      });
-
-      this.processNext();
-    });
-  }
-
-  private async processNext(): Promise<void> {
-    if (this.isProcessing || this.queue.length === 0) return;
-    this.isProcessing = true;
-
-    const item = this.queue[0];
-    const now = Date.now();
-
-    // 1. Calculate required delay for Global Cooldown (5 seconds)
-    const timeSinceGlobal = now - this.lastGlobalSendTime;
-    const globalWait = Math.max(0, this.GLOBAL_COOLDOWN_MS - timeSinceGlobal);
-
-    // 2. Calculate additional delay if OTP Cooldown applies (10 seconds)
-    let otpWait = 0;
-    if (item.type === "OTP") {
-      const timeSinceOTP = now - this.lastOTPSendTime;
-      otpWait = Math.max(0, this.OTP_COOLDOWN_MS - timeSinceOTP);
-    }
-
-    const requiredWait = Math.max(globalWait, otpWait);
-
-    if (requiredWait > 0) {
-      logger.debug("Enforcing queue cooldown delay", {
-        queueId: item.id,
-        waitMs: requiredWait,
-        type: item.type,
-      });
-      await new Promise((r) => setTimeout(r, requiredWait));
-    }
-
-    // Check if item has been sitting in queue for more than 10 seconds (10,000 ms)
-    const timeSpentInQueue = Date.now() - item.enqueuedAt;
-    if (timeSpentInQueue > 10000) {
-      logger.warn("Item exceeded 10s in Baileys queue. Attempting Meta Cloud API dispatch.", {
-        queueId: item.id,
-        phone: item.phoneE164,
-        waitedMs: timeSpentInQueue,
-      });
-
-      try {
-        const metaRes = await officialMetaProvider.sendMessage({
-          recipient: item.phoneE164,
-          content: item.content,
-          messageType: item.type === "OTP" ? "OTP" : "CUSTOM",
-        });
-
-        if (metaRes.success) {
-          logger.info("Successfully dispatched queued message via Meta Cloud API after 10s queue wait", {
-            queueId: item.id,
-            phone: item.phoneE164,
-            messageId: metaRes.messageId,
-          });
-          this.queue.shift();
-          item.resolve({ success: true, messageId: metaRes.messageId });
-          return;
-        }
-      } catch (metaErr: any) {
-        logger.warn("Meta Cloud API failover for queued message failed, proceeding with Baileys attempt", {
-          queueId: item.id,
-          error: metaErr.message,
-        });
+    // If OTP, validate rate limiter
+    if (category === "OTP") {
+      const limitCheck = rateLimiter.checkOTPRateLimit(phoneE164);
+      if (!limitCheck.allowed) {
+        logger.warn("OTP request blocked by rate limiter", { phone: phoneE164, reason: limitCheck.reason });
+        return Promise.reject(new Error(limitCheck.reason || "OTP rate limit exceeded."));
       }
     }
 
-    // Attempt to dispatch
-    item.attempts++;
+    const expiresAt = Date.now() + expiresInSeconds * 1000;
+    const estimatedWaitMs = this.getEstimatedWaitTimeMs(priority);
+
+    // Deadline-based fallback evaluation:
+    // If estimated wait exceeds remaining lifetime (minus 2s buffer) AND fallback is META -> dispatch via Meta immediately
+    const timeRemainingMs = expiresAt - Date.now();
+    if (estimatedWaitMs >= timeRemainingMs - 2000 && fallbackPolicy === "META") {
+      logger.warn("Queue wait exceeds deadline SLA. Bypassing Baileys queue directly to Meta Cloud API.", {
+        recipient: phoneE164,
+        priority,
+        estimatedWaitMs,
+        timeRemainingMs,
+      });
+
+      return officialMetaProvider.sendMessage({
+        recipient: phoneE164,
+        content,
+        messageType: category === "OTP" ? "OTP" : "CUSTOM",
+      });
+    }
+
+    // Circuit Breaker Fast-Path:
+    // If Baileys account is restricted or permanently disabled, route directly if Meta fallback is enabled
+    if (circuitBreaker.getState() === "ACCOUNT_RESTRICTED") {
+      if (fallbackPolicy === "META") {
+        logger.info("Baileys account is restricted. Routing eligible job to Meta API.", { recipient: phoneE164, priority });
+        return officialMetaProvider.sendMessage({
+          recipient: phoneE164,
+          content,
+          messageType: category === "OTP" ? "OTP" : "CUSTOM",
+        });
+      } else {
+        return Promise.reject(new Error("Baileys WhatsApp account is restricted (403 Forbidden). Non-fallback job rejected."));
+      }
+    }
+
+    const promise = new Promise<{ success: boolean; messageId?: string; provider?: string; error?: string }>((resolve, reject) => {
+      const job: WhatsAppJob = {
+        id: `job-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        idempotencyKey,
+        priority,
+        category,
+        recipient: phoneE164,
+        jid,
+        content,
+        otpCode,
+        expiresAt,
+        fallbackPolicy,
+        attempts: 0,
+        maxAttempts: 3,
+        enqueuedAt: Date.now(),
+        resolve: (val) => {
+          this.completedJobs.set(idempotencyKey, { success: val.success, messageId: val.messageId, timestamp: Date.now() });
+          this.inFlightJobs.delete(idempotencyKey);
+          resolve(val);
+        },
+        reject: (err) => {
+          this.inFlightJobs.delete(idempotencyKey);
+          reject(err);
+        },
+      };
+
+      this.pushToBand(job);
+      logger.info("Enqueued WhatsApp job into priority band", {
+        jobId: job.id,
+        priority: job.priority,
+        category: job.category,
+        phone: phoneE164,
+        totalQueue: this.getQueueLength(),
+      });
+
+      this.processNext();
+    });
+
+    this.inFlightJobs.set(idempotencyKey, promise);
+    return promise;
+  }
+
+  /**
+   * Push job into its respective priority band.
+   */
+  private pushToBand(job: WhatsAppJob): void {
+    switch (job.priority) {
+      case "P0":
+        this.p0Queue.push(job);
+        break;
+      case "P1":
+        this.p1Queue.push(job);
+        break;
+      case "P2":
+        this.p2Queue.push(job);
+        break;
+      case "P3":
+        this.p3Queue.push(job);
+        break;
+      default:
+        this.p2Queue.push(job);
+    }
+  }
+
+  /**
+   * Dequeues the next available job adhering strictly to priority order (P0 > P1 > P2 > P3).
+   */
+  private getNextJob(): WhatsAppJob | null {
+    if (this.p0Queue.length > 0) return this.p0Queue.shift()!;
+    if (this.p1Queue.length > 0) return this.p1Queue.shift()!;
+    if (this.p2Queue.length > 0) return this.p2Queue.shift()!;
+    if (this.p3Queue.length > 0) return this.p3Queue.shift()!;
+    return null;
+  }
+
+  private async processNext(): Promise<void> {
+    if (this.isProcessing || this.getQueueLength() === 0) return;
+    this.isProcessing = true;
+
+    const job = this.getNextJob();
+    if (!job) {
+      this.isProcessing = false;
+      return;
+    }
+
     try {
+      // 1. Check TTL Expiration
+      const now = Date.now();
+      if (now >= job.expiresAt) {
+        logger.warn("WhatsApp job expired before dispatch", { jobId: job.id, priority: job.priority, phone: job.recipient });
+        job.reject(new Error(`Message job ${job.id} expired before reaching dispatch.`));
+        return;
+      }
+
+      // 2. Evaluate Circuit Breaker State
+      const circuitState = circuitBreaker.getState();
+      if (circuitState === "ACCOUNT_RESTRICTED") {
+        if (job.fallbackPolicy === "META") {
+          logger.info("Circuit breaker restricted: dispatching job via Meta Cloud API", { jobId: job.id, phone: job.recipient });
+          const metaRes = await officialMetaProvider.sendMessage({
+            recipient: job.recipient,
+            content: job.content,
+            messageType: job.category === "OTP" ? "OTP" : "CUSTOM",
+          });
+          job.resolve(metaRes);
+          return;
+        } else {
+          job.reject(new Error("Baileys account restricted. Dispatch cancelled."));
+          return;
+        }
+      }
+
+      if (circuitState === "PROVIDER_UNHEALTHY" || circuitState === "SESSION_INVALID") {
+        if (job.fallbackPolicy === "META" && (job.priority === "P0" || job.expiresAt - now < 30000)) {
+          logger.info("Circuit breaker degraded: dispatching urgent job via Meta API", { jobId: job.id, state: circuitState });
+          const metaRes = await officialMetaProvider.sendMessage({
+            recipient: job.recipient,
+            content: job.content,
+            messageType: job.category === "OTP" ? "OTP" : "CUSTOM",
+          });
+          job.resolve(metaRes);
+          return;
+        }
+      }
+
+      // 3. Enforce Priority-Based Pacing with Gaussian Jitter
+      const pacing = this.PACING_CONFIG[job.priority];
+      if (pacing.meanMs > 0) {
+        const lastSend = this.lastSendTimes[job.priority];
+        const timeSince = now - lastSend;
+        const requiredDelay = getGaussianJitter(pacing.meanMs, pacing.stdDevMs, 500);
+
+        if (timeSince < requiredDelay) {
+          const waitMs = requiredDelay - timeSince;
+          await new Promise((r) => setTimeout(r, waitMs));
+        }
+      }
+
+      // 4. Attempt Baileys Dispatch
+      job.attempts++;
       if (!whatsappClient.isConnected()) {
         const isMainInstance = process.env.NODE_APP_INSTANCE === undefined || process.env.NODE_APP_INSTANCE === "0";
         if (isMainInstance) {
-          // Attempt to auto-initialize if client is disconnected on main instance
           await whatsappClient.initialize();
-        } else {
-          // In PM2 cluster mode on worker > 0, do not initialize a secondary Baileys socket
-          // to avoid corrupting shared on-disk auth state. Failover directly to Meta API.
-          logger.info("Worker instance > 0 detected with disconnected Baileys, routing to Meta Cloud API", {
-            queueId: item.id,
-            workerInstance: process.env.NODE_APP_INSTANCE,
-          });
-          const metaRes = await officialMetaProvider.sendMessage({
-            recipient: item.phoneE164,
-            content: item.content,
-            messageType: item.type === "OTP" ? "OTP" : "CUSTOM",
-          });
-          if (metaRes.success) {
-            this.queue.shift();
-            item.resolve({ success: true, messageId: metaRes.messageId });
-            return;
-          }
         }
 
         if (!whatsappClient.isConnected()) {
-          throw new Error("WhatsApp client is disconnected. Message held in queue.");
+          circuitBreaker.recordFailure(new Error("Socket disconnected"));
+          if (job.fallbackPolicy === "META") {
+            logger.info("Baileys disconnected: executing fallback to Meta Cloud API", { jobId: job.id });
+            const metaRes = await officialMetaProvider.sendMessage({
+              recipient: job.recipient,
+              content: job.content,
+              messageType: job.category === "OTP" ? "OTP" : "CUSTOM",
+            });
+            job.resolve(metaRes);
+            return;
+          }
+          throw new Error("WhatsApp socket disconnected. Retrying in background.");
         }
       }
 
       const socket = whatsappClient.getSocket();
-      await sendRawWhatsAppMessage(socket, item.jid, item.content);
+      await sendRawWhatsAppMessage(socket, job.jid, job.content);
 
-      // Record send times
+      // Record successful dispatch
       const sentTime = Date.now();
-      this.lastGlobalSendTime = sentTime;
-      if (item.type === "OTP") {
-        this.lastOTPSendTime = sentTime;
-        rateLimiter.recordOTPSend(item.phoneE164);
+      this.lastSendTimes[job.priority] = sentTime;
+      circuitBreaker.recordSuccess();
+
+      if (job.category === "OTP") {
+        rateLimiter.recordOTPSend(job.recipient);
       }
 
-      logger.info("Successfully sent queued message", {
-        queueId: item.id,
-        phone: item.phoneE164,
-        type: item.type,
-        queueRemaining: this.queue.length - 1,
+      logger.info("Successfully dispatched WhatsApp job via Baileys", {
+        jobId: job.id,
+        priority: job.priority,
+        phone: job.recipient,
+        queueRemaining: this.getQueueLength(),
       });
 
-      this.queue.shift(); // Remove from queue
-      item.resolve({ success: true });
+      job.resolve({ success: true, provider: "BAILEYS", messageId: job.id });
     } catch (err: any) {
-      logger.error("Failed to send queued WhatsApp message", {
-        queueId: item.id,
-        phone: item.phoneE164,
-        attempt: item.attempts,
+      const statusCode = err?.output?.statusCode || err?.status;
+      circuitBreaker.recordFailure(err, statusCode);
+
+      logger.error("Failed to dispatch WhatsApp job", {
+        jobId: job.id,
+        phone: job.recipient,
+        attempt: job.attempts,
         error: err.message,
       });
 
-      if (item.attempts < item.maxAttempts && !err.message.includes("Invalid phone number")) {
-        // Retry with exponential backoff delay before next attempt
-        const retryDelay = 2000 * Math.pow(2, item.attempts - 1);
-        logger.info("Scheduling retry for queued message", { queueId: item.id, retryDelayMs: retryDelay });
+      // If retryable and attempts remain
+      if (job.attempts < job.maxAttempts && !err.message?.includes("Invalid phone number") && circuitBreaker.getState() !== "ACCOUNT_RESTRICTED") {
+        const retryDelay = 2000 * Math.pow(2, job.attempts - 1);
         await new Promise((r) => setTimeout(r, retryDelay));
+        this.pushToBand(job); // Re-queue for next attempt
       } else {
-        // Max attempts reached or non-retryable error
-        this.queue.shift();
-        item.reject(err);
+        // Fallback to Meta API if eligible before giving up
+        if (job.fallbackPolicy === "META") {
+          try {
+            logger.info("Baileys max attempts reached. Executing final failover to Meta Cloud API", { jobId: job.id });
+            const metaRes = await officialMetaProvider.sendMessage({
+              recipient: job.recipient,
+              content: job.content,
+              messageType: job.category === "OTP" ? "OTP" : "CUSTOM",
+            });
+            job.resolve(metaRes);
+            return;
+          } catch (metaErr: any) {
+            job.reject(new Error(`Both Baileys and Meta fallback failed: ${metaErr.message}`));
+            return;
+          }
+        }
+        job.reject(err);
       }
     } finally {
       this.isProcessing = false;
-      if (this.queue.length > 0) {
+      if (this.getQueueLength() > 0) {
         setImmediate(() => this.processNext());
       }
     }
+  }
+
+  // --- Compatibility Wrappers ---
+  public enqueue(rawPhone: string, text: string, isOtp: boolean = false): Promise<{ success: boolean; messageId?: string; error?: string }> {
+    return this.enqueueJob({
+      recipient: rawPhone,
+      content: text,
+      priority: isOtp ? "P0" : "P2",
+      category: isOtp ? "OTP" : "NOTIFICATION",
+      fallbackPolicy: isOtp ? "META" : "NONE",
+    });
+  }
+
+  public enqueueMessage(rawPhone: string, text: string): Promise<{ success: boolean; messageId?: string; error?: string }> {
+    return this.enqueueJob({
+      recipient: rawPhone,
+      content: text,
+      priority: "P2",
+      category: "NOTIFICATION",
+      fallbackPolicy: "NONE",
+    });
+  }
+
+  public enqueueOTP(rawPhone: string, otpCode: string, customTemplate?: string): Promise<{ success: boolean; messageId?: string; error?: string }> {
+    const content = formatOTPMessage(otpCode, customTemplate);
+    return this.enqueueJob({
+      recipient: rawPhone,
+      content,
+      priority: "P0",
+      category: "OTP",
+      otpCode,
+      expiresInSeconds: 300, // 5 min TTL
+      fallbackPolicy: "META",
+    });
   }
 }
 

@@ -1258,10 +1258,15 @@ export default function AccountPage() {
                     if (!tx.reference) return;
                     setCheckingTxId(tx.id);
                     try {
-                      const res = await fetch(`/api/payments/shakeout/status?transactionId=${encodeURIComponent(tx.reference)}`);
+                      const isSha7nawy = tx.type.toLowerCase().includes("sha7nawy") || (tx.note && tx.note.includes("sha7nawy_ref"));
+                      const endpoint = isSha7nawy
+                        ? `/api/payments/sha7nawy/status?transactionId=${encodeURIComponent(tx.reference)}`
+                        : `/api/payments/shakeout/status?transactionId=${encodeURIComponent(tx.reference)}`;
+
+                      const res = await fetch(endpoint);
                       const data = await res.json();
                       if (data.paid || data.status === "paid" || data.status === "completed" || data.status === "success") {
-                        alert("🎉 تم تأكيد الدفع وإضافة الرصيد إلى حسابك بنجاح!");
+                        alert(data.message || "🎉 تم تأكيد الدفع وتفعيل طلبك بنجاح!");
                         const balRes = await fetch("/api/student/balance", { credentials: "include" });
                         if (balRes.ok) {
                           const balData = await balRes.json();

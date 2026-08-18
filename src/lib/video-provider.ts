@@ -41,15 +41,23 @@ export function cleanProviderVideoId(provider: VideoProvider, input: string): st
   }
 }
 
+export interface ResolveEmbedOptions {
+  userId?: string;
+  domain?: string;
+}
+
 /**
  * Given a video record's provider + providerVideoId (with legacy vdoCipherId fallback),
  * returns a ready-to-embed URL for the player iframe.
  */
-export async function resolveEmbedUrl(video: {
-  videoProvider: string;
-  providerVideoId: string;
-  vdoCipherId: string;
-}): Promise<VideoEmbedResult> {
+export async function resolveEmbedUrl(
+  video: {
+    videoProvider: string;
+    providerVideoId: string;
+    vdoCipherId: string;
+  },
+  options?: ResolveEmbedOptions
+): Promise<VideoEmbedResult> {
   const provider = (video.videoProvider || "vdocipher") as VideoProvider;
 
   // Legacy rows have providerVideoId="" and vdoCipherId set — fall back gracefully.
@@ -63,7 +71,11 @@ export async function resolveEmbedUrl(video: {
 
   switch (provider) {
     case "alasly": {
-      const result = await getAlaslyPlaybackToken(id);
+      const result = await getAlaslyPlaybackToken({
+        videoId: id,
+        userId: options?.userId,
+        domain: options?.domain,
+      });
       return { embedUrl: result.embedUrl, provider, signed: true, expiresInSeconds: result.expiresInSeconds };
     }
     case "bunny": {

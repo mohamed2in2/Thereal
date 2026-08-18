@@ -6,6 +6,7 @@ import { baileysProvider } from "@/lib/whatsapp/baileysProvider";
 import { whatsappClient } from "@/lib/whatsapp/client";
 import { fallbackClient } from "@/lib/whatsapp/fallbackClient";
 import { regenerateParentToken, getAppBaseUrl } from "@/lib/whatsapp/parentToken";
+import { circuitBreaker } from "@/lib/whatsapp/circuitBreaker";
 
 export async function GET(req: NextRequest) {
   try {
@@ -158,6 +159,13 @@ export async function POST(req: NextRequest) {
       await whatsappClient.logout();
       await logConfigChange(session.id, session.name, "baileysSession", "ACTIVE", "LOGGED_OUT");
       return NextResponse.json({ success: true, message: "تم تسجيل الخروج ومسح بيانات الجلسة" });
+    }
+
+    // 4b. Reset WhatsApp Circuit Breaker
+    if (action === "reset-circuit-breaker") {
+      circuitBreaker.reset();
+      await logConfigChange(session.id, session.name, "circuitBreaker", "RESET", "HEALTHY");
+      return NextResponse.json({ success: true, message: "تم إعادة تعيين قاطع الدائرة بنجاح وإعادة الحالة إلى HEALTHY" });
     }
 
     // 5b. Reconnect Fallback Baileys Number

@@ -492,38 +492,51 @@ function PaymentContent() {
     }
 
     try {
-      if (intent.transactionId) {
-        const res = await fetch(`/api/payments/sha7nawy/status?transactionId=${encodeURIComponent(String(intent.transactionId))}`);
-        if (res.ok) {
-          const data = await res.json();
+      const queryRef = intent.reference || (intent.transactionId ? String(intent.transactionId) : "");
+      if (queryRef) {
+        // 1. Check Sha7nawy status API
+        const shaRes = await fetch(`/api/payments/sha7nawy/status?transactionId=${encodeURIComponent(queryRef)}`);
+        if (shaRes.ok) {
+          const data = await shaRes.json();
           const st = String(data.status || "").toLowerCase();
-          if (st === "completed" || st === "paid" || st === "success") {
+          if (st === "completed" || st === "paid" || st === "success" || data.paid) {
             setStep("success");
-            toastSuccess("تم التحقق من نجاح عملية الدفع وتفعيل المحتوى بنجاح! 🎉");
+            toastSuccess(data.message || "تم التحقق من نجاح عملية الدفع وتفعيل المحتوى بنجاح! 🎉");
             return;
           }
         }
-      }
 
-      if (intent.reference) {
+        // 2. Check Shake-Out status API
+        const soRes = await fetch(`/api/payments/shakeout/status?transactionId=${encodeURIComponent(queryRef)}`);
+        if (soRes.ok) {
+          const data = await soRes.json();
+          const st = String(data.status || "").toLowerCase();
+          if (st === "completed" || st === "paid" || st === "success" || data.paid) {
+            setStep("success");
+            toastSuccess(data.message || "تم التحقق من نجاح عملية الدفع وتفعيل المحتوى بنجاح! 🎉");
+            return;
+          }
+        }
+
+        // 3. Fallback to Sha7nawy confirm endpoint
         const confRes = await fetch("/api/payments/sha7nawy/confirm", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ref_code: intent.reference }),
+          body: JSON.stringify({ ref_code: queryRef }),
         });
 
         if (confRes.ok) {
           const confData = await confRes.json();
           if (confData.success && (confData.status === "completed" || confData.status === "paid" || confData.status === true)) {
             setStep("success");
-            toastSuccess("تم التحقق وتأكيد سداد العملية بنجاح! 🎉");
+            toastSuccess(confData.message || "تم التحقق وتأكيد سداد العملية بنجاح! 🎉");
             return;
           }
         }
       }
 
       if (!isSilent) {
-        setCheckMessage("العملية ما زالت معلقة قيد موافقتك على هاتفك المحمول. يرجى إدخال الرقم السري في طلب الدفع ثم المحاولة مجدداً.");
+        setCheckMessage("العملية ما زالت معلقة بانتظار سداد الفاتورة أو إدخال الرقم السري في محفظتك.");
       }
     } catch {
       if (!isSilent) {
@@ -1041,26 +1054,42 @@ function PaymentContent() {
 
         {/* Success Step */}
         {step === "success" && (
-          <div className="rounded-2xl border border-[#E4E7EC] dark:border-[#232C36] bg-[#FFFFFF] dark:bg-[#141A21] p-8 shadow-md text-center space-y-5 animate-fadeIn">
-            <div className="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-500 flex items-center justify-center mx-auto text-3xl font-black">
+          <div className="rounded-3xl border border-[#E4E7EC] dark:border-[#232C36] bg-[#FFFFFF] dark:bg-[#141A21] p-8 shadow-xl text-center space-y-5 animate-fadeIn max-w-lg mx-auto">
+            <div className="w-20 h-20 rounded-full bg-emerald-500/20 text-emerald-500 flex items-center justify-center mx-auto text-4xl font-black shadow-inner">
               ✓
             </div>
             <div>
-              <h1 className="text-2xl font-black text-[#101828] dark:text-white">
-                تمت العملية بنجاح! 🎉
+              <h1 className="text-2xl sm:text-3xl font-black text-[#101828] dark:text-white">
+                تم تأكيد الدفع بنجاح! 🎉
               </h1>
-              <p className="text-sm text-[#667085] dark:text-[#98A2B3] mt-2">
-                تم استلام الدفعة وتفعيل المحتوى المطلوب في حسابك فوراً.
+              <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400 mt-2">
+                تم استلام دفعتك بقيمة {taxCalculation.totalAmount || rawItemPrice} جنيه وتأكيد طلبك بنجاح.
               </p>
+              {verifiedItemName && (
+                <div className="mt-3 p-3 rounded-2xl bg-[var(--surface-2,#0f1420)] border border-[var(--border,rgba(255,255,255,0.08))] text-xs font-bold text-[var(--ink,#fff)]">
+                  📦 العنصر المفعل: {verifiedItemName}
+                </div>
+              )}
+              <div className="mt-4 p-3.5 rounded-2xl bg-sky-500/10 border border-sky-500/20 text-sky-700 dark:text-sky-300 text-xs leading-relaxed text-right">
+                <span className="font-black block mb-1">📍 موعد إتاحة الدروس والمحاضرات:</span>
+                تم قيد وتفعيل اشتراكك بنجاح في حسابك. إذا كان المعلم قد حدد موعداً لبدء الكورس الدراسي، ستتاح المحاضرات والواجبات تلقائياً فور بدء موعد الدراسة.
+              </div>
             </div>
 
-            <div className="pt-2 flex justify-center gap-3">
+            <div className="pt-3 flex flex-col sm:flex-row justify-center gap-3">
               <button
                 type="button"
                 onClick={() => router.push(returnHref || "/account")}
-                className="px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-md transition-all cursor-pointer"
+                className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-lg shadow-emerald-600/20 transition-all cursor-pointer"
               >
                 الانتقال إلى المحتوى 🚀
+              </button>
+              <button
+                type="button"
+                onClick={() => router.push("/account")}
+                className="w-full sm:w-auto px-6 py-3.5 rounded-xl border border-[var(--border,rgba(255,255,255,0.1))] bg-[var(--surface,#1a1f2e)] hover:bg-[var(--surface-2,#252d3d)] text-[var(--ink,#fff)] font-bold text-sm transition-all cursor-pointer"
+              >
+                لوحة حسابي والاشتراكات 🎓
               </button>
             </div>
           </div>

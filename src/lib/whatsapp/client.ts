@@ -9,6 +9,7 @@ import pino from "pino";
 import { getAuthState, clearAuthState } from "./auth";
 import { reconnectManager } from "./reconnect";
 import { logger } from "./logger";
+import { circuitBreaker } from "./circuitBreaker";
 
 export type WhatsAppConnectionState = "DISCONNECTED" | "CONNECTING" | "PAIRING" | "CONNECTED";
 
@@ -73,6 +74,7 @@ class WhatsAppClientManager {
       this.isInitializing = false;
       this.state = "DISCONNECTED";
       logger.error("Failed to initialize WhatsApp socket", { error: err.message });
+      circuitBreaker.recordFailure(err);
       this.scheduleReconnect();
     } finally {
       this.isInitializing = false;
@@ -99,7 +101,6 @@ class WhatsAppClientManager {
       if (this.qrAttempts >= WhatsAppClientManager.MAX_QR_ATTEMPTS) {
         logger.warn("QR code expired after max attempts, clearing auth for fresh pairing", { attempts: this.qrAttempts });
         this.qrAttempts = 0;
-        // Don't clear here — let user manually reconnect or wait for next cycle
       }
     }
 
@@ -117,6 +118,7 @@ class WhatsAppClientManager {
       this.connectedAtTime = Date.now();
       this.qrAttempts = 0;
       reconnectManager.resetReconnectAttempts();
+      circuitBreaker.recordSuccess();
 
       const user = this.socket?.user;
       if (user) {
@@ -138,20 +140,31 @@ class WhatsAppClientManager {
       this.socket = null;
 
       const statusCode = (lastDisconnect?.error as any)?.output?.statusCode;
-      const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+      const isForbidden = statusCode === 403 || statusCode === 405;
+      const isLoggedOut = statusCode === DisconnectReason.loggedOut;
+      const shouldReconnect = !isLoggedOut && !isForbidden;
 
       logger.warn("WhatsApp connection closed", { statusCode, shouldReconnect });
 
-      if (statusCode === DisconnectReason.loggedOut) {
+      if (isForbidden) {
+        circuitBreaker.recordFailure(lastDisconnect?.error || new Error("Account restricted (403)"), 403);
+        logger.error("WhatsApp account restricted or forbidden by WhatsApp server. Reconnect aborted.");
+        return;
+      }
+
+      if (isLoggedOut) {
+        circuitBreaker.recordFailure(new Error("Session logged out"), 401);
         logger.warn("WhatsApp session logged out. Clearing authentication state.");
         await clearAuthState();
         this.rawQrCode = null;
         this.qrCodeDataUrl = null;
-        // After logout, immediately re-initialize to show fresh QR code
         this.qrAttempts = 0;
         setTimeout(() => void this.initialize(), 1500);
-      } else if (shouldReconnect) {
-        this.scheduleReconnect();
+      } else {
+        circuitBreaker.recordFailure(lastDisconnect?.error, statusCode);
+        if (shouldReconnect && circuitBreaker.getState() !== "ACCOUNT_RESTRICTED") {
+          this.scheduleReconnect();
+        }
       }
     }
   }

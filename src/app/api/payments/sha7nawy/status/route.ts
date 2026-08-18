@@ -1,19 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getSha7nawyPaymentInfo } from "@/lib/sha7nawy";
+import {
+  getSha7nawyPaymentInfo,
+  SHA7NAWY_PENDING_TYPE,
+  SHA7NAWY_CREDITED_TYPE,
+  SHA7NAWY_PAID_STATUSES,
+  sha7nawyRefNote,
+} from "@/lib/sha7nawy";
 import { getPaymentMethod } from "@/lib/payment-methods";
+import { fulfillPendingItemPurchase } from "@/lib/fulfillment";
 
 /**
  * GET /api/payments/sha7nawy/status?transactionId=123
- * Returns the current status of a Sha7nawy payment.
- *
- * - Authenticated user only.
- * - The transactionId is the gateway's `transaction_id` (numeric).
- * - We verify that the transaction belongs to the caller by checking a
- *   pending/credited ledger entry whose note contains the same reference.
- * - No state changes are performed – the webhook (or confirm endpoint) is the
- *   only place that credits the user's balance.
+ * Returns the current status of a Sha7nawy payment and automatically reconciles
+ * pending transactions if the gateway confirms payment completion.
  */
 export async function GET(req: NextRequest) {
   const session = await getSession();
@@ -30,7 +31,10 @@ export async function GET(req: NextRequest) {
   // Query the gateway for the latest info (requires secret key)
   const gatewayInfo = await getSha7nawyPaymentInfo(transactionId);
   if (!gatewayInfo.status) {
-    return NextResponse.json({ error: gatewayInfo.message || "فشل جلب حالة الدفع" }, { status: gatewayInfo.code || 500 });
+    return NextResponse.json(
+      { error: gatewayInfo.message || "فشل جلب حالة الدفع من Sha7nawy" },
+      { status: gatewayInfo.code || 500 }
+    );
   }
 
   const data = gatewayInfo.data;
@@ -38,30 +42,95 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "الرد من البوابة لا يحتوي على مرجع" }, { status: 502 });
   }
 
-  // Verify user ownership via pending/credited ledger note
-  const existingTx = await prisma.balanceTransaction.findFirst({
+  const rawRef = String(data.reference).trim();
+  const rawId = String(transactionId).trim();
+  const searchTokens = Array.from(new Set([rawRef, rawId].filter(Boolean)));
+
+  // Verify user ownership via providerRef or note
+  let existingTx = await prisma.balanceTransaction.findFirst({
     where: {
       userId: session.id,
-      note: { contains: data.reference },
-    },
-    select: { id: true },
+      providerRef: { in: searchTokens },
+    } as any,
+    select: { id: true, type: true, amount: true, note: true },
   });
 
   if (!existingTx) {
-    // The user is asking about a transaction that does not belong to them.
+    for (const token of searchTokens) {
+      const refPrefix = sha7nawyRefNote(token);
+      const candidates = await prisma.balanceTransaction.findMany({
+        where: {
+          userId: session.id,
+          note: { contains: refPrefix },
+        },
+        select: { id: true, type: true, amount: true, note: true },
+      });
+
+      if (candidates.length > 0) {
+        existingTx = candidates[0];
+        break;
+      }
+    }
+  }
+
+  if (!existingTx) {
     return NextResponse.json({ error: "المعاملة غير صالحة للمستخدم الحالي" }, { status: 403 });
   }
 
-  // Normalise status – gateway may return strings like "pending", "completed", "failed"
   const normalizedStatus = (data.status || "unknown").toString().toLowerCase();
+  const isPaid = SHA7NAWY_PAID_STATUSES.includes(normalizedStatus);
+
+  let fulfillmentRes: any = null;
+  let didFulfill = false;
+
+  // Auto-reconciliation: If paid and transaction is pending/expired, claim & fulfill
+  if (isPaid && (existingTx.type === SHA7NAWY_PENDING_TYPE || existingTx.type === "credit_sha7nawy_expired")) {
+    const targetTx = existingTx;
+    didFulfill = await prisma.$transaction(async (tx: any) => {
+      const claim = await tx.balanceTransaction.updateMany({
+        where: { id: targetTx.id, type: targetTx.type },
+        data: {
+          type: SHA7NAWY_CREDITED_TYPE,
+          note: `${targetTx.note} — شحن محفظة عبر Sha7nawy (تأكيد الحالة)`,
+        },
+      });
+
+      if (claim.count === 0) {
+        return false;
+      }
+
+      await tx.user.update({
+        where: { id: session.id },
+        data: { balance: { increment: targetTx.amount } },
+      });
+
+      fulfillmentRes = await fulfillPendingItemPurchase({
+        userId: session.id,
+        note: targetTx.note,
+        tx,
+      });
+
+      return true;
+    });
+
+    if (didFulfill) {
+      console.log(`[Sha7nawy Status] Auto-reconciled & credited ${targetTx.amount} EGP for user ${session.id} (ref ${data.reference}).`);
+    }
+  }
+
+  const customMessage = fulfillmentRes?.message || (didFulfill ? "تم التأكيد وتفعيل طلبك بنجاح! 🎉" : isPaid ? "تم التأكيد وتفعيل الطلب مسبقاً." : "العملية ما زالت قيد المراجعة أو معلقة.");
 
   return NextResponse.json({
+    success: true,
+    paid: isPaid,
+    fulfilled: didFulfill || existingTx.type === SHA7NAWY_CREDITED_TYPE,
     transactionId,
     reference: data.reference,
     status: normalizedStatus,
-    amount: parseFloat(data.amount ?? "0"),
+    amount: existingTx.amount,
     method: data.method,
-    // expose a short label for UI convenience
     methodLabel: getPaymentMethod(data.method as string)?.label ?? data.method,
+    message: customMessage,
+    fulfillment: fulfillmentRes,
   });
 }

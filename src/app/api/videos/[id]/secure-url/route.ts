@@ -114,7 +114,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 
   try {
-    const result = await resolveEmbedUrl(video);
+    const domain = req.headers.get("x-forwarded-host") || req.headers.get("host") || undefined;
+    const studentIdentifier = session.phone || session.name || session.id;
+    const result = await resolveEmbedUrl(video, {
+      userId: studentIdentifier,
+      domain,
+    });
     return NextResponse.json({
       embedUrl: result.embedUrl,
       provider: result.provider,

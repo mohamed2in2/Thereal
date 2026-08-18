@@ -41,7 +41,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       where: { teacherId: video.folder.course.teacherId },
       select: { slug: true },
     });
-    const embedResult = await resolveEmbedUrl(video);
+    const domain = req.headers.get("x-forwarded-host") || req.headers.get("host") || undefined;
+    const studentIdentifier = session.phone || session.name || session.id;
+    const embedResult = await resolveEmbedUrl(video, { userId: studentIdentifier, domain });
     return NextResponse.json({
       videoId,
       sessionToken,
@@ -158,7 +160,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 
   const isTesterUser = session?.accountMode === "TESTER";
-  const embedResult = await resolveEmbedUrl(video);
+  const domain = req.headers.get("x-forwarded-host") || req.headers.get("host") || undefined;
+  const studentIdentifier = session.phone || session.name || session.id;
+  const embedResult = await resolveEmbedUrl(video, { userId: studentIdentifier, domain });
   const progress = await prisma.progress.findUnique({
     where: { studentId_videoId: { studentId: session.id, videoId } },
     select: { lastPositionSeconds: true },
@@ -237,7 +241,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   // ── FREE / DEMO video: bypass enrollment + quota, no session row consumed ──
   if (video.isFree) {
-    const embedResult = await resolveEmbedUrl(video);
+    const domain = req.headers.get("x-forwarded-host") || req.headers.get("host") || undefined;
+    const studentIdentifier = session ? (session.phone || session.name || session.id) : undefined;
+    const embedResult = await resolveEmbedUrl(video, { userId: studentIdentifier, domain });
     const expiresAt = new Date(now.getTime() + WATCH_DURATION_HOURS * 60 * 60 * 1000);
     return NextResponse.json({
       sessionToken: "free",
@@ -269,7 +275,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // Owner Teacher / Admin / Superadmin: preview playback — no enrollment, no quota, no slot used.
   const isOwnerTeacher = session.role === "teacher" && video.folder.course.teacherId === session.id;
   if (session.role === "admin" || session.role === "superadmin" || isOwnerTeacher) {
-    const embedResult = await resolveEmbedUrl(video);
+    const domain = req.headers.get("x-forwarded-host") || req.headers.get("host") || undefined;
+    const studentIdentifier = session.phone || session.name || session.id;
+    const embedResult = await resolveEmbedUrl(video, { userId: studentIdentifier, domain });
     const expiresAt = new Date(now.getTime() + WATCH_DURATION_HOURS * 60 * 60 * 1000);
     return NextResponse.json({
       sessionToken: "preview",
@@ -365,7 +373,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       where: { studentId: session.id, videoId, usedWatchSlot: true },
     });
 
-    const embedResult = await resolveEmbedUrl(video);
+    const domain = req.headers.get("x-forwarded-host") || req.headers.get("host") || undefined;
+    const studentIdentifier = session.phone || session.name || session.id;
+    const embedResult = await resolveEmbedUrl(video, { userId: studentIdentifier, domain });
 
     const profile = await prisma.teacherProfile.findUnique({
       where: { teacherId: course.teacherId },
@@ -543,7 +553,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       }
     }
 
-    const embedResult = await resolveEmbedUrl(video);
+    const domain = req.headers.get("x-forwarded-host") || req.headers.get("host") || undefined;
+    const studentIdentifier = session.phone || session.name || session.id;
+    const embedResult = await resolveEmbedUrl(video, { userId: studentIdentifier, domain });
     const progress = await prisma.progress.findUnique({
       where: { studentId_videoId: { studentId: session.id, videoId } },
       select: { lastPositionSeconds: true },

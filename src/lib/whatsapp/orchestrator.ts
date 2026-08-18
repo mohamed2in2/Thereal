@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { WhatsAppProvider, MessageType, SendMessageParams, SendResult, ProviderId } from "./providerInterface";
 import { baileysProvider } from "./baileysProvider";
 import { officialMetaProvider } from "./officialMetaProvider";
+import { circuitBreaker } from "./circuitBreaker";
 
 export type DeliveryMode = "baileys_only" | "official_only" | "baileys_primary" | "official_primary";
 
@@ -240,6 +241,7 @@ class WhatsAppOrchestrator {
       autoSendParentPortal: config.autoSendParentPortal,
       requireParentVerification: config.requireParentVerification,
       baileysOtpTemplate: config.baileysOtpTemplate || DEFAULT_OTP_TEMPLATE,
+      circuitBreaker: circuitBreaker.getStatus(),
       providers: {
         baileys: baileysStatus,
         officialApi: metaStatus,

@@ -81,56 +81,70 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Reference mismatch" }, { status: 400 });
     }
 
-    // Guard 2: Reference match with fast O(1) indexed lookup via providerRef, with fallback to legacy note prefix
-    const refStr = String(reference);
-    const refPrefix = sha7nawyRefNote(refStr);
+    // Guard 2: Reference match with fast multi-token lookup via providerRef and note tags
+    const refStr = String(reference).trim();
+    const txIdStr = String(transactionId).trim();
+    const verifiedRefStr = verifiedReference ? String(verifiedReference).trim() : "";
+    const searchTokens = Array.from(new Set([refStr, txIdStr, verifiedRefStr].filter(Boolean)));
 
-    let pendingTx = await prisma.balanceTransaction.findFirst({
+    let pendingTx: { id: string; userId: string; amount: number; note: string } | null = null;
+    let targetType = SHA7NAWY_PENDING_TYPE;
+    let isLatePayment = false;
+
+    // 1. Direct providerRef match on active pending
+    pendingTx = await prisma.balanceTransaction.findFirst({
       where: {
         type: SHA7NAWY_PENDING_TYPE,
-        providerRef: refStr,
+        providerRef: { in: searchTokens },
       } as any,
       select: { id: true, userId: true, amount: true, note: true },
     });
 
+    // 2. Note search on active pending
     if (!pendingTx) {
-      const candidates = await prisma.balanceTransaction.findMany({
-        where: {
-          type: SHA7NAWY_PENDING_TYPE,
-          note: { startsWith: refPrefix },
-        },
-        select: { id: true, userId: true, amount: true, note: true },
-      });
+      for (const token of searchTokens) {
+        const refPrefix = sha7nawyRefNote(token);
+        const candidates = await prisma.balanceTransaction.findMany({
+          where: {
+            type: SHA7NAWY_PENDING_TYPE,
+            note: { contains: refPrefix },
+          },
+          select: { id: true, userId: true, amount: true, note: true },
+        });
 
-      pendingTx = candidates.find(
-        (c) => c.note === refPrefix || c.note?.startsWith(`${refPrefix}|`) || c.note?.startsWith(`${refPrefix} `)
-      ) ?? null;
+        if (candidates.length > 0) {
+          pendingTx = candidates[0];
+          break;
+        }
+      }
     }
 
-    let targetType = SHA7NAWY_PENDING_TYPE;
-    let isLatePayment = false;
-
-    // B23b: Also search expired rows if no active pending row found
+    // 3. Search expired rows for late payments
     if (!pendingTx) {
       let expiredTx = await prisma.balanceTransaction.findFirst({
         where: {
           type: "credit_sha7nawy_expired",
-          providerRef: refStr,
+          providerRef: { in: searchTokens },
         } as any,
         select: { id: true, userId: true, amount: true, note: true },
       });
 
       if (!expiredTx) {
-        const expiredCandidates = await prisma.balanceTransaction.findMany({
-          where: {
-            type: "credit_sha7nawy_expired",
-            note: { startsWith: refPrefix },
-          },
-          select: { id: true, userId: true, amount: true, note: true },
-        });
-        expiredTx = expiredCandidates.find(
-          (c) => c.note === refPrefix || c.note?.startsWith(`${refPrefix}|`) || c.note?.startsWith(`${refPrefix} `)
-        ) ?? null;
+        for (const token of searchTokens) {
+          const refPrefix = sha7nawyRefNote(token);
+          const candidates = await prisma.balanceTransaction.findMany({
+            where: {
+              type: "credit_sha7nawy_expired",
+              note: { contains: refPrefix },
+            },
+            select: { id: true, userId: true, amount: true, note: true },
+          });
+
+          if (candidates.length > 0) {
+            expiredTx = candidates[0];
+            break;
+          }
+        }
       }
 
       if (expiredTx) {
@@ -141,11 +155,12 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // 4. Check if already credited
     if (!pendingTx) {
       const alreadyCreditedDirect = await prisma.balanceTransaction.findFirst({
         where: {
           type: SHA7NAWY_CREDITED_TYPE,
-          providerRef: refStr,
+          providerRef: { in: searchTokens },
         } as any,
         select: { id: true, note: true },
       });
@@ -154,20 +169,22 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: true, processed: false, reason: "Already credited" }, { status: 200 });
       }
 
-      const creditedCandidates = await prisma.balanceTransaction.findMany({
-        where: {
-          type: SHA7NAWY_CREDITED_TYPE,
-          note: { startsWith: refPrefix },
-        },
-        select: { id: true, note: true },
-      });
-      const alreadyCredited = creditedCandidates.find(
-        (c) => c.note === refPrefix || c.note?.startsWith(`${refPrefix}|`) || c.note?.startsWith(`${refPrefix} `) || c.note?.startsWith(`${refPrefix} —`)
-      ) ?? null;
-      if (alreadyCredited) {
-        return NextResponse.json({ success: true, processed: false, reason: "Already credited" }, { status: 200 });
+      for (const token of searchTokens) {
+        const refPrefix = sha7nawyRefNote(token);
+        const creditedCandidates = await prisma.balanceTransaction.findMany({
+          where: {
+            type: SHA7NAWY_CREDITED_TYPE,
+            note: { contains: refPrefix },
+          },
+          select: { id: true, note: true },
+        });
+
+        if (creditedCandidates.length > 0) {
+          return NextResponse.json({ success: true, processed: false, reason: "Already credited" }, { status: 200 });
+        }
       }
-      console.warn(`[Sha7nawy Webhook] No pending or expired transaction found for ref ${reference}`);
+
+      console.warn(`[Sha7nawy Webhook] No pending or expired transaction found for ref ${reference} (tokens: ${searchTokens.join(",")})`);
       return NextResponse.json({ error: "Unknown transaction reference" }, { status: 400 });
     }
 

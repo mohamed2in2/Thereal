@@ -127,12 +127,17 @@ export async function fulfillPendingItemPurchase({
 
   // 1. Teacher Subscription Auto-Fulfillment
   if (itemType === "teacher_sub" && meta.teacherId && meta.planType) {
+    const studentPhone = meta.phone || meta.studentPhone || undefined;
+    const studentName = meta.studentName ? decodeURIComponent(meta.studentName) : undefined;
+
     const res = await PurchaseService.purchaseTeacherSubscription({
       studentId: userId,
       teacherId: meta.teacherId,
       planType: meta.planType,
       languageTrack: meta.lang,
       studentGrade: meta.grade,
+      studentPhone,
+      studentName,
       discountCode,
       paymentMethod: "gateway_direct",
       tx,
@@ -154,6 +159,29 @@ export async function fulfillPendingItemPurchase({
             note: `تفعيل تلقائي لحجز اشتراك (${res.itemTitle || "معلم"})`,
           },
         });
+      }
+
+      // Generate in-app student confirmation notification
+      await tx.notification.create({
+        data: {
+          userId,
+          type: "payment_success",
+          title: "تم تأكيد عملية الدفع بنجاح 🎉",
+          body: `تم استلام دفعتك بنجاح (${baseAmount} ج.م) وتأكيد اشتراكك في (${res.itemTitle || meta.planType}). إذا كان موعد الكورس في وقت لاحق، ستتاح المحاضرات تلقائياً فور بدء موعد الدراسة.`,
+          link: "/account",
+        },
+      }).catch(() => {});
+
+      if (meta.teacherId) {
+        await tx.notification.create({
+          data: {
+            userId: meta.teacherId,
+            type: "new_subscriber",
+            title: "طالب جديد اشترك في باقتك 🎓",
+            body: `قام الطالب ${studentName || "طالب"} بالاشتراك في (${res.itemTitle || meta.planType}) بمبلغ ${baseAmount} ج.م.`,
+            link: "/adminpanel/teacher",
+          },
+        }).catch(() => {});
       }
 
       return {

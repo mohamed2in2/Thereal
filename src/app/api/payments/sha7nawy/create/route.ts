@@ -255,6 +255,14 @@ export async function POST(req: NextRequest) {
       ? `سداد: ${courseTitle || priceCheck.itemName} (${baseAmount} ج + ${methodConfig.feePercentage}% رسوم) = ${totalAmount} ج`
       : `شحن رصيد: ${baseAmount} ج (+ ${methodConfig.feePercentage}% رسوم = ${totalAmount} ج)`;
 
+    // Query user details for reliable student identity snapshot
+    const studentUser = await prisma.user.findUnique({
+      where: { id: session.id },
+      select: { phone: true, name: true, parentPhone: true },
+    });
+    const snapshotPhone = cleanNumber || number || studentUser?.phone || "";
+    const snapshotName = studentUser?.name || session.name || "";
+
     // Encode item metadata for webhook auto-fulfillment
     let itemMeta = "";
     if (teacherId && planType) {
@@ -269,6 +277,12 @@ export async function POST(req: NextRequest) {
       itemMeta = `|itemType:plan|planId:${planId}`;
     }
 
+    if (snapshotPhone) {
+      itemMeta += `|phone:${snapshotPhone}`;
+    }
+    if (snapshotName) {
+      itemMeta += `|studentName:${encodeURIComponent(snapshotName)}`;
+    }
     if (discountCode) {
       itemMeta += `|discount:${discountCode}`;
     }
@@ -285,11 +299,11 @@ export async function POST(req: NextRequest) {
     if (methodConfig.provider === "shakeout") {
       const webhookUrl = `${appUrl}/api/payments/shakeout/webhook`;
       const result = await createShakeOutPayment({
-        number: number || "",
+        number: snapshotPhone || number || "",
         amount: totalAmount,
         method: methodConfig.id,
         client: session.id,
-        customerName: session.name || "Student",
+        customerName: snapshotName || "Student",
         customerEmail: session.email || undefined,
         details,
         webhook_url: webhookUrl,
@@ -307,8 +321,12 @@ export async function POST(req: NextRequest) {
         );
       }
 
+      const invoiceId = result.data?.invoice_id ? String(result.data.invoice_id) : "";
+      const invoiceRef = result.data?.invoice_ref ? String(result.data.invoice_ref) : "";
+      const extraRefTags = `${invoiceId ? `|inv_id:${invoiceId}` : ""}${invoiceRef ? `|inv_ref:${invoiceRef}` : ""}`;
+
       const soCheckoutUrl = result.data?.payment_page_url || result.data?.url || null;
-      const noteText = `${shakeOutRefNote(reference)}|base:${baseAmount}|total:${totalAmount}${itemMeta}${soCheckoutUrl ? `|url:${soCheckoutUrl}` : ""}`;
+      const noteText = `${shakeOutRefNote(reference)}|base:${baseAmount}|total:${totalAmount}${itemMeta}${extraRefTags}${soCheckoutUrl ? `|url:${soCheckoutUrl}` : ""}`;
 
       await prisma.balanceTransaction.create({
         data: {
@@ -343,7 +361,7 @@ export async function POST(req: NextRequest) {
     // ────────────────────────────────────────────────────────────────────────
     const webhookUrl = `${appUrl}/api/payments/sha7nawy/webhook`;
     const result = await createSha7nawyPayment({
-      number: cleanNumber || number || "",
+      number: cleanNumber || snapshotPhone || number || "",
       amount: totalAmount,
       method: methodConfig.id,
       client: session.id,

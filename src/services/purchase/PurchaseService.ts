@@ -36,6 +36,8 @@ export interface TeacherSubscriptionPurchaseParams extends BasePurchaseParams {
   planType: string; // "monthly" | "termly" | "yearly"
   languageTrack?: string;
   studentGrade?: string;
+  studentPhone?: string;
+  studentName?: string;
 }
 
 export interface PurchaseResult {
@@ -1082,6 +1084,8 @@ export class PurchaseService {
       expiresAt.setMonth(expiresAt.getMonth() + months);
 
       const trackedLang = isLanguages ? "languages" : "arabic";
+      const activeStudentPhone = params.studentPhone || userDetails?.phone || null;
+      const activeStudentName = params.studentName || userDetails?.name || null;
 
       const sub = await tx.teacherSubscription.upsert({
         where: {
@@ -1097,10 +1101,10 @@ export class PurchaseService {
           planType,
           planLabel,
           amount: finalPrice,
-          educationalStage: userDetails?.educationalStage,
+          educationalStage: studentGrade || userDetails?.educationalStage,
           languageTrack: trackedLang,
-          studentName: userDetails?.name,
-          studentPhone: userDetails?.phone,
+          studentName: activeStudentName,
+          studentPhone: activeStudentPhone,
           parentPhone: userDetails?.parentPhone,
           status: "active",
           expiresAt,
@@ -1108,10 +1112,10 @@ export class PurchaseService {
         update: {
           planLabel,
           amount: finalPrice,
-          educationalStage: userDetails?.educationalStage,
+          educationalStage: studentGrade || userDetails?.educationalStage,
           languageTrack: trackedLang,
-          studentName: userDetails?.name,
-          studentPhone: userDetails?.phone,
+          studentName: activeStudentName,
+          studentPhone: activeStudentPhone,
           parentPhone: userDetails?.parentPhone,
           status: "active",
           expiresAt,
