@@ -5,6 +5,7 @@ import { resolveEmbedUrl } from "@/lib/video-provider";
 import { isScheduledLocked, unlockAtISO } from "@/lib/publish";
 import { getConfigNumberClamped } from "@/lib/config";
 import { checkVideoAccess } from "@/lib/authorization";
+import { isVpnOrProxy, logVpnViolation } from "@/lib/vpn-guard";
 
 // Verify an existing watch session (used when loading the watch page on refresh)
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -315,27 +316,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   // VPN & Proxy Detection Guard
-  const viaHeader = req.headers.get("via");
-  const xProxyId = req.headers.get("x-proxy-id");
-  const forwardedHops = (req.headers.get("x-forwarded-for") || "").split(",");
-  const isVpnProxy = !!viaHeader || !!xProxyId || forwardedHops.length > 2;
-
-  if (isVpnProxy) {
-    await prisma.securityViolation.create({
-      data: {
-        studentId: session.id,
-        videoId,
-        type: "VPN_DETECTED",
-        details: `Proxy/VPN Headers: via=${viaHeader || "none"}, proxyId=${xProxyId || "none"}, hops=${forwardedHops.length}`,
-        ip: ipAddress,
-        userAgent: req.headers.get("user-agent"),
-      },
-    }).catch(() => {});
+  const vpnCheck = isVpnOrProxy(req.headers);
+  if (vpnCheck.isVpn) {
+    await logVpnViolation({
+      studentId: session.id,
+      videoId,
+      type: "VPN_DETECTED",
+      details: vpnCheck.reason,
+      ip: vpnCheck.ip,
+      userAgent: req.headers.get("user-agent"),
+    });
 
     return NextResponse.json(
       {
         error: "تم رصد استخدام تطبيق VPN أو البروكسي (مثل Cloudflare WARP / NordVPN). يرجى إغلاق تطبيق الـ VPN لفتح المحتوى المحمي.",
         code: "VPN_DETECTED",
+        vpnDetected: true,
       },
       { status: 403 }
     );

@@ -562,7 +562,14 @@ export default function CourseLearningPage() {
     try {
       const res = await fetch(`/api/videos/${modalVideo.id}/watch`, { method: "POST", credentials: "include" });
       const data = await res.json();
-      if (!res.ok) { toastError(data.error || "تعذر بدء جلسة المشاهدة"); return; }
+      if (!res.ok) {
+        if (data.code === "VPN_DETECTED" || data.vpnDetected) {
+          router.push(`/vpn-check?redirect_url=${encodeURIComponent(window.location.pathname)}`);
+          return;
+        }
+        toastError(data.error || "تعذر بدء جلسة المشاهدة");
+        return;
+      }
       const vid = flatVideos.find((v) => v.id === modalVideo.id);
       const startAt = resume ? savedPosition : 0;
       setPlayer({

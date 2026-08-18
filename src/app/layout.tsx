@@ -45,7 +45,12 @@ async function resolveGatedState(): Promise<GateResult> {
   try {
     const hdrs = await headers();
     const pathname = hdrs.get("x-pathname") ?? "";
-    if (pathname.startsWith("/adminpanel") || pathname === "/maintenance") {
+    if (
+      pathname.startsWith("/adminpanel") ||
+      pathname === "/maintenance" ||
+      pathname.startsWith("/vpn-check") ||
+      pathname.startsWith("/waiting-room")
+    ) {
       return { gated: false };
     }
 

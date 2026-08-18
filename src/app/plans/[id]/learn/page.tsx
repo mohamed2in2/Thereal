@@ -196,6 +196,10 @@ export default function PlanLearnPage() {
           provider: data.provider || "vdocipher"
         });
       } else {
+        if (data.code === "VPN_DETECTED" || data.vpnDetected) {
+          router.push(`/vpn-check?redirect_url=${encodeURIComponent(window.location.pathname)}`);
+          return;
+        }
         toastError(data.error || "فشل بدء تشغيل الفيديو");
       }
     } catch {

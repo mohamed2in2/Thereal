@@ -172,6 +172,10 @@ export default function VideoWatchPage() {
       const data = await res.json();
 
       if (!res.ok) {
+        if (data.code === "VPN_DETECTED" || data.vpnDetected) {
+          router.push(`/vpn-check?redirect_url=${encodeURIComponent(window.location.pathname)}`);
+          return;
+        }
         setError(data.error || "تعذر تحميل جلسة المشاهدة");
         setLoading(false);
         return;

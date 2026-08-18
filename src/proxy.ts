@@ -1,6 +1,7 @@
 import { jwtVerify } from "jose";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { isVpnOrProxy } from "./lib/vpn-guard";
 
 /** Admin-panel sub-pages — require a valid session; redirect to /adminpanel on failure */
 const ADMIN_PANEL_PREFIXES = [
@@ -28,7 +29,7 @@ const PROTECTED_API_PREFIXES = [
 
 /** Paths under /courses that require auth (the learning room) */
 function isProtectedCourseRoute(pathname: string) {
-  return /^\/courses\/[^/]+\/learn(\/.*)?$/.test(pathname);
+  return /^\/courses\/[^/]+\/learn(\/.*)?$/.test(pathname) || /^\/courses\/[^/]+\/watch(\/.*)?$/.test(pathname);
 }
 
 function isProtectedPlanRoute(pathname: string) {
@@ -51,6 +52,20 @@ function startsWithAny(pathname: string, prefixes: string[]) {
 /** /adminpanel login page itself — exact match only, never prefix */
 function isAdminLoginPage(pathname: string) {
   return pathname === "/adminpanel" || pathname === "/adminpanel/";
+}
+
+function isVpnExemptRoute(pathname: string) {
+  return (
+    pathname === "/vpn-check" ||
+    pathname.startsWith("/vpn-check/") ||
+    pathname === "/waiting-room" ||
+    pathname.startsWith("/waiting-room/") ||
+    pathname === "/api/security/vpn-check" ||
+    pathname.startsWith("/api/security/vpn-check/") ||
+    isAdminLoginPage(pathname) ||
+    startsWithAny(pathname, ADMIN_PANEL_PREFIXES) ||
+    pathname.startsWith("/api/admin/")
+  );
 }
 
 // Read JWT_SECRET dynamically inside hasValidSession to handle hot-reloads and Edge runtime environment injection correctly.
@@ -87,9 +102,45 @@ export default async function proxy(req: NextRequest) {
   // Admin panel login page — always public
   if (isAdminLoginPage(pathname)) return pass();
 
+  // VPN Check Waiting Room & Verification API are always exempt
+  if (isVpnExemptRoute(pathname)) return pass();
+
   // Always allow public access to login and signup
   if (pathname.startsWith("/login") || pathname.startsWith("/signup")) {
     return pass();
+  }
+
+  // VPN & Proxy Detection Protocol for student surfaces
+  const isProtectedStudentPage =
+    isProtectedCourseRoute(pathname) ||
+    isProtectedPlanRoute(pathname) ||
+    startsWithAny(pathname, PROTECTED_PAGE_PREFIXES);
+
+  const isProtectedStudentApi =
+    startsWithAny(pathname, PROTECTED_API_PREFIXES) ||
+    pathname.startsWith("/api/videos/") ||
+    (pathname.startsWith("/api/courses") && !isPublicCoursesApi(pathname)) ||
+    (pathname.startsWith("/api/plans") && !isPublicPlansApi(pathname));
+
+  const vpnCheck = isVpnOrProxy(req.headers);
+  if (vpnCheck.isVpn) {
+    if (isProtectedStudentPage) {
+      const vpnUrl = new URL("/vpn-check", req.url);
+      const targetUrl = `${pathname}${req.nextUrl.search || ""}`;
+      vpnUrl.searchParams.set("redirect_url", targetUrl);
+      return NextResponse.redirect(vpnUrl);
+    }
+
+    if (isProtectedStudentApi) {
+      return NextResponse.json(
+        {
+          error: "تم رصد استخدام تطبيق VPN أو بروكسي. يرجى إيقاف الـ VPN والمتابعة عبر غرفة الانتظار.",
+          code: "VPN_DETECTED",
+          vpnDetected: true,
+        },
+        { status: 403 }
+      );
+    }
   }
 
   const authed = await hasValidSession(req);
