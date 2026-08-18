@@ -63,19 +63,22 @@ export async function verifyAuthoritativePrice(params: {
       return { valid: false, expectedPrice: 0, itemName: "اشتراك معلم", error: "نوع باقة الاشتراك غير صالح" };
     }
 
-    // The grade selects which tier of TeacherProfile.stagePricing applies, so a
-    // client-supplied grade is a price control. A student could name whichever
-    // stage was cheapest and be billed that while still receiving a subscription
-    // bound to their real stage. Resolve it from the student's own profile; the
-    // supplied value is only a fallback for profiles with no stage recorded yet.
+    // The grade selects which tier of TeacherProfile.stagePricing applies.
+    // If student has a recorded educationalStage, default to it, but if client requested
+    // a specific grade that is open for booking on the teacher profile, allow it.
+    let studentProfileStage: string | undefined = undefined;
     if (studentId) {
       const gradeOwner = await prisma.user.findUnique({
         where: { id: studentId },
         select: { educationalStage: true },
       });
       if (gradeOwner?.educationalStage) {
-        grade = gradeOwner.educationalStage;
+        studentProfileStage = gradeOwner.educationalStage;
       }
+    }
+
+    if (!grade && studentProfileStage) {
+      grade = studentProfileStage;
     }
 
     const teacher = await prisma.user.findUnique({
@@ -97,27 +100,44 @@ export async function verifyAuthoritativePrice(params: {
     let planPrice = rawPriceMap[planType];
 
     // Check stage-specific pricing override & booking availability
-    if (profile.stagePricing && grade) {
+    if (profile.stagePricing) {
       try {
         const parsedMap = JSON.parse(profile.stagePricing);
-        if (parsedMap && parsedMap[grade]) {
-          const stageConfig = parsedMap[grade];
+        const checkStage = grade || studentProfileStage;
+        if (parsedMap && checkStage && parsedMap[checkStage]) {
+          const stageConfig = parsedMap[checkStage];
           if (stageConfig.bookingEnabled === false) {
-            return {
-              valid: false,
-              expectedPrice: 0,
-              itemName: `اشتراك المعلم (${grade})`,
-              error: "عذراً، الحجز والاشتراك مغلق حالياً لهذه المرحلة الدراسية من قِبل المعلم",
+            // If the user profile stage is closed but the client explicitly requested a stage that is open, switch to it
+            if (params.grade && params.grade !== checkStage && parsedMap[params.grade]?.bookingEnabled !== false) {
+              grade = params.grade;
+              const requestedConfig = parsedMap[params.grade];
+              const keyMap: Record<string, string> = {
+                monthly: "priceMonthly",
+                termly: "priceTermly",
+                yearly: "priceYearly",
+              };
+              const stageVal = requestedConfig?.[keyMap[planType]];
+              if (typeof stageVal === "number" && stageVal > 0) {
+                planPrice = stageVal;
+              }
+            } else {
+              return {
+                valid: false,
+                expectedPrice: 0,
+                itemName: `اشتراك المعلم (${checkStage})`,
+                error: "عذراً، الحجز والاشتراك مغلق حالياً لهذه المرحلة الدراسية من قِبل المعلم",
+              };
+            }
+          } else {
+            const keyMap: Record<string, string> = {
+              monthly: "priceMonthly",
+              termly: "priceTermly",
+              yearly: "priceYearly",
             };
-          }
-          const keyMap: Record<string, string> = {
-            monthly: "priceMonthly",
-            termly: "priceTermly",
-            yearly: "priceYearly",
-          };
-          const stageVal = stageConfig[keyMap[planType]];
-          if (typeof stageVal === "number" && stageVal > 0) {
-            planPrice = stageVal;
+            const stageVal = stageConfig[keyMap[planType]];
+            if (typeof stageVal === "number" && stageVal > 0) {
+              planPrice = stageVal;
+            }
           }
         }
       } catch {}

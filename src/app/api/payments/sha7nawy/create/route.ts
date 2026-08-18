@@ -260,7 +260,7 @@ export async function POST(req: NextRequest) {
       where: { id: session.id },
       select: { phone: true, name: true, parentPhone: true },
     });
-    const snapshotPhone = cleanNumber || number || studentUser?.phone || "";
+    const snapshotPhone = cleanNumber || (studentUser?.phone ? normalizeEgyptianPhone(studentUser.phone) : "") || number || "";
     const snapshotName = studentUser?.name || session.name || "";
 
     // Encode item metadata for webhook auto-fulfillment

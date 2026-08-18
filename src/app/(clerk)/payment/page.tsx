@@ -97,7 +97,7 @@ function PaymentContent() {
   // 15-Minute Countdown Timer for Payment Instructions
   const [timeLeftSeconds, setTimeLeftSeconds] = useState<number>(15 * 60);
 
-  const [user, setUser] = useState<{ id: string; name: string; role: string; balance?: number } | null>(null);
+  const [user, setUser] = useState<{ id: string; name: string; role: string; balance?: number; phone?: string | null } | null>(null);
   const [userLoading, setUserLoading] = useState(true);
 
   const allMethods = listPaymentMethods();
@@ -109,7 +109,7 @@ function PaymentContent() {
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (d?.user) {
-          setUser({ id: d.user.id, name: d.user.name, role: d.user.role, balance: d.user.balance });
+          setUser({ id: d.user.id, name: d.user.name, role: d.user.role, balance: d.user.balance, phone: d.user.phone });
           if (d.user.phone) {
             setPhone((prev) => (prev ? prev : normalizeEgyptianPhone(d.user.phone)));
           }
@@ -397,13 +397,17 @@ function PaymentContent() {
         return;
       }
 
-      const normalizedPhone = methodObj.needsPhone ? normalizeEgyptianPhone(phone) : "";
+      const normalizedPhone = normalizeEgyptianPhone(phone) || (user?.phone ? normalizeEgyptianPhone(user.phone) : "");
+      if (methodObj.needsPhone && !normalizedPhone) {
+        setPhoneError("يرجى إدخال رقم محفظة صالح (010, 011, 012, 015)");
+        return;
+      }
       const res = await fetch("/api/payments/sha7nawy/create", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          number: methodObj.needsCode ? code.trim() : (normalizedPhone || "01000000000"),
+          number: methodObj.needsCode ? code.trim() : (normalizedPhone || undefined),
           amount: rawItemPrice,
           method: methodObj.id,
           code: methodObj.needsCode ? code.trim() : undefined,
@@ -792,10 +796,12 @@ function PaymentContent() {
             </div>
 
             {/* Dynamic Inputs (Phone / Code) */}
-            {selectedMethod.needsPhone && (
+            {(!selectedMethod.needsCode && selectedMethod.id !== "wallet_balance") && (
               <div className="rounded-2xl border border-[#E4E7EC] dark:border-[#232C36] bg-[#FFFFFF] dark:bg-[#141A21] p-5 shadow-sm space-y-2">
                 <label className="text-[14px] font-bold text-[#101828] dark:text-[#F2F4F7]">
-                  رقم محفظة فودافون كاش / الهاتف المحمول:
+                  {selectedMethod.needsPhone
+                    ? "رقم محفظة فودافون كاش / الهاتف المحمول:"
+                    : "رقم هاتف الطالب للتواصل وتأكيد الحجز:"}
                 </label>
                 <input
                   type="tel"
@@ -813,7 +819,9 @@ function PaymentContent() {
                   <p className="text-xs text-rose-500 font-bold mt-1">{phoneError}</p>
                 )}
                 <p className="text-xs text-[#667085] dark:text-[#98A2B3]">
-                  سيصلك طلب تأكيد ودفع فوري على هذا الرقم المسجل به المحفظة.
+                  {selectedMethod.needsPhone
+                    ? "سيصلك طلب تأكيد ودفع فوري على هذا الرقم المسجل به المحفظة."
+                    : "يتم تسجيل هذا الرقم في بيانات الفاتورة والحجز لتأكيد اشتراكك والتواصل معك فور السداد."}
                 </p>
               </div>
             )}
