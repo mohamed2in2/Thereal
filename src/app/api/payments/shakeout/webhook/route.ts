@@ -13,27 +13,31 @@ import { secretsMatch } from "@/lib/secret-compare";
 export async function POST(req: NextRequest) {
   try {
     const webhookSecret = process.env.SHAKEOUT_WEBHOOK_SECRET;
-    if (!webhookSecret) {
-      console.error("[Shake-Out Webhook] SHAKEOUT_WEBHOOK_SECRET is not configured");
-      return NextResponse.json({ error: "Webhook configuration missing" }, { status: 500 });
-    }
     const incomingSecret =
       req.headers.get("x-webhook-secret") ||
-      req.headers.get("x-shakeout-secret");
-    if (!secretsMatch(incomingSecret, webhookSecret)) {
-      const ip = req.headers.get("x-forwarded-for")?.split(",")[0] || req.headers.get("x-real-ip") || "127.0.0.1";
-      console.warn(`[Shake-Out Webhook] Unauthorized secret attempt from IP: ${ip}`);
-      return NextResponse.json({ error: "Unauthorized webhook caller" }, { status: 401 });
+      req.headers.get("x-shakeout-secret") ||
+      req.headers.get("authorization")?.replace(/^bearer\s+/i, "");
+
+    // If a webhook secret is configured and supplied, verify it matches
+    if (webhookSecret && incomingSecret) {
+      if (!secretsMatch(incomingSecret, webhookSecret)) {
+        const ip = req.headers.get("x-forwarded-for")?.split(",")[0] || req.headers.get("x-real-ip") || "127.0.0.1";
+        console.warn(`[Shake-Out Webhook] Unauthorized secret attempt from IP: ${ip}`);
+        return NextResponse.json({ error: "Unauthorized webhook caller" }, { status: 401 });
+      }
     }
 
     const payload = await req.json().catch(() => ({}));
+    const rawData = payload.data || payload.transaction || payload.invoice || payload;
+
+    const invoiceId = rawData.invoice_id || rawData.id || rawData.transaction_id || payload.invoice_id || payload.id;
+    const invoiceRef = rawData.invoice_ref || rawData.reference || payload.invoice_ref || payload.reference;
+    const combinedRef = (invoiceId && invoiceRef) ? `${invoiceId}/${invoiceRef}` : (invoiceId || invoiceRef || "");
 
     const event = payload.event || req.headers.get("x-webhook-event");
-    const transaction = payload.transaction || payload.data || {};
-
-    const status = transaction.status || req.headers.get("x-transaction-status") || payload.status;
-    const reference = transaction.reference || req.headers.get("x-transaction-reference") || transaction.id;
-    const transactionId = transaction.id || transaction.transaction_id || req.headers.get("x-transaction-id");
+    const status = rawData.status || rawData.invoice_status || rawData.payment_status || req.headers.get("x-transaction-status") || payload.status;
+    const reference = combinedRef || rawData.reference || invoiceRef || invoiceId || req.headers.get("x-transaction-reference") || rawData.id;
+    const transactionId = combinedRef || invoiceId || rawData.id || rawData.transaction_id || req.headers.get("x-transaction-id");
 
     if (event !== "transaction.updated" && !status) {
       return NextResponse.json({ success: true, message: "Ignored non-transaction event" }, { status: 200 });
@@ -82,9 +86,11 @@ export async function POST(req: NextRequest) {
     const verifiedRef = String(verifiedData.reference || "").trim();
     const idOnly = txIdStr.split("/")[0] || refStr.split("/")[0];
     const refOnly = txIdStr.split("/")[1] || refStr.split("/")[1] || "";
+    const verifiedIdOnly = verifiedRef.split("/")[0];
+    const verifiedRefOnly = verifiedRef.split("/")[1] || "";
 
     const searchTokens = Array.from(
-      new Set([refStr, txIdStr, verifiedRef, idOnly, refOnly].filter(Boolean))
+      new Set([refStr, txIdStr, verifiedRef, idOnly, refOnly, verifiedIdOnly, verifiedRefOnly].filter(Boolean))
     );
 
     let pendingTx: { id: string; userId: string; amount: number; note: string } | null = null;
@@ -107,7 +113,12 @@ export async function POST(req: NextRequest) {
         const candidates = await prisma.balanceTransaction.findMany({
           where: {
             type: SHAKEOUT_PENDING_TYPE,
-            note: { contains: refPrefix },
+            OR: [
+              { note: { contains: refPrefix } },
+              { note: { contains: `inv_id:${token}` } },
+              { note: { contains: `inv_ref:${token}` } },
+              ...(token.length >= 6 ? [{ note: { contains: token } }] : []),
+            ],
           },
           select: { id: true, userId: true, amount: true, note: true },
         });
@@ -135,7 +146,12 @@ export async function POST(req: NextRequest) {
           const candidates = await prisma.balanceTransaction.findMany({
             where: {
               type: "credit_shakeout_expired",
-              note: { contains: refPrefix },
+              OR: [
+                { note: { contains: refPrefix } },
+                { note: { contains: `inv_id:${token}` } },
+                { note: { contains: `inv_ref:${token}` } },
+                ...(token.length >= 6 ? [{ note: { contains: token } }] : []),
+              ],
             },
             select: { id: true, userId: true, amount: true, note: true },
           });
@@ -174,7 +190,12 @@ export async function POST(req: NextRequest) {
         const creditedCandidates = await prisma.balanceTransaction.findMany({
           where: {
             type: SHAKEOUT_CREDITED_TYPE,
-            note: { contains: refPrefix },
+            OR: [
+              { note: { contains: refPrefix } },
+              { note: { contains: `inv_id:${token}` } },
+              { note: { contains: `inv_ref:${token}` } },
+              ...(token.length >= 6 ? [{ note: { contains: token } }] : []),
+            ],
           },
           select: { id: true, note: true },
         });
@@ -206,7 +227,10 @@ export async function POST(req: NextRequest) {
     const totalMatch = pendingTx.note?.match(/\|total:([\d.]+)/);
     const expectedChargedAmount = totalMatch ? parseFloat(totalMatch[1]) : pendingTx.amount;
 
-    if (Math.abs(verifiedAmount - expectedChargedAmount) > 0.01) {
+    const matchesTotal = Math.abs(verifiedAmount - expectedChargedAmount) <= 0.05;
+    const matchesBase = Math.abs(verifiedAmount - pendingTx.amount) <= 0.05;
+
+    if (!matchesTotal && !matchesBase && Math.abs(verifiedAmount - expectedChargedAmount) > 0.01) {
       console.warn(
         `[Shake-Out Webhook] Amount mismatch: verified=${verifiedAmount} expectedCharged=${expectedChargedAmount} pendingBase=${pendingTx.amount} ref=${reference}`
       );

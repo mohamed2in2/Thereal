@@ -45,7 +45,7 @@ const PAYMENT_METHODS_OPTIONS = [
 
 export function WalletSection() {
   const { success: toastSuccess, error: toastError } = useToast();
-  const [tab, setTab] = useState<"codes" | "credit" | "discounts">("codes");
+  const [tab, setTab] = useState<"codes" | "credit" | "discounts" | "course_access">("codes");
 
   /* ── Code generator state ── */
   const [amount,    setAmount]    = useState("");
@@ -57,6 +57,26 @@ export function WalletSection() {
   const [allCodes,   setAllCodes]   = useState<MoneyCode[]>([]);
   const [loadingCodes, setLoadingCodes] = useState(false);
   const [codesLoaded,  setCodesLoaded]  = useState(false);
+
+  /* ── Course Access & Direct Enrollment State ── */
+  const [coursesList, setCoursesList] = useState<{ id: string; title: string; subject: string; teacher?: { name: string } }[]>([]);
+  const [loadingCourses, setLoadingCourses] = useState(false);
+
+  // 1. Course Code Generator
+  const [accessCourseId, setAccessCourseId] = useState("");
+  const [accessCount, setAccessCount] = useState("1");
+  const [accessPrefix, setAccessPrefix] = useState("CRS");
+  const [accessType, setAccessType] = useState<"TERM" | "FOLDER" | "VIDEO">("TERM");
+  const [generatingAccess, setGeneratingAccess] = useState(false);
+  const [generatedAccessCodes, setGeneratedAccessCodes] = useState<any[]>([]);
+
+  // 2. Direct Student Enrollment
+  const [enrollStudentQ, setEnrollStudentQ] = useState("");
+  const [enrollSearching, setEnrollSearching] = useState(false);
+  const [enrollStudents, setEnrollStudents] = useState<StudentResult[]>([]);
+  const [enrollSelectedStudent, setEnrollSelectedStudent] = useState<StudentResult | null>(null);
+  const [enrollCourseId, setEnrollCourseId] = useState("");
+  const [enrolling, setEnrolling] = useState(false);
 
   /* ── Discount codes state ── */
   const [discountCodes, setDiscountCodes] = useState<DiscountCodeItem[]>([]);
@@ -230,6 +250,110 @@ export function WalletSection() {
     }
   };
 
+  /* ── Load all courses for access code generator & enrollment ── */
+  const loadCourses = async () => {
+    setLoadingCourses(true);
+    try {
+      const res = await fetch("/api/admin/superadmin/courses", { credentials: "include" });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.courses) {
+        setCoursesList(data.courses);
+        if (data.courses.length > 0) {
+          setAccessCourseId((prev) => prev || data.courses[0].id);
+          setEnrollCourseId((prev) => prev || data.courses[0].id);
+        }
+      }
+    } finally {
+      setLoadingCourses(false);
+    }
+  };
+
+  useEffect(() => {
+    if (tab === "course_access" && coursesList.length === 0) {
+      loadCourses();
+    }
+  }, [tab]);
+
+  /* ── Generate Course Access Codes (Access Only — No Money) ── */
+  const handleGenerateAccessCodes = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!accessCourseId) return toastError("يرجى اختيار الكورس أولاً");
+    const cnt = parseInt(accessCount);
+    if (!cnt || cnt < 1 || cnt > 100) return toastError("العدد يجب أن يكون بين 1 و 100");
+
+    setGeneratingAccess(true);
+    try {
+      const res = await fetch("/api/admin/codes", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          courseId: accessCourseId,
+          count: cnt,
+          prefix: accessPrefix.trim() || "CRS",
+          accessType,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.codes) {
+        setGeneratedAccessCodes(data.codes);
+        toastSuccess(`تم توليد ${data.codes.length} كود وصول بنجاح (وصول تعليمي فقط دون المساس برصيد المحفظة)`);
+      } else {
+        toastError(data.error || "تعذر توليد أكواد الوصول");
+      }
+    } catch {
+      toastError("حدث خطأ أثناء إنشاء الأكواد");
+    } finally {
+      setGeneratingAccess(false);
+    }
+  };
+
+  /* ── Direct Student Course Enrollment ── */
+  const handleEnrollSearch = async (q: string) => {
+    setEnrollStudentQ(q);
+    if (!q.trim()) { setEnrollStudents([]); return; }
+    setEnrollSearching(true);
+    try {
+      const res = await fetch(`/api/admin/students/search?q=${encodeURIComponent(q)}`, { credentials: "include" });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) setEnrollStudents(data.students ?? []);
+    } finally {
+      setEnrollSearching(false);
+    }
+  };
+
+  const handleDirectEnroll = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!enrollSelectedStudent) return toastError("يرجى اختيار الطالب أولاً");
+    if (!enrollCourseId) return toastError("يرجى اختيار الكورس");
+
+    setEnrolling(true);
+    try {
+      const res = await fetch("/api/admin/superadmin/courses/enroll", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          studentId: enrollSelectedStudent.id,
+          courseId: enrollCourseId,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        toastSuccess(data.message || `تم تسجيل ${enrollSelectedStudent.name} في الكورس وتفعيل المحتوى بنجاح!`);
+        setEnrollSelectedStudent(null);
+        setEnrollStudentQ("");
+        setEnrollStudents([]);
+      } else {
+        toastError(data.error || "تعذر تسجيل الطالب في الكورس");
+      }
+    } catch {
+      toastError("حدث خطأ أثناء تنفيذ التسجيل");
+    } finally {
+      setEnrolling(false);
+    }
+  };
+
   const copyCode = async (code: string) => {
     await navigator.clipboard.writeText(code).catch(() => {});
     toastSuccess(`تم نسخ: ${code}`);
@@ -244,15 +368,16 @@ export function WalletSection() {
     <AccessGate id="wallet" title="إدارة الرصيد والخصومات" type="wallet">
       <div dir="rtl">
       {/* Tab bar */}
-      <div className="flex gap-2 mb-6 p-1 rounded-[14px]" style={{ background: "var(--surface-2)", border: "1px solid var(--border)", width: "fit-content" }}>
+      <div className="flex flex-wrap gap-2 mb-6 p-1 rounded-[14px]" style={{ background: "var(--surface-2)", border: "1px solid var(--border)", width: "fit-content" }}>
         {[
           { id: "codes" as const, label: "🔑 توليد أكواد رصيد" },
           { id: "credit" as const, label: "💳 شحن رصيد طالب" },
+          { id: "course_access" as const, label: "🎓 أكواد وتسجيل الكورسات" },
           { id: "discounts" as const, label: "🏷️ أكواد الخصم" },
         ].map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
             className="cursor-pointer border-none rounded-[10px] transition-colors font-bold"
-            style={{ padding: "10px 20px", fontSize: 14, fontFamily: "var(--font-body)",
+            style={{ padding: "10px 18px", fontSize: 14, fontFamily: "var(--font-body)",
               background: tab === t.id ? "var(--brand)" : "transparent",
               color: tab === t.id ? "#fff" : "var(--ink-2)" }}>
             {t.label}
@@ -688,6 +813,247 @@ export function WalletSection() {
               </form>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ═══ COURSE ACCESS & DIRECT ENROLLMENT ═══ */}
+      {tab === "course_access" && (
+        <div className="space-y-6">
+          {/* Card 1: Generate Access Codes */}
+          <div className="rounded-[18px] p-6 space-y-4" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }}>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 style={{ fontFamily: "var(--font-head)", fontWeight: 800, fontSize: 18, color: "var(--ink)", margin: 0 }}>
+                  🎟️ إنشاء وتوليد أكواد وصول لكورس (Access Codes)
+                </h3>
+                <p className="text-xs text-[var(--ink-muted)] mt-1">
+                  الأكواد المولدة هنا تمنح الطالب صلاحية فتح الكورس أو المحاضرة في مكتبته فوراً، ولا تضاف إلى رصيد المحفظة المالي إطلاقاً.
+                </p>
+              </div>
+              <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                🔒 وصول تعليمي فقط (بدون رصيد)
+              </span>
+            </div>
+
+            <form onSubmit={handleGenerateAccessCodes} className="grid gap-4 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-semibold mb-2" style={{ color: "var(--ink-2)" }}>اختر الكورس المستهدف *</label>
+                {loadingCourses ? (
+                  <div className="p-3 text-xs text-[var(--ink-muted)] bg-[var(--surface-2)] rounded-xl border border-[var(--border)]">جاري تحميل قائمة الكورسات...</div>
+                ) : coursesList.length === 0 ? (
+                  <div className="p-3 text-xs text-rose-400 bg-rose-500/10 rounded-xl border border-rose-500/20">لا توجد كورسات مسجلة في المنصة حالياً</div>
+                ) : (
+                  <select
+                    value={accessCourseId}
+                    onChange={(e) => setAccessCourseId(e.target.value)}
+                    required
+                    className={input}
+                    style={inputStyle}
+                  >
+                    {coursesList.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.title} — ({c.subject || "عام"}) {c.teacher?.name ? `| أستاذ: ${c.teacher.name}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold mb-2" style={{ color: "var(--ink-2)" }}>عدد الأكواد (1-100) *</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="100"
+                  required
+                  value={accessCount}
+                  onChange={(e) => setAccessCount(e.target.value)}
+                  placeholder="مثال: 10"
+                  dir="ltr"
+                  className={input}
+                  style={inputStyle}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold mb-2" style={{ color: "var(--ink-2)" }}>بادئة الكود (Prefix)</label>
+                <input
+                  type="text"
+                  value={accessPrefix}
+                  onChange={(e) => setAccessPrefix(e.target.value.toUpperCase())}
+                  placeholder="مثال: CRS أو MATH"
+                  maxLength={10}
+                  dir="ltr"
+                  className={input}
+                  style={inputStyle}
+                />
+              </div>
+
+              <div className="sm:col-span-2">
+                <button
+                  type="submit"
+                  disabled={generatingAccess || !accessCourseId || coursesList.length === 0}
+                  className="w-full cursor-pointer border-none rounded-[12px] text-white font-bold transition-opacity hover:opacity-90 disabled:opacity-50"
+                  style={{
+                    padding: "13px",
+                    background: "var(--brand)",
+                    fontSize: 15,
+                    fontFamily: "var(--font-head)",
+                    boxShadow: "0 6px 16px -6px var(--brand-shadow)",
+                  }}
+                >
+                  {generatingAccess ? "جارٍ توليد أكواد الوصول..." : `توليد ${accessCount || "1"} كود وصول للكورس المحدد 🚀`}
+                </button>
+              </div>
+            </form>
+
+            {/* Generated access codes display */}
+            {generatedAccessCodes.length > 0 && (
+              <div className="mt-5 p-4 rounded-2xl bg-[var(--surface-2)] border border-emerald-500/30 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-emerald-400">
+                    ✅ تم توليد {generatedAccessCodes.length} كود وصول بنجاح
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const allText = generatedAccessCodes.map((c) => c.code).join("\n");
+                      navigator.clipboard.writeText(allText).catch(() => {});
+                      toastSuccess("تم نسخ جميع أكواد الوصول");
+                    }}
+                    className="px-3 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 text-xs font-bold transition-colors cursor-pointer border border-emerald-500/30"
+                  >
+                    📋 نسخ جميع الأكواد
+                  </button>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2 max-h-60 overflow-y-auto p-1">
+                  {generatedAccessCodes.map((c) => (
+                    <div
+                      key={c.id || c.code}
+                      className="flex items-center justify-between p-2.5 rounded-xl bg-[var(--surface)] border border-[var(--border)] font-mono text-xs text-[var(--ink)]"
+                    >
+                      <span className="font-bold text-sky-400">{c.code}</span>
+                      <button
+                        type="button"
+                        onClick={() => copyCode(c.code)}
+                        className="px-2 py-1 rounded-md bg-[var(--surface-2)] hover:bg-[var(--surface-3,#2d3748)] text-[10px] text-[var(--ink-muted)] hover:text-white transition-colors"
+                      >
+                        نسخ
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Card 2: Direct Student Enrollment */}
+          <div className="rounded-[18px] p-6 space-y-4" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }}>
+            <div>
+              <h3 style={{ fontFamily: "var(--font-head)", fontWeight: 800, fontSize: 18, color: "var(--ink)", margin: 0 }}>
+                ⚡ تسجيل وإضافة طالب مباشر في كورس (Direct Enrollment)
+              </h3>
+              <p className="text-xs text-[var(--ink-muted)] mt-1">
+                يمكنك البحث عن أي طالب وتسجيله في الكورس فوراً لفتح المحتوى في مكتبته دون الحاجة لإدخال كود وصول.
+              </p>
+            </div>
+
+            {/* Student Search */}
+            <div>
+              <label className="block text-sm font-semibold mb-2" style={{ color: "var(--ink-2)" }}>ابحث عن الطالب (بالاسم أو الهاتف أو البريد) *</label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={enrollStudentQ}
+                  onChange={(e) => handleEnrollSearch(e.target.value)}
+                  placeholder="اكتب اسم الطالب أو رقم هاتفه..."
+                  className={input}
+                  style={inputStyle}
+                />
+                {enrollSearching && (
+                  <span className="absolute left-3 top-2.5 text-xs text-[var(--ink-muted)] font-bold animate-pulse">
+                    جارٍ البحث...
+                  </span>
+                )}
+              </div>
+
+              {/* Search Results Dropdown */}
+              {enrollStudents.length > 0 && !enrollSelectedStudent && (
+                <div className="mt-2 rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] max-h-48 overflow-y-auto divide-y divide-[var(--border)] shadow-lg">
+                  {enrollStudents.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => {
+                        setEnrollSelectedStudent(s);
+                        setEnrollStudents([]);
+                      }}
+                      className="w-full p-3 flex items-center justify-between text-right hover:bg-[var(--surface)] transition-colors cursor-pointer border-none"
+                    >
+                      <div>
+                        <div className="font-bold text-sm text-[var(--ink)]">{s.name}</div>
+                        <div className="text-xs text-[var(--ink-muted)] font-mono dir-ltr text-right">{s.phone || "بدون هاتف"}</div>
+                      </div>
+                      <span className="px-2 py-1 rounded-lg text-xs font-bold bg-sky-500/10 text-sky-400 border border-sky-500/20">
+                        اختيار الطالب 👈
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Selected Student & Enrollment Action */}
+            {enrollSelectedStudent && (
+              <form onSubmit={handleDirectEnroll} className="p-4 rounded-2xl bg-sky-500/10 border border-sky-500/30 space-y-4 animate-fadeIn">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">🎓</span>
+                    <div>
+                      <div className="font-bold text-sm text-sky-950 dark:text-sky-200">
+                        الطالب المختار: {enrollSelectedStudent.name}
+                      </div>
+                      <div className="text-xs text-sky-700 dark:text-sky-400 font-mono dir-ltr text-right">
+                        {enrollSelectedStudent.phone || "بدون رقم هاتف"}
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setEnrollSelectedStudent(null)}
+                    className="px-2.5 py-1 rounded-lg bg-rose-500/20 text-rose-400 hover:bg-rose-500/30 text-xs font-bold transition-colors cursor-pointer border border-rose-500/30"
+                  >
+                    تغيير الطالب
+                  </button>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold mb-1 text-[var(--ink-2)]">اختر الكورس لتسجيل الطالب فيه:</label>
+                  <select
+                    value={enrollCourseId}
+                    onChange={(e) => setEnrollCourseId(e.target.value)}
+                    required
+                    className={input}
+                    style={inputStyle}
+                  >
+                    {coursesList.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.title} — ({c.subject || "عام"}) {c.teacher?.name ? `| أستاذ: ${c.teacher.name}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={enrolling || !enrollCourseId}
+                  className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-md transition-all cursor-pointer disabled:opacity-50"
+                >
+                  {enrolling ? "جارٍ تسجيل الطالب..." : `تأكيد تسجيل ${enrollSelectedStudent.name} في الكورس فوراً 🚀`}
+                </button>
+              </form>
+            )}
+          </div>
         </div>
       )}
       </div>

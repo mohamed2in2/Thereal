@@ -182,13 +182,13 @@ export async function getShakeOutInvoiceStatus(invoiceId: string, invoiceRef?: s
     return { status: false, code: 400, message: "مفتاح الربط مع Shake-Out غير مهيأ" };
   }
 
-  const parts = (invoiceId || "").split("/");
+  const parts = (invoiceId || "").trim().split("/");
   const id = parts[0] || invoiceId;
   const ref = invoiceRef || parts[1] || "";
 
   try {
-    const url = ref ? `${baseUrl}/api/public/vendor/invoice-status/${id}/${ref}` : `${baseUrl}/api/public/vendor/invoice-status/${id}`;
-    const res = await fetch(url, {
+    let url = ref ? `${baseUrl}/api/public/vendor/invoice-status/${id}/${ref}` : `${baseUrl}/api/public/vendor/invoice-status/${id}`;
+    let res = await fetch(url, {
       method: "GET",
       headers: {
         "Accept": "application/json",
@@ -196,22 +196,61 @@ export async function getShakeOutInvoiceStatus(invoiceId: string, invoiceRef?: s
       },
     });
 
-    const data = await res.json().catch(() => ({}));
-    const invData = data.data || {};
+    let data = await res.json().catch(() => ({}));
+
+    // If request with id/ref failed, attempt with id only or vice versa
+    if (!res.ok && ref) {
+      const fallbackUrl = `${baseUrl}/api/public/vendor/invoice-status/${id}`;
+      const fallbackRes = await fetch(fallbackUrl, {
+        method: "GET",
+        headers: {
+          "Accept": "application/json",
+          "Authorization": `apikey ${publicKey}`,
+        },
+      }).catch(() => null);
+      if (fallbackRes && fallbackRes.ok) {
+        const fallbackData = await fallbackRes.json().catch(() => ({}));
+        if (fallbackData && (fallbackData.status === "success" || fallbackData.data)) {
+          res = fallbackRes;
+          data = fallbackData;
+        }
+      }
+    }
+
+    const invData = data.data || data.invoice || data.transaction || {};
+
+    const rawStatus = (
+      invData.status ||
+      invData.invoice_status ||
+      invData.payment_status ||
+      invData.state ||
+      (invData.is_paid ? "paid" : "") ||
+      (invData.paid ? "paid" : "") ||
+      data.status ||
+      "unknown"
+    ).toString().trim().toLowerCase();
+
+    const finalInvoiceId = invData.invoice_id || id;
+    const finalInvoiceRef = invData.invoice_ref || ref;
+    const combinedRef = (finalInvoiceId && finalInvoiceRef)
+      ? `${finalInvoiceId}/${finalInvoiceRef}`
+      : (finalInvoiceId || finalInvoiceRef || id);
+
+    const finalAmount = invData.amount ?? invData.total ?? invData.price ?? "0";
 
     return {
-      status: data.status === "success",
+      status: data.status === "success" || res.ok || SHAKEOUT_PAID_STATUSES.includes(rawStatus),
       code: res.status,
       message: data.message || "تم استعلام الفاتورة بنجاح",
       data: {
-        id: invData.invoice_id || id,
-        amount: invData.amount ?? "0",
-        method: invData.payment_method || "card",
-        reference: invData.invoice_id || id,
-        status: invData.invoice_status || "unknown",
-        client: invData.client || undefined,
-        invoice_id: invData.invoice_id,
-        invoice_ref: invData.invoice_ref,
+        id: finalInvoiceId,
+        amount: finalAmount,
+        method: invData.payment_method || invData.method || "card",
+        reference: combinedRef,
+        status: rawStatus,
+        client: invData.client || invData.user_id || undefined,
+        invoice_id: finalInvoiceId,
+        invoice_ref: finalInvoiceRef,
       },
     };
   } catch (error: any) {

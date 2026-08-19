@@ -8,7 +8,7 @@ export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
 
-  const [user, rawTransactions] = await Promise.all([
+  let [user, rawTransactions] = await Promise.all([
     prisma.user.findUnique({ where: { id: session.id }, select: { balance: true } }),
     prisma.balanceTransaction.findMany({
       where: { userId: session.id },
@@ -18,11 +18,81 @@ export async function GET() {
     }),
   ]);
 
+  // Auto-reconcile recent pending transactions on visit (within 48h)
+  const pendingTxs = rawTransactions.filter(
+    tx => tx.type.toLowerCase().includes("pending") &&
+    (Date.now() - new Date(tx.createdAt).getTime()) < 48 * 60 * 60 * 1000
+  ).slice(0, 3);
+
+  let didReconcileAny = false;
+
+  if (pendingTxs.length > 0) {
+    for (const pTx of pendingTxs) {
+      try {
+        const refMatch = pTx.note?.match(/(?:shakeout_ref|sha7nawy_ref):([^\s|]+)/);
+        const ref = refMatch ? refMatch[1] : null;
+        if (!ref) continue;
+
+        if (pTx.type.includes("shakeout")) {
+          const { getShakeOutPaymentInfo, SHAKEOUT_PAID_STATUSES, SHAKEOUT_CREDITED_TYPE } = await import("@/lib/shakeout");
+          const { fulfillPendingItemPurchase } = await import("@/lib/fulfillment");
+          const info = await getShakeOutPaymentInfo(ref);
+          const normalizedStatus = (info.data?.status || "unknown").toString().toLowerCase();
+          if (SHAKEOUT_PAID_STATUSES.includes(normalizedStatus)) {
+            const processed = await prisma.$transaction(async (tx: any) => {
+              const claim = await tx.balanceTransaction.updateMany({
+                where: { id: pTx.id, type: pTx.type },
+                data: { type: SHAKEOUT_CREDITED_TYPE, note: `${pTx.note} — سداد عبر Shake-Out (تأكيد تلقائي)` },
+              });
+              if (claim.count === 0) return false;
+              await tx.user.update({ where: { id: session.id }, data: { balance: { increment: pTx.amount } } });
+              await fulfillPendingItemPurchase({ userId: session.id, note: pTx.note, tx });
+              return true;
+            });
+            if (processed) didReconcileAny = true;
+          }
+        } else if (pTx.type.includes("sha7nawy")) {
+          const { getSha7nawyPaymentInfo, SHA7NAWY_PAID_STATUSES, SHA7NAWY_CREDITED_TYPE } = await import("@/lib/sha7nawy");
+          const { fulfillPendingItemPurchase } = await import("@/lib/fulfillment");
+          const info = await getSha7nawyPaymentInfo(ref);
+          const normalizedStatus = (info.data?.status || "unknown").toString().toLowerCase();
+          if (SHA7NAWY_PAID_STATUSES.includes(normalizedStatus)) {
+            const processed = await prisma.$transaction(async (tx: any) => {
+              const claim = await tx.balanceTransaction.updateMany({
+                where: { id: pTx.id, type: pTx.type },
+                data: { type: SHA7NAWY_CREDITED_TYPE, note: `${pTx.note} — سداد عبر Sha7nawy (تأكيد تلقائي)` },
+              });
+              if (claim.count === 0) return false;
+              await tx.user.update({ where: { id: session.id }, data: { balance: { increment: pTx.amount } } });
+              await fulfillPendingItemPurchase({ userId: session.id, note: pTx.note, tx });
+              return true;
+            });
+            if (processed) didReconcileAny = true;
+          }
+        }
+      } catch (err) {
+        // Safe skip on single error, do not block balance retrieval
+      }
+    }
+
+    if (didReconcileAny) {
+      [user, rawTransactions] = await Promise.all([
+        prisma.user.findUnique({ where: { id: session.id }, select: { balance: true } }),
+        prisma.balanceTransaction.findMany({
+          where: { userId: session.id },
+          orderBy: { createdAt: "desc" },
+          take: 50,
+          select: { id: true, type: true, amount: true, note: true, createdAt: true },
+        }),
+      ]);
+    }
+  }
+
   const transactions = rawTransactions.map(tx => {
     const isPending = tx.type.toLowerCase().includes("pending");
     let url: string | null = null;
     let ref: string | null = null;
-    
+
     if (tx.note) {
       const urlMatch = tx.note.match(/\|url:(https?:\/\/[^\s|]+)/);
       if (urlMatch) url = urlMatch[1];

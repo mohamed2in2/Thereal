@@ -48,35 +48,45 @@ export async function GET(req: NextRequest) {
   const rawId = String(transactionId).trim();
   const idOnly = rawId.split("/")[0];
   const refOnly = rawId.split("/")[1] || "";
-  const dataRef = String(data.reference).trim();
+  const dataRef = String(data.reference || "").trim();
   const dataRefIdOnly = dataRef.split("/")[0];
+  const dataRefRefOnly = dataRef.split("/")[1] || "";
+  const invoiceId = String(data.invoice_id || "").trim();
+  const invoiceRef = String(data.invoice_ref || "").trim();
 
   const searchTokens = Array.from(
-    new Set([rawId, idOnly, refOnly, dataRef, dataRefIdOnly].filter(Boolean))
+    new Set([rawId, idOnly, refOnly, dataRef, dataRefIdOnly, dataRefRefOnly, invoiceId, invoiceRef].filter(Boolean))
   );
 
+  const userWhere = session.role === "superadmin" ? {} : { userId: session.id };
+
   // Find candidate transaction for this user
-  let existingTx: { id: string; type: string; amount: number; note: string } | null = null;
+  let existingTx: { id: string; type: string; amount: number; note: string; userId: string } | null = null;
 
   // 1. Direct providerRef match
   existingTx = await prisma.balanceTransaction.findFirst({
     where: {
-      userId: session.id,
+      ...userWhere,
       providerRef: { in: searchTokens },
     } as any,
-    select: { id: true, type: true, amount: true, note: true },
+    select: { id: true, type: true, amount: true, note: true, userId: true },
   });
 
-  // 2. Note search by prefix or containment
+  // 2. Note search by prefix, tags, or containment
   if (!existingTx) {
     for (const token of searchTokens) {
       const refPrefix = shakeOutRefNote(token);
       const candidates = await prisma.balanceTransaction.findMany({
         where: {
-          userId: session.id,
-          note: { contains: refPrefix },
+          ...userWhere,
+          OR: [
+            { note: { contains: refPrefix } },
+            { note: { contains: `inv_id:${token}` } },
+            { note: { contains: `inv_ref:${token}` } },
+            ...(token.length >= 6 ? [{ note: { contains: token } }] : []),
+          ],
         },
-        select: { id: true, type: true, amount: true, note: true },
+        select: { id: true, type: true, amount: true, note: true, userId: true },
       });
 
       if (candidates.length > 0) {
