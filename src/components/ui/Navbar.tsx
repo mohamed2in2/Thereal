@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect, useRef, useSyncExternalStore, useCallback } from "react";
 import { getResolvedTheme, setThemePreference, type Theme } from "@/lib/theme";
 import { BrandLogo } from "@/components/ui/BrandLogo";
+import { useToast } from "@/components/ui/Toast";
 
 interface NavbarProps {
   user?: { name: string; role: string } | null;
@@ -35,9 +36,13 @@ const NAV_LINKS = [
 ];
 
 const NOTIF_ICON: Record<string, string> = {
+  payment_success:  "🎉",
+  course_enrollment:"🎓",
   streak_milestone: "🔥",
   exam_live:        "🎯",
   grade_resolved:   "📝",
+  ticket_reply:     "💬",
+  system:           "📢",
   referral_joined:  "🎁",
   project_graded:   "📋",
 };
@@ -88,6 +93,7 @@ export function Navbar({ user: propUser }: NavbarProps) {
   const [searching, setSearching] = useState(false);
   const [stats, setStats] = useState<{ streak: number; points: number } | null>(null);
 
+  const { success: toastSuccess } = useToast();
   const notifRef  = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLDivElement>(null);
   const profileMenuRef = useRef<HTMLDivElement>(null);
@@ -143,14 +149,25 @@ export function Navbar({ user: propUser }: NavbarProps) {
       .finally(() => setNotifLoading(false));
   }, [notifOpen, user]);
 
-  // Fetch unread count on mount
+  // Fetch unread count and trigger celebratory notification on student re-entry
   useEffect(() => {
     if (!user) return;
     fetch("/api/notifications", { credentials: "include" })
       .then((r) => r.ok ? r.json() : null)
-      .then((d: { unreadCount?: number } | null) => { if (d) setUnreadCount(d.unreadCount ?? 0); })
+      .then((d: { notifications?: Notification[]; unreadCount?: number } | null) => {
+        if (!d) return;
+        setUnreadCount(d.unreadCount ?? 0);
+        if (d.notifications) setNotifications(d.notifications);
+
+        const latestPayment = d.notifications?.find(
+          (n) => n.type === "payment_success" && !n.isRead && (Date.now() - new Date(n.createdAt).getTime()) < 24 * 60 * 60 * 1000
+        );
+        if (latestPayment) {
+          toastSuccess(latestPayment.title || "🎉 تم استلام وتأكيد دفعتك بنجاح! المحتوى متاح الآن في حسابك.");
+        }
+      })
       .catch(() => {});
-  }, [user]);
+  }, [user, toastSuccess]);
 
   // Fetch student points and streak
   useEffect(() => {
