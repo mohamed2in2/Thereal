@@ -2113,9 +2113,26 @@ export default function TeacherDashboardPage() {
                                 )}
 
                                 {activeDrmTab === "manual" && (
-                                  <p className="text-[11px] text-[var(--ink-muted)] m-0">
-                                    أدخل معرّف الـ Asset ID في الحقل أعلاه (مثال: <code className="font-mono text-sky-300">lesson_101</code>) بعد تشفيره وحفظه في مجلد المحتوى المحمي.
-                                  </p>
+                                  <div className="space-y-2">
+                                    <p className="text-[11px] text-[var(--ink-muted)] m-0">
+                                      أدخل معرّف الـ Asset ID في الحقل أعلاه (مثال: <code className="font-mono text-sky-300">lesson_101</code> أو <code className="font-mono text-sky-300">axinom_demo</code>) لتجربة البث المشفر عتادياً.
+                                    </p>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setNewVideo((prev) => ({
+                                          ...prev,
+                                          providerVideoId: "axinom_demo",
+                                          title: "فيديو تجربة Axinom Widevine الرسمي (1080p CENC)",
+                                        }));
+                                        handleGenerateDrmPreview("axinom_demo");
+                                      }}
+                                      className="px-3 py-1.5 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 border border-sky-500/30 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                                    >
+                                      <span>🎯</span>
+                                      <span>تحميل وتجربة فيديو Widevine CENC الرسمي المباشر (1080p)</span>
+                                    </button>
+                                  </div>
                                 )}
 
                                 {/* 2-Hour DRM Preview & Testing Box */}
