@@ -427,17 +427,8 @@ export function YouTubeSecurePlayer({
     };
   }, [toggleFs]);
 
-  const [screenCaptured, setScreenCaptured] = useState(false);
-
-  // PC Anti-Screenshot & Screen-Recording Deterrence Engine for YouTube
+  // PC Anti-Screenshot & Clipboard Security Guard
   useEffect(() => {
-    const triggerBlackout = () => {
-      setScreenCaptured(true);
-      try {
-        playerRef.current?.pauseVideo();
-      } catch {}
-    };
-
     const handleKeySecurity = (e: KeyboardEvent) => {
       const k = e.key;
       const lowerK = k.toLowerCase();
@@ -464,9 +455,10 @@ export function YouTubeSecurePlayer({
         isBrowserScreenshot ||
         isDevTools
       ) {
-        e.preventDefault();
-        e.stopPropagation();
-        triggerBlackout();
+        if (isPrtScn || isWinSnipping || isMacScreenshot) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
 
         if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
           navigator.clipboard.writeText("").catch(() => {});
@@ -476,39 +468,18 @@ export function YouTubeSecurePlayer({
 
     const handleKeyUpSecurity = (e: KeyboardEvent) => {
       if (e.key === "PrintScreen" || e.code === "PrintScreen") {
-        triggerBlackout();
         if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
           navigator.clipboard.writeText("").catch(() => {});
         }
       }
     };
 
-    const handleBlur = () => {
-      triggerBlackout();
-    };
-
-    const handleFocus = () => {
-      setScreenCaptured(false);
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.hidden) {
-        triggerBlackout();
-      }
-    };
-
     window.addEventListener("keydown", handleKeySecurity, true);
     window.addEventListener("keyup", handleKeyUpSecurity, true);
-    window.addEventListener("blur", handleBlur);
-    window.addEventListener("focus", handleFocus);
-    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       window.removeEventListener("keydown", handleKeySecurity, true);
       window.removeEventListener("keyup", handleKeyUpSecurity, true);
-      window.removeEventListener("blur", handleBlur);
-      window.removeEventListener("focus", handleFocus);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, []);
 
@@ -527,30 +498,6 @@ export function YouTubeSecurePlayer({
       }
       onContextMenu={(e) => e.preventDefault()}
     >
-      {/* PC Screen Capture / Blur blackout security overlay */}
-      {screenCaptured && (
-        <div className="absolute inset-0 z-50 bg-black flex flex-col items-center justify-center p-6 text-center text-white backdrop-blur-3xl">
-          <div className="w-12 h-12 rounded-full bg-rose-500/20 text-rose-500 flex items-center justify-center mb-3">
-            <svg
-              className="w-6 h-6"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-              />
-            </svg>
-          </div>
-          <h3 className="text-base font-bold mb-1 text-white">🔒 محتوى محمي ضد تسجيل والتقاط الشاشة</h3>
-          <p className="text-xs text-slate-400 max-w-sm">
-            تم إيقاف عرض الفيديو مؤقتاً لحماية حقوق النشر والملكية الفكرية. يُرجى العودة للنافذة لمتابعة المشاهدة.
-          </p>
-        </div>
-      )}
 
       {/* Error Card Overlay if YouTube returns an error */}
       {errorMessage && (

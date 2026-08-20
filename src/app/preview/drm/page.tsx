@@ -25,9 +25,33 @@ function DrmPreviewContent() {
     }
   }, []);
 
-  const [activeToken, setActiveToken] = useState(token);
-  const [activeManifestUrl, setActiveManifestUrl] = useState("");
-  const [tokenLoading, setTokenLoading] = useState(!token);
+  const isAxinomDemo =
+    assetId === "axinom_demo" ||
+    assetId === "axinom_test" ||
+    assetId === "axinom_test_singlekey" ||
+    assetId === "axinom_widevine_test";
+
+  const AXINOM_DEMO_TOKEN =
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ2ZXJzaW9uIjoxLCJjb21fa2V5X2lkIjoiYjMzNjRlYjUtNTFmNi00YWUzLThjOTgtMzNjZWQ1ZTMxYzc4IiwibWVzc2FnZSI6eyJ0eXBlIjoiZW50aXRsZW1lbnRfbWVzc2FnZSIsInZlcnNpb24iOjIsImxpY2Vuc2UiOnsiYWxsb3dfcGVyc2lzdGVuY2UiOnRydWV9LCJjb250ZW50X2tleXNfc291cmNlIjp7ImlubGluZSI6W3siaWQiOiI5ZWI0MDUwZC1lNDRiLTQ4MDItOTMyZS0yN2Q3NTA4M2UyNjYiLCJlbmNyeXB0ZWRfa2V5IjoibEszT2pITFlXMjRjcjJrdFI3NGZudz09IiwidXNhZ2VfcG9saWN5IjoiUG9saWN5IEEifV19LCJjb250ZW50X2tleV91c2FnZV9wb2xpY2llcyI6W3sibmFtZSI6IlBvbGljeSBBIiwicGxheXJlYWR5Ijp7Im1pbl9kZXZpY2Vfc2VjdXJpdHlfbGV2ZWwiOjE1MCwicGxheV9lbmFibGVycyI6WyI3ODY2MjdEOC1DMkE2LTQ0QkUtOEY4OC0wOEFFMjU1QjAxQTciXX19XX19.W2FbPDSDaq-LeeLfOnbpTMa-zCmXh8RLChEVDYvdcVw";
+
+  const [activeToken, setActiveToken] = useState(token || (isAxinomDemo ? AXINOM_DEMO_TOKEN : ""));
+  const [activeManifestUrl, setActiveManifestUrl] = useState(
+    isAxinomDemo ? "https://media.axprod.net/TestVectors/v7-MultiDRM-SingleKey/Manifest_1080p.mpd" : ""
+  );
+  const [activeLicenseServers, setActiveLicenseServers] = useState<{
+    widevine?: string;
+    playready?: string;
+    fairplay?: string;
+  } | null>(
+    isAxinomDemo
+      ? {
+          widevine: "https://drm-widevine-licensing.axtest.net/AcquireLicense",
+          playready: "https://drm-playready-licensing.axtest.net/AcquireLicense",
+          fairplay: "https://drm-fairplay-licensing.axtest.net/AcquireLicense",
+        }
+      : null
+  );
+  const [tokenLoading, setTokenLoading] = useState(!token && !isAxinomDemo);
 
   useEffect(() => {
     if (token) {
@@ -35,7 +59,7 @@ function DrmPreviewContent() {
       setTokenLoading(false);
       return;
     }
-    if (!assetId) return;
+    if (!assetId || isAxinomDemo) return;
 
     let isMounted = true;
     setTokenLoading(true);
@@ -48,8 +72,9 @@ function DrmPreviewContent() {
       .then((res) => res.json())
       .then((data) => {
         if (!isMounted) return;
-        if (data.success && data.drm?.token) {
-          setActiveToken(data.drm.token);
+        if (data.success && data.drm) {
+          if (data.drm.token) setActiveToken(data.drm.token);
+          if (data.drm.licenseServers) setActiveLicenseServers(data.drm.licenseServers);
           if (data.manifestUrl) setActiveManifestUrl(data.manifestUrl);
         }
       })
@@ -61,7 +86,7 @@ function DrmPreviewContent() {
     return () => {
       isMounted = false;
     };
-  }, [assetId, token, title]);
+  }, [assetId, token, title, isAxinomDemo]);
 
   // Expiration countdown
   useEffect(() => {
@@ -112,27 +137,38 @@ function DrmPreviewContent() {
   const embedUrl = useMemo(() => {
     if (!assetId) return "";
     if (activeManifestUrl) return activeManifestUrl;
-    if (assetId === "axinom_demo") {
+    if (isAxinomDemo) {
       return "https://media.axprod.net/TestVectors/v7-MultiDRM-SingleKey/Manifest_1080p.mpd";
     }
     if (isDirectStream) {
       return `/api/videos/stream/${encodeURIComponent(assetId)}`;
     }
     return `/api/videos/drm/${encodeURIComponent(assetId)}/manifest.mpd`;
-  }, [assetId, isDirectStream, activeManifestUrl]);
+  }, [assetId, isDirectStream, activeManifestUrl, isAxinomDemo]);
 
   const drmConfig = useMemo(() => {
-    const finalToken = activeToken || token;
-    if (!finalToken) return undefined;
+    const finalToken = activeToken || token || (isAxinomDemo ? AXINOM_DEMO_TOKEN : "");
+    if (!finalToken && !isDirectStream) return undefined;
+
+    const servers =
+      activeLicenseServers ||
+      (isAxinomDemo
+        ? {
+            widevine: "https://drm-widevine-licensing.axtest.net/AcquireLicense",
+            playready: "https://drm-playready-licensing.axtest.net/AcquireLicense",
+            fairplay: "https://drm-fairplay-licensing.axtest.net/AcquireLicense",
+          }
+        : {
+            widevine: AXINOM_CONFIG.endpoints.widevine,
+            playready: AXINOM_CONFIG.endpoints.playready,
+            fairplay: AXINOM_CONFIG.endpoints.fairplay,
+          });
+
     return {
       token: finalToken,
-      licenseServers: {
-        widevine: AXINOM_CONFIG.endpoints.widevine,
-        playready: AXINOM_CONFIG.endpoints.playready,
-        fairplay: AXINOM_CONFIG.endpoints.fairplay,
-      },
+      licenseServers: servers,
     };
-  }, [activeToken, token]);
+  }, [activeToken, token, activeLicenseServers, isAxinomDemo, isDirectStream]);
 
 
   const handleCopyUrl = () => {

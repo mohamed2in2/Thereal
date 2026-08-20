@@ -234,27 +234,11 @@ export function SecurePlayer({
 
   const isDirectVideo = embedUrl.startsWith("/api/") || embedUrl.includes(".mp4") || embedUrl.includes(".webm") || embedUrl.includes(".mov");
 
-  const [screenCaptured, setScreenCaptured] = useState(false);
-
-  // PC Anti-Screenshot & Anti-Screen-Recording Protection Engine
+  // PC Anti-Screenshot & Clipboard Security Guard
   React.useEffect(() => {
     if (noNativeSecurity || useDriveDirect) {
-      setScreenCaptured(false);
       return;
     }
-
-    let focusTimeout: NodeJS.Timeout | null = null;
-
-    const triggerBlackout = () => {
-      setScreenCaptured(true);
-      if (focusTimeout) clearTimeout(focusTimeout);
-      if (typeof onPause === "function") {
-        onPause();
-      }
-      if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
-        navigator.clipboard.writeText("").catch(() => {});
-      }
-    };
 
     const handleKeyDown = (e: KeyboardEvent) => {
       const k = e.key;
@@ -262,7 +246,10 @@ export function SecurePlayer({
 
       // PrintScreen (PrtScn) / Alt+PrtScn / Win+PrtScn
       const isPrtScn = k === "PrintScreen" || e.code === "PrintScreen";
-      const isMeta = e.metaKey || (typeof e.getModifierState === "function" && (e.getModifierState("Meta") || e.getModifierState("OS")));
+      const isMeta =
+        e.metaKey ||
+        (typeof e.getModifierState === "function" &&
+          (e.getModifierState("Meta") || e.getModifierState("OS")));
 
       // Windows Snipping Tool (Win + Shift + S) or Xbox Game Bar (Win + G)
       const isWinSnipping = isMeta && e.shiftKey && lowerK === "s";
@@ -281,52 +268,32 @@ export function SecurePlayer({
         (e.ctrlKey && lowerK === "u");
 
       if (isPrtScn || isWinSnipping || isWinGameBar || isMacScreenshot || isBrowserScreenshot || isDevTools) {
-        e.preventDefault();
-        e.stopPropagation();
-        triggerBlackout();
+        if (isPrtScn || isWinSnipping || isMacScreenshot) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+          navigator.clipboard.writeText("").catch(() => {});
+        }
       }
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
       if (e.key === "PrintScreen" || e.code === "PrintScreen") {
-        triggerBlackout();
-      }
-    };
-
-    const handleBlur = () => {
-      // Blackout when user clicks outside, opens Snipping Tool overlay, or switches apps/tabs
-      triggerBlackout();
-    };
-
-    const handleFocus = () => {
-      // Hold blackout for 4 seconds after refocus to prevent Snipping Tool capture buffer
-      if (focusTimeout) clearTimeout(focusTimeout);
-      focusTimeout = setTimeout(() => {
-        setScreenCaptured(false);
-      }, 4000);
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.hidden) {
-        triggerBlackout();
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+          navigator.clipboard.writeText("").catch(() => {});
+        }
       }
     };
 
     window.addEventListener("keydown", handleKeyDown, true);
     window.addEventListener("keyup", handleKeyUp, true);
-    window.addEventListener("blur", handleBlur);
-    window.addEventListener("focus", handleFocus);
-    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
-      if (focusTimeout) clearTimeout(focusTimeout);
       window.removeEventListener("keydown", handleKeyDown, true);
       window.removeEventListener("keyup", handleKeyUp, true);
-      window.removeEventListener("blur", handleBlur);
-      window.removeEventListener("focus", handleFocus);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [onPause, noNativeSecurity, useDriveDirect]);
+  }, [noNativeSecurity, useDriveDirect]);
 
   return (
     <div
@@ -364,21 +331,6 @@ export function SecurePlayer({
             </>
           )}
         </button>
-      )}
-
-      {/* Screen capture / loss-of-focus protection black screen overlay */}
-      {!useDriveDirect && !noNativeSecurity && screenCaptured && (
-        <div className="absolute inset-0 z-50 bg-black flex flex-col items-center justify-center p-6 text-center text-white backdrop-blur-3xl">
-          <div className="w-12 h-12 rounded-full bg-rose-500/20 text-rose-500 flex items-center justify-center mb-3">
-            <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-            </svg>
-          </div>
-          <h3 className="text-base font-bold mb-1 text-white">🔒 محتوى محمي ضد تسجيل والتقاط الشاشة</h3>
-          <p className="text-xs text-slate-400 max-w-sm">
-            تم إيقاف عرض الفيديو مؤقتاً لحماية حقوق النشر والملكية الفكرية. يُرجى العودة للنافذة لمتابعة المشاهدة.
-          </p>
-        </div>
       )}
 
       {driveFileId && useDriveDirect ? (
