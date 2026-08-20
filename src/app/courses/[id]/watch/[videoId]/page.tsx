@@ -7,7 +7,7 @@ import { SecurePlayer } from "@/components/ui/SecurePlayer";
 import { VideoGuard } from "@/components/ui/VideoGuard";
 import { AILectureNotesModal } from "@/components/player/AILectureNotesModal";
 
-type VideoProvider = "vdocipher" | "bunny" | "youtube" | "alasly";
+type VideoProvider = "vdocipher" | "bunny" | "youtube" | "alasly" | "axinom";
 
 interface WatchSessionData {
   sessionId: string;
@@ -85,6 +85,7 @@ export default function VideoWatchPage() {
   const [resumeLoaded, setResumeLoaded] = useState(false);
   const [showNotesModal, setShowNotesModal] = useState(false);
   const [directDriveMode, setDirectDriveMode] = useState(false);
+  const [drmConfig, setDrmConfig] = useState<any>(null);
 
   // ── Smart Progress Sync Manager (Pillar 1: 30s Debounced Heartbeat + Event-based Flush) ──
   const lastSyncedSecondsRef = useRef<number>(0);
@@ -214,6 +215,7 @@ export default function VideoWatchPage() {
       lastSyncedSecondsRef.current = savedSec;
       currentPlaybackSecondsRef.current = savedSec;
       setResumeLoaded(true);
+      setDrmConfig(data.drm || null);
 
       setIframeSrc(data.embedUrl || "");
       setCountdown(formatCountdown(expiresAt.toISOString()));
@@ -477,6 +479,7 @@ export default function VideoWatchPage() {
                   title={session.video.title}
                   watermark={wmLabel}
                   provider={session.video.videoProvider}
+                  drm={drmConfig}
                   startSeconds={resumeSeconds}
                   onProgress={saveProgress}
                   onPause={() => flushProgress()}

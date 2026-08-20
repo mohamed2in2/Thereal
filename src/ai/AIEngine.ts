@@ -3,6 +3,9 @@ import { ConfigManager } from "./config/AIConfig";
 import { ContextBuilder } from "./context/ContextBuilder";
 import { IntentDetector } from "./intent/IntentDetector";
 import { KnowledgeLoader } from "./knowledge/KnowledgeLoader";
+import { CurriculumRetriever } from "./knowledge/curriculum/CurriculumRetriever";
+import { buildGrounding } from "./knowledge/curriculum/CurriculumGrounding";
+import { CurriculumScope } from "./knowledge/curriculum/types";
 import { MemoryManager } from "./memory/MemoryManager";
 import { PromptBuilder } from "./prompts/PromptBuilder";
 import { ProviderManager } from "./providers/ProviderManager";
@@ -29,7 +32,7 @@ import { PromptOptimizer } from "./production/optimizers/PromptOptimizer";
 import { ResponseOptimizer } from "./production/optimizers/ResponseOptimizer";
 import { EvaluationFramework } from "./production/eval/EvaluationFramework";
 import { EventSubscribers } from "./events/EventSubscribers";
-import { EngineRequest, EngineResponse, GenerateResult } from "./types";
+import { AIContext, EngineRequest, EngineResponse, GenerateResult } from "./types";
 import { SimilarQuestionDetector } from "./providers/cost/SimilarQuestionDetector";
 import { DailyBudgetManager } from "./providers/cost/DailyBudgetManager";
 import { PromptBudgetManager } from "./providers/cost/PromptBudgetManager";
@@ -40,6 +43,7 @@ export class AIEngine {
   private actionRouter: ActionRouter;
   private contextBuilder: ContextBuilder;
   private knowledgeLoader: KnowledgeLoader;
+  private curriculumRetriever: CurriculumRetriever;
   private promptBuilder: PromptBuilder;
   private providerManager: ProviderManager;
   private gateway: AIGateway;
@@ -60,6 +64,7 @@ export class AIEngine {
     this.actionRouter = actionRouter || new ActionRouter();
     this.contextBuilder = new ContextBuilder();
     this.knowledgeLoader = new KnowledgeLoader();
+    this.curriculumRetriever = CurriculumRetriever.getInstance();
     this.promptBuilder = new PromptBuilder(this.configManager);
     this.providerManager = providerManager || new ProviderManager();
     this.gateway = new AIGateway(this.providerManager);
@@ -302,6 +307,20 @@ export class AIEngine {
     // Stage 4: Knowledge Loading
     const subjectRules = this.knowledgeLoader.getRulesString(context.course.subject);
 
+    // Stage 4b: Official curriculum retrieval (RAG).  Never fatal: if the
+    // knowledge base is missing or retrieval fails, the engine answers exactly
+    // as it did before, just without curriculum grounding.
+    let grounding = { promptBlock: "", citations: [] as string[], usedOfficialCurriculum: false };
+    try {
+      const results = await this.curriculumRetriever.retrieve({
+        question: request.userMessage,
+        scope: this.buildCurriculumScope(request, context),
+      });
+      grounding = buildGrounding(results);
+    } catch {
+      // Retrieval is best-effort grounding, not a hard dependency.
+    }
+
     // Stage 5: Prompt Building
     const actionInstructions = action.getPromptInstructions(context, request.params);
     let finalPrompt = this.promptBuilder.buildPrompt({
@@ -309,6 +328,7 @@ export class AIEngine {
       context,
       actionInstructions,
       subjectRules,
+      curriculumGrounding: grounding.promptBlock,
     });
 
     // Context compression check if prompt is too large
@@ -321,6 +341,7 @@ export class AIEngine {
         context,
         actionInstructions,
         subjectRules,
+        curriculumGrounding: grounding.promptBlock,
       });
     }
 
@@ -485,10 +506,36 @@ export class AIEngine {
       action: action.type,
       formattedResponse,
       telemetry: telemetryEvent,
+      curriculumCitations: grounding.citations,
+      usedOfficialCurriculum: grounding.usedOfficialCurriculum,
       observation,
       decisionMetadata,
       educationalState: this.stateMachine.getState(),
     };
+  }
+
+  /**
+   * Works out which part of the curriculum the student is in, so retrieval can
+   * prefer their current lesson.  An explicit scope on the request always wins;
+   * otherwise we read a lesson number such as "1-2" out of the lesson title.
+   */
+  private buildCurriculumScope(
+    request: EngineRequest,
+    context: AIContext
+  ): CurriculumScope {
+    const explicit = request.curriculumScope || {};
+    const scope: CurriculumScope = { ...explicit };
+
+    if (!scope.lessonNumber) {
+      const title = `${context.lesson?.title || ""} ${context.course?.title || ""}`;
+      const match = /(\d{1,2})\s*-\s*(\d{1,2})/.exec(title);
+      if (match) scope.lessonNumber = `${match[1]}-${match[2]}`;
+    }
+    if (!scope.chapterNumber && scope.lessonNumber) {
+      const chapter = Number(scope.lessonNumber.split("-")[0]);
+      if (Number.isFinite(chapter)) scope.chapterNumber = chapter;
+    }
+    return scope;
   }
 
   // Helper accessors for sub-systems

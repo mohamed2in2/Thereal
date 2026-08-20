@@ -1,4 +1,4 @@
-import { logAdminAction } from "@/lib/admin-auth";
+import { logAdminAction, verifyDrmPassword } from "@/lib/admin-auth";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -8,7 +8,7 @@ import { getConfigNumber, getConfigNumberClamped } from "@/lib/config";
 import { triggerPlanSyncForCourse } from "@/lib/plan-lesson-matcher";
 
 const MAX_TITLE_LENGTH = 100;
-const VALID_PROVIDERS: VideoProvider[] = ["vdocipher", "bunny", "youtube", "alasly"];
+const VALID_PROVIDERS: VideoProvider[] = ["vdocipher", "bunny", "youtube", "alasly", "axinom"];
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -38,6 +38,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       durationMinutes?: number;
       maxWatchesPerUser?: number;
       publishAt?: string | null;
+      drmPassword?: string;
       // Legacy field — accepted for backwards compat, treated as vdocipher
       vdoCipherId?: string;
     };
@@ -59,6 +60,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const videoProvider: VideoProvider = VALID_PROVIDERS.includes(body.videoProvider as VideoProvider)
       ? (body.videoProvider as VideoProvider)
       : "vdocipher";
+
+    // Enforce DRM access password for restricted Axinom DRM creation
+    if (videoProvider === "axinom") {
+      const drmPass = req.headers.get("x-drm-password") || body.drmPassword || "";
+      if (!verifyDrmPassword(drmPass)) {
+        return NextResponse.json(
+          { error: "كلمة مرور حماية الـ DRM مطلوبة أو غير صحيحة" },
+          { status: 403 }
+        );
+      }
+    }
 
     const rawProviderId = (body.providerVideoId ?? body.vdoCipherId ?? "").trim();
     const providerVideoId = cleanProviderVideoId(videoProvider, rawProviderId);

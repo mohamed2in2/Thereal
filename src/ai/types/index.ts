@@ -149,6 +149,8 @@ export interface PromptOptions {
   context: AIContext;
   actionInstructions: string;
   subjectRules: string;
+  /** Official curriculum extracts to ground the answer in, if any were found. */
+  curriculumGrounding?: string;
 }
 
 export interface FinalPrompt {
@@ -157,6 +159,7 @@ export interface FinalPrompt {
   actionInstructions: string;
   subjectRules: string;
   contextString: string;
+  curriculumGrounding: string;
   userMessage: string;
   fullPrompt: string;
 }
@@ -328,8 +331,11 @@ export interface EngineRequest {
   actionOverride?: EducationalActionType;
   params?: Record<string, unknown>;
   contextOverride?: Partial<AIContext>;
+  /** Narrows curriculum retrieval to where the student currently is. */
+  curriculumScope?: CurriculumScope;
 }
 
+import { CurriculumScope } from "../knowledge/curriculum/types";
 import { ContinuousObservation } from "../observations/StudentObservationEngine";
 import { DecisionReasoningMetadata } from "../explainability/DecisionExplainer";
 import { StudentEducationalState } from "../state_machine/StudentStateMachine";
@@ -339,6 +345,9 @@ export interface EngineResponse {
   action: EducationalActionType;
   formattedResponse: FormattedResponse;
   telemetry: TelemetryEvent;
+  /** Student-safe locations (lesson + page) the answer was grounded in. */
+  curriculumCitations?: string[];
+  usedOfficialCurriculum?: boolean;
   observation?: ContinuousObservation;
   decisionMetadata?: DecisionReasoningMetadata;
   educationalState?: StudentEducationalState;

@@ -19,7 +19,7 @@ const CSP = [
   // Next.js injects inline bootstrap scripts; 'unsafe-inline' stays until a
   // nonce-based setup is introduced. Scripts still cannot be loaded from
   // arbitrary origins, which is what blocks injected exfiltration payloads.
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.google.com https://www.gstatic.com https://www.youtube.com https://s.ytimg.com https://player.vdocipher.com",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.google.com https://www.gstatic.com https://www.youtube.com https://s.ytimg.com https://player.vdocipher.com https://cdnjs.cloudflare.com",
   // Google Fonts is loaded from the root layout and the parent portal
   // (Tajawal / IBM Plex Sans Arabic / Amiri / Noto Naskh Arabic). Omitting
   // these two hosts blocks every Arabic webfont on the site.
@@ -28,7 +28,7 @@ const CSP = [
   "font-src 'self' data: https://fonts.gstatic.com",
   "media-src 'self' blob: https:",
   `frame-src 'self' ${VIDEO_FRAME_HOSTS.join(" ")} https://www.google.com`,
-  "connect-src 'self' https://recaptchaenterprise.googleapis.com https://www.google.com https://fonts.googleapis.com https://fonts.gstatic.com https://www.youtube.com https://www.youtube-nocookie.com https://*.googlevideo.com https://*.youtube.com",
+  "connect-src 'self' https://recaptchaenterprise.googleapis.com https://www.google.com https://fonts.googleapis.com https://fonts.gstatic.com https://www.youtube.com https://www.youtube-nocookie.com https://*.googlevideo.com https://*.youtube.com https://*.axprod.net https://*.drm-widevine-licensing.axprod.net https://*.drm-playready-licensing.axprod.net https://*.drm-fairplay-licensing.axprod.net",
   // Nothing in this app should ever be framed by a third party.
   "frame-ancestors 'self'",
   "base-uri 'self'",

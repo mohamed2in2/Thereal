@@ -45,6 +45,7 @@ export class PromptBuilder {
     const actionInstructions = options.actionInstructions;
     const subjectRules = `${pedagogicalSubjectRules}\n\n${options.subjectRules}`;
     const contextString = this.formatContext(options.context);
+    const curriculumGrounding = options.curriculumGrounding || "";
     const userMessage = options.userMessage;
 
     const fullPrompt = [
@@ -69,6 +70,9 @@ export class PromptBuilder {
       `=== PLATFORM & STUDENT CONTEXT ===`,
       contextString,
       ``,
+      // Placed last before the student's message so the official text is the
+      // most recent thing the model reads before answering.
+      ...(curriculumGrounding ? [curriculumGrounding, ``] : []),
       `=== STUDENT MESSAGE / INPUT ===`,
       userMessage,
     ].join("\n");
@@ -79,6 +83,7 @@ export class PromptBuilder {
       actionInstructions,
       subjectRules,
       contextString,
+      curriculumGrounding,
       userMessage,
       fullPrompt,
     };

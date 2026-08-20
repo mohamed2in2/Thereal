@@ -7,14 +7,24 @@ import { getVdoCipherOtp } from "./vdocipher";
 import { getBunnyEmbedUrl } from "./bunny";
 import { getYouTubeEmbedUrl, extractYouTubeVideoId } from "./youtube";
 import { getAlaslyPlaybackToken } from "./alasly";
+import { createAxinomDrmToken } from "./axinom";
 
-export type VideoProvider = "vdocipher" | "bunny" | "youtube" | "alasly";
+export type VideoProvider = "vdocipher" | "bunny" | "youtube" | "alasly" | "axinom";
 
 export interface VideoEmbedResult {
   embedUrl: string;
   provider: VideoProvider;
   signed: boolean;
   expiresInSeconds: number | null;
+  drm?: {
+    token: string;
+    licenseServers: {
+      widevine: string;
+      playready: string;
+      fairplay: string;
+      fairplayCertUrl?: string;
+    };
+  };
 }
 
 /** Sanitizes and extracts clean provider video ID based on provider rules */
@@ -36,6 +46,7 @@ export function cleanProviderVideoId(provider: VideoProvider, input: string): st
     }
     case "vdocipher":
     case "alasly":
+    case "axinom":
     default:
       return trimmed;
   }
@@ -70,6 +81,22 @@ export async function resolveEmbedUrl(
   const id = cleanProviderVideoId(provider, rawId);
 
   switch (provider) {
+    case "axinom": {
+      const result = createAxinomDrmToken({
+        videoId: id,
+        userId: options?.userId,
+      });
+      return {
+        embedUrl: result.manifestUrl,
+        provider: "axinom",
+        signed: true,
+        expiresInSeconds: result.expiresInSeconds,
+        drm: {
+          token: result.token,
+          licenseServers: result.licenseServers,
+        },
+      };
+    }
     case "alasly": {
       const result = await getAlaslyPlaybackToken({
         videoId: id,
@@ -95,6 +122,7 @@ export async function resolveEmbedUrl(
 }
 
 export const PROVIDER_LABELS: Record<VideoProvider, string> = {
+  axinom: "Axinom DRM (Hardware Multi-DRM)",
   vdocipher: "VdoCipher",
   bunny: "Bunny Stream",
   youtube: "YouTube Private",
@@ -107,6 +135,9 @@ export function validateProviderId(provider: VideoProvider, id: string): string 
   const trimmed = id.trim();
 
   switch (provider) {
+    case "axinom":
+      if (!/^[a-z0-9_.-]+$/i.test(trimmed)) return "معرف درس Axinom DRM يحتوي على أحرف وأرقام وشرطات ونقاط فقط";
+      break;
     case "alasly":
       if (!/^[a-z0-9_.-]+$/i.test(trimmed)) return "معرف درس Native يحتوي على أحرف وأرقام وشرطات ونقاط فقط";
       break;

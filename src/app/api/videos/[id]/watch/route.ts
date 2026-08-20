@@ -58,6 +58,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       studentPlan: "course",
       embedUrl: embedResult.embedUrl,
       provider: embedResult.provider,
+      drm: embedResult.drm || null,
       resumeSeconds: 0,
       watermark: session.phone || session.name || "",
       video: {
@@ -183,6 +184,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     studentPlan,
     embedUrl: embedResult.embedUrl,
     provider: embedResult.provider,
+    drm: embedResult.drm || null,
     resumeSeconds: progress?.lastPositionSeconds ?? 0,
     watermark: session.phone || session.name || "",
     video: {
@@ -254,6 +256,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       usedWatches: 0,
       embedUrl: embedResult.embedUrl,
       provider: embedResult.provider,
+      drm: embedResult.drm || null,
       resumeSeconds: 0,
       watermark: session ? (session.phone || session.name || "") : "",
       video: {
@@ -288,6 +291,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       usedWatches: 0,
       embedUrl: embedResult.embedUrl,
       provider: embedResult.provider,
+      drm: embedResult.drm || null,
       resumeSeconds: 0,
       watermark: session.phone || session.name || "",
       video: {
@@ -443,6 +447,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       usedWatches: activeUsedWatchCount,
       embedUrl: embedResult.embedUrl,
       provider: embedResult.provider,
+      drm: embedResult.drm || null,
       resumeSeconds: progress?.lastPositionSeconds ?? 0,
       watermark: session.phone || session.name || "",
       video: {
@@ -572,6 +577,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       usedWatches: used + 1,
       embedUrl: embedResult.embedUrl,
       provider: embedResult.provider,
+      drm: embedResult.drm || null,
       resumeSeconds: progress?.lastPositionSeconds ?? 0,
       watermark: session.phone || session.name || "",
       video: {

@@ -20,7 +20,11 @@
     "db:clear": "ts-node --project tsconfig.json scripts/clearDb.ts",
     "db:backup": "node scripts/db-backup.js",
     "validate:env": "node scripts/validate-env.mjs",
-    "postinstall": "node scripts/prisma-generate.js"
+    "postinstall": "node scripts/prisma-generate.js",
+    "curriculum:ingest": "python scripts/curriculum/ingest.py",
+    "curriculum:embed": "node scripts/curriculum/embed.mjs",
+    "curriculum:test": "npx tsx scripts/curriculum/test-retrieval.ts",
+    "curriculum:build": "npm run curriculum:ingest && npm run curriculum:embed && npm run curriculum:test"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.98.0",

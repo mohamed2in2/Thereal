@@ -5,6 +5,7 @@ import { useState, useCallback } from "react";
 
 import { VideoWatermark } from "./VideoWatermark";
 import { YouTubeSecurePlayer } from "./YouTubeSecurePlayer";
+import { DrmPlayer } from "./DrmPlayer";
 import { useFullscreen } from "./useFullscreen";
 import { extractYouTubeVideoId } from "@/lib/youtube";
 
@@ -34,6 +35,7 @@ export function SecurePlayer({
   title,
   watermark,
   provider,
+  drm,
   onEnded,
   startSeconds = 0,
   onProgress,
@@ -48,6 +50,15 @@ export function SecurePlayer({
   title: string;
   watermark: string;
   provider?: string;
+  drm?: {
+    token: string;
+    licenseServers: {
+      widevine?: string;
+      playready?: string;
+      fairplay?: string;
+      fairplayCertUrl?: string;
+    };
+  } | null;
   onEnded?: () => void;
   /** Resume position in seconds. Currently honored on YouTube (the only provider
    *  whose cross-origin embed exposes seek/currentTime safely; signed
@@ -69,6 +80,25 @@ export function SecurePlayer({
   const [useDriveDirect, setUseDriveDirect] = useState(noNativeSecurity);
   const [streamError, setStreamError] = useState(false);
   const { ref: wrapRef, isFs, cssFs, toggle: toggleFs } = useFullscreen<HTMLDivElement>();
+
+  // Axinom Hardware Multi-DRM Player
+  if (provider === "axinom") {
+    return (
+      <DrmPlayer
+        manifestUrl={embedUrl}
+        drmToken={drm?.token}
+        licenseServers={drm?.licenseServers}
+        initialPosition={startSeconds}
+        watermark={watermark}
+        title={title}
+        onTimeUpdate={onProgress}
+        onEnded={onEnded}
+        onPause={onPause}
+        onPlay={onPlay}
+        paused={paused}
+      />
+    );
+  }
 
   // YouTube → hardened API player (no clickable YouTube chrome).
   if (provider === "youtube") {

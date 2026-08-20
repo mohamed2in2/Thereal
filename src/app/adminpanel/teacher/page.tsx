@@ -175,6 +175,66 @@ export default function TeacherDashboardPage() {
   const [gdriveStatus, setGdriveStatus] = useState("");
   const [activeNativeTab, setActiveNativeTab] = useState<"gdrive" | "upload">("gdrive");
 
+  // 🔐 Axinom DRM Security Gate & State
+  const [drmUnlocked, setDrmUnlocked] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return sessionStorage.getItem("gate_drm") === "1";
+  });
+  const [drmPasswordModal, setDrmPasswordModal] = useState(false);
+  const [drmPasswordInput, setDrmPasswordInput] = useState("");
+  const [drmChecking, setDrmChecking] = useState(false);
+  const [drmError, setDrmError] = useState("");
+  const [drmVerifiedPassword, setDrmVerifiedPassword] = useState(() => {
+    if (typeof window === "undefined") return "";
+    return sessionStorage.getItem("drm_verified_pass") || "";
+  });
+  const [activeDrmTab, setActiveDrmTab] = useState<"upload" | "gdrive" | "manual">("upload");
+
+  const handleUnlockDrm = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!drmPasswordInput.trim()) {
+      setDrmError("يرجى إدخال كلمة المرور");
+      return;
+    }
+    setDrmChecking(true);
+    setDrmError("");
+    try {
+      const res = await fetch("/api/teacher/drm-gate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: drmPasswordInput.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setDrmError(data.error || "كلمة مرور DRM غير صحيحة");
+        return;
+      }
+      sessionStorage.setItem("gate_drm", "1");
+      sessionStorage.setItem("drm_verified_pass", drmPasswordInput.trim());
+      setDrmVerifiedPassword(drmPasswordInput.trim());
+      setDrmUnlocked(true);
+      setDrmPasswordModal(false);
+      setDrmPasswordInput("");
+      setNewVideo((prev) => ({ ...prev, videoProvider: "axinom", providerVideoId: "" }));
+      notify("success", "تم إلغاء قفل خيارات Axinom Multi-DRM بنجاح! 🛡️");
+    } catch {
+      setDrmError("تعذر الاتصال بالخادم للتحقق من كلمة المرور");
+    } finally {
+      setDrmChecking(false);
+    }
+  };
+
+  const handleLockDrm = () => {
+    sessionStorage.removeItem("gate_drm");
+    sessionStorage.removeItem("drm_verified_pass");
+    setDrmUnlocked(false);
+    setDrmVerifiedPassword("");
+    if (newVideo.videoProvider === "axinom") {
+      setNewVideo((prev) => ({ ...prev, videoProvider: "alasly", providerVideoId: "" }));
+    }
+    notify("success", "تم قفل خيار Axinom DRM مجدداً 🔒");
+  };
+
   const handleGoogleDriveImport = async () => {
     if (!gdriveUrl.trim()) {
       notify("error", "يرجى إدخال رابط أو معرّف فيديو Google Drive");
@@ -573,10 +633,15 @@ export default function TeacherDashboardPage() {
         ? extractYouTubeVideoId(newVideo.providerVideoId) || newVideo.providerVideoId.trim()
         : newVideo.providerVideoId.trim();
 
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (newVideo.videoProvider === "axinom" && drmVerifiedPassword) {
+      headers["x-drm-password"] = drmVerifiedPassword;
+    }
+
     const res = await fetch(`/api/admin/folders/${newVideo.folderId}/videos`, {
       method: "POST",
       credentials: "include",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({
         title: newVideo.title,
         videoProvider: newVideo.videoProvider,
@@ -584,6 +649,7 @@ export default function TeacherDashboardPage() {
         durationMinutes: newVideo.durationMinutes,
         maxWatchesPerUser: newVideo.maxWatchesPerUser,
         publishAt: newVideo.publishAt || null,
+        drmPassword: drmVerifiedPassword || undefined,
       }),
     });
     const data = await readJson<{ error?: string; video?: { id: string; providerVideoId: string; title: string } }>(res);
@@ -1400,8 +1466,8 @@ export default function TeacherDashboardPage() {
                               <div className="space-y-2">
                                 {f.videos?.map((video) => {
                                   const prov = video.videoProvider || "vdocipher";
-                                  const provLabel = prov === "bunny" ? "Bunny CDN" : prov === "youtube" ? "YouTube" : prov === "alasly" ? "Native" : "VdoCipher";
-                                  const provColor = prov === "bunny" ? "text-orange-500 bg-orange-500/12" : prov === "youtube" ? "text-red-500 bg-red-500/12" : prov === "alasly" ? "text-emerald-500 bg-emerald-500/12" : "text-sky-500 bg-sky-500/12";
+                                  const provLabel = prov === "axinom" ? "Axinom DRM" : prov === "bunny" ? "Bunny CDN" : prov === "youtube" ? "YouTube" : prov === "alasly" ? "Native" : "VdoCipher";
+                                  const provColor = prov === "axinom" ? "text-cyan-400 bg-cyan-500/15" : prov === "bunny" ? "text-orange-500 bg-orange-500/12" : prov === "youtube" ? "text-red-500 bg-red-500/12" : prov === "alasly" ? "text-emerald-500 bg-emerald-500/12" : "text-sky-500 bg-sky-500/12";
                                   return (
                                     <div key={video.id} className="flex flex-col gap-2 rounded-xl border border-[var(--border)] bg-[var(--bg)] p-3">
                                       <div className="flex flex-wrap items-center gap-2">
@@ -1735,26 +1801,53 @@ export default function TeacherDashboardPage() {
                           <input type="text" value={newVideo.title} onChange={(e) => setNewVideo({ ...newVideo, title: e.target.value })} placeholder="عنوان الفيديو" className={input} />
 
                           {/* Provider selector */}
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                             {([
-                              { value: "vdocipher", label: "VdoCipher", badge: "أعلى حماية DRM", level: "الأعلى أماناً" },
-                              { value: "alasly", label: "Native", badge: "Super Native", level: "عالي" },
-                              { value: "bunny", label: "Bunny CDN", badge: "حماية متوسطة", level: "متوسط" },
-                              { value: "youtube", label: "YouTube", badge: "مجاني / اقتصادي", level: "منخفض التكلفة" },
-                            ] as const).map(({ value, label: pl, badge, level }) => {
+                              {
+                                value: "axinom",
+                                label: "Axinom DRM",
+                                badge: drmUnlocked ? "مفعّل 🛡️" : "مقيد بكلمة سر 🔒",
+                                level: "أعلى حماية عتادية",
+                                locked: !drmUnlocked,
+                              },
+                              { value: "vdocipher", label: "VdoCipher", badge: "DRM سحابي", level: "أعلى أماناً", locked: false },
+                              { value: "alasly", label: "Native", badge: "Super Native", level: "عالي", locked: false },
+                              { value: "bunny", label: "Bunny CDN", badge: "حماية متوسطة", level: "متوسط", locked: false },
+                              { value: "youtube", label: "YouTube", badge: "اقتصادي", level: "منخفض", locked: false },
+                            ] as const).map(({ value, label: pl, badge, level, locked }) => {
                               const active = newVideo.videoProvider === value;
                               return (
                                 <button
                                   key={value}
                                   type="button"
-                                  onClick={() => setNewVideo({ ...newVideo, videoProvider: value, providerVideoId: "" })}
-                                  className={`flex flex-col items-center gap-1 p-2.5 rounded-xl border-2 text-xs font-bold transition-all ${
-                                    active ? "border-sky-500 bg-sky-500/10 text-sky-500 dark:text-sky-300 shadow-sm" : "border-[var(--border)] text-[var(--ink-muted)] hover:border-[var(--ink-muted)]/40"
+                                  onClick={() => {
+                                    if (value === "axinom" && !drmUnlocked) {
+                                      setDrmPasswordModal(true);
+                                      return;
+                                    }
+                                    setNewVideo({ ...newVideo, videoProvider: value, providerVideoId: "" });
+                                  }}
+                                  className={`flex flex-col items-center gap-1 p-2.5 rounded-xl border-2 text-xs font-bold transition-all cursor-pointer ${
+                                    active
+                                      ? "border-sky-500 bg-sky-500/10 text-sky-500 dark:text-sky-300 shadow-sm"
+                                      : locked
+                                      ? "border-amber-500/30 bg-amber-500/5 text-amber-500 dark:text-amber-400 hover:border-amber-500/60"
+                                      : "border-[var(--border)] text-[var(--ink-muted)] hover:border-[var(--ink-muted)]/40"
                                   }`}
                                 >
-                                  <IconShield className="w-4 h-4" />
+                                  {locked ? <span className="text-sm">🔒</span> : <IconShield className="w-4 h-4" />}
                                   <span className="truncate w-full text-center">{pl}</span>
-                                  <span className={`text-[8.5px] px-1.5 py-0.5 rounded-full font-bold ${active ? "bg-sky-500/20 text-sky-600 dark:text-sky-300" : "bg-[var(--border)]"}`}>{badge}</span>
+                                  <span
+                                    className={`text-[8.5px] px-1.5 py-0.5 rounded-full font-bold ${
+                                      active
+                                        ? "bg-sky-500/20 text-sky-600 dark:text-sky-300"
+                                        : locked
+                                        ? "bg-amber-500/20 text-amber-500 dark:text-amber-300"
+                                        : "bg-[var(--border)]"
+                                    }`}
+                                  >
+                                    {badge}
+                                  </span>
                                   <span className="text-[8px] text-[var(--ink-muted)] font-normal">{level}</span>
                                 </button>
                               );
@@ -1764,6 +1857,7 @@ export default function TeacherDashboardPage() {
                           {/* Provider ID */}
                           <div>
                             <label className={label}>
+                              {newVideo.videoProvider === "axinom" && "معرف فيديو Axinom Multi-DRM (أو ارفعه مباشرة من السيرفر)"}
                               {newVideo.videoProvider === "vdocipher" && "VdoCipher Video ID — أعلى حماية مشفرة (Highest DRM)"}
                               {newVideo.videoProvider === "alasly" && "معرف درس Native — حماية عالية (Super Native Security)"}
                               {newVideo.videoProvider === "bunny" && "Bunny Stream Video GUID — حماية متوسطة (Medium CDN Security)"}
@@ -1773,7 +1867,7 @@ export default function TeacherDashboardPage() {
                               type="text"
                               value={newVideo.providerVideoId}
                               onChange={(e) => setNewVideo({ ...newVideo, providerVideoId: e.target.value.trim() })}
-                              placeholder={newVideo.videoProvider === "vdocipher" ? "مثال: abc123def456" : newVideo.videoProvider === "bunny" ? "مثال: 12345678-abcd-…" : newVideo.videoProvider === "alasly" ? "أدخل معرف الدرس أو قم برفع الملف مباشرة أدناه" : "ضع رابط الفيديو مثل: https://youtu.be/... أو المعرّف"}
+                              placeholder={newVideo.videoProvider === "axinom" ? "مثال: lesson_101 أو ارفعه أدناه" : newVideo.videoProvider === "vdocipher" ? "مثال: abc123def456" : newVideo.videoProvider === "bunny" ? "مثال: 12345678-abcd-…" : newVideo.videoProvider === "alasly" ? "أدخل معرف الدرس أو قم برفع الملف مباشرة أدناه" : "ضع رابط الفيديو مثل: https://youtu.be/... أو المعرّف"}
                               dir="ltr"
                               className={`${input} font-mono`}
                             />
@@ -1809,6 +1903,131 @@ export default function TeacherDashboardPage() {
                               }
                               return null;
                             })()}
+
+                            {/* Axinom Multi-DRM Direct Upload & Packaging Box */}
+                            {newVideo.videoProvider === "axinom" && drmUnlocked && (
+                              <div className="mt-2.5 p-3.5 rounded-2xl border border-sky-500/40 bg-sky-500/5 space-y-3">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-500/20 text-sky-400 border border-sky-500/30">
+                                      🛡️ Axinom Hardware Multi-DRM
+                                    </span>
+                                    <span className="text-xs text-[var(--ink-muted)]">مفعّل بالرخصة المشفرة</span>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={handleLockDrm}
+                                    className="text-[10px] px-2.5 py-1 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 font-bold transition-all cursor-pointer"
+                                  >
+                                    🔒 قفل الخيار
+                                  </button>
+                                </div>
+
+                                {/* Tab selector between Direct Upload & Google Drive & Manual */}
+                                <div className="flex items-center gap-1.5 p-1 rounded-xl bg-black/20 border border-white/5">
+                                  <button
+                                    type="button"
+                                    onClick={() => setActiveDrmTab("upload")}
+                                    className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                                      activeDrmTab === "upload"
+                                        ? "bg-sky-500 text-white shadow-sm"
+                                        : "text-[var(--ink-muted)] hover:text-[var(--ink)]"
+                                    }`}
+                                  >
+                                    <span>📁</span>
+                                    <span>رفع وتشفير من الجهاز</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setActiveDrmTab("gdrive")}
+                                    className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                                      activeDrmTab === "gdrive"
+                                        ? "bg-sky-500 text-white shadow-sm"
+                                        : "text-[var(--ink-muted)] hover:text-[var(--ink)]"
+                                    }`}
+                                  >
+                                    <span>📥</span>
+                                    <span>استيراد من Google Drive</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setActiveDrmTab("manual")}
+                                    className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                                      activeDrmTab === "manual"
+                                        ? "bg-sky-500 text-white shadow-sm"
+                                        : "text-[var(--ink-muted)] hover:text-[var(--ink)]"
+                                    }`}
+                                  >
+                                    <span>⌨️</span>
+                                    <span>معرّف Asset ID</span>
+                                  </button>
+                                </div>
+
+                                {activeDrmTab === "upload" && (
+                                  <div className="space-y-2">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                      <label className="text-xs font-bold text-[var(--ink)] flex items-center gap-1.5">
+                                        <span>⚡</span> رفع ملف فيديو من جهازك ومعالجته بـ Multi-DRM:
+                                      </label>
+                                      <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-white text-xs font-bold transition-all cursor-pointer shrink-0">
+                                        <span>📁 اختر فيديو من جهازك</span>
+                                        <input
+                                          type="file"
+                                          accept="video/*"
+                                          disabled={nativeUploading}
+                                          className="hidden"
+                                          onChange={(e) => {
+                                            const file = e.target.files?.[0];
+                                            if (file) handleNativeFileUpload(file);
+                                          }}
+                                        />
+                                      </label>
+                                    </div>
+                                    {nativeUploading && (
+                                      <div className="space-y-1.5 pt-1">
+                                        <div className="flex items-center justify-between text-[11px] font-bold text-sky-400">
+                                          <span>{nativeStatus}</span>
+                                          <span className="font-mono">{nativeProgress}%</span>
+                                        </div>
+                                        <div className="w-full h-2 rounded-full bg-[var(--border)] overflow-hidden">
+                                          <div className="h-full bg-sky-500 transition-all duration-300" style={{ width: `${nativeProgress}%` }} />
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+
+                                {activeDrmTab === "gdrive" && (
+                                  <div className="space-y-2">
+                                    <div className="flex flex-col sm:flex-row gap-2">
+                                      <input
+                                        type="url"
+                                        dir="ltr"
+                                        value={gdriveUrl}
+                                        onChange={(e) => setGdriveUrl(e.target.value)}
+                                        placeholder="https://drive.google.com/file/d/.../view"
+                                        disabled={gdriveImporting}
+                                        className={`${input} font-mono text-xs flex-1`}
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={handleGoogleDriveImport}
+                                        disabled={gdriveImporting || !gdriveUrl.trim()}
+                                        className="px-4 py-2 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-black text-xs shadow-md transition-all disabled:opacity-50 flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
+                                      >
+                                        {gdriveImporting ? "جاري الاستيراد..." : "📥 استيراد وحماية"}
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {activeDrmTab === "manual" && (
+                                  <p className="text-[11px] text-[var(--ink-muted)] m-0">
+                                    أدخل معرّف الـ Asset ID في الحقل أعلاه (مثال: <code className="font-mono text-sky-300">lesson_101</code>) بعد تشفيره وحفظه في مجلد المحتوى المحمي.
+                                  </p>
+                                )}
+                              </div>
+                            )}
 
                             {/* Native Video SaaS Direct Upload & Google Drive Downloader */}
                             {newVideo.videoProvider === "alasly" && (
@@ -2999,6 +3218,82 @@ export default function TeacherDashboardPage() {
       />
 
       {showJsonGuide && <JSONGuideModal onClose={() => setShowJsonGuide(false)} notify={notify} />}
+
+      {/* ── DRM Access Gate Password Modal ── */}
+      {drmPasswordModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn" dir="rtl">
+          <div className="w-full max-w-md bg-[var(--surface)] border border-sky-500/30 rounded-2xl p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
+              <div className="flex items-center gap-2 font-black text-sm text-[var(--ink)]">
+                <span className="p-2 rounded-xl bg-sky-500/10 text-sky-400">🔒</span>
+                <span>فتح خيار Axinom Multi-DRM المحمي</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setDrmPasswordModal(false);
+                  setDrmError("");
+                  setDrmPasswordInput("");
+                }}
+                className="text-[var(--ink-muted)] hover:text-[var(--ink)] text-lg cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-[var(--ink-muted)] leading-relaxed">
+              هذا الخيار مقيد ومحمي بكلمة مرور خاصة لمنع استهلاك حصة الـ DRM المحدودة وسيرفر المعالجة بدون إذن مسبق. أدخل كلمة المرور للمتابعة.
+            </p>
+
+            <form onSubmit={handleUnlockDrm} className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-[var(--ink)] mb-1">
+                  كلمة مرور الـ DRM المقيدة (DRM_UPLOAD_PASSWORD):
+                </label>
+                <input
+                  type="password"
+                  autoFocus
+                  value={drmPasswordInput}
+                  onChange={(e) => {
+                    setDrmPasswordInput(e.target.value);
+                    if (drmError) setDrmError("");
+                  }}
+                  placeholder="••••••••••••"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] text-sm text-[var(--ink)] focus:border-sky-500 focus:outline-none transition-colors"
+                />
+              </div>
+
+              {drmError && (
+                <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs flex items-center gap-2">
+                  <span>⚠️</span>
+                  <span>{drmError}</span>
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDrmPasswordModal(false);
+                    setDrmError("");
+                    setDrmPasswordInput("");
+                  }}
+                  className="flex-1 py-2.5 rounded-xl border border-[var(--border)] hover:bg-[var(--border)]/20 text-xs font-bold text-[var(--ink-muted)] transition-colors cursor-pointer"
+                >
+                  إلغاء
+                </button>
+                <button
+                  type="submit"
+                  disabled={drmChecking || !drmPasswordInput.trim()}
+                  className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white text-xs font-bold shadow-lg transition-all disabled:opacity-50 cursor-pointer"
+                >
+                  {drmChecking ? "جارٍ التحقق..." : "دخول وفك القفل"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

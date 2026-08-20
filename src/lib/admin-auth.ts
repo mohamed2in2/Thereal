@@ -85,6 +85,17 @@ export function verifyWalletPassword(password: string): boolean {
   return timingSafeCompare(password, env);
 }
 
+/** Verifies the DRM video protection password (gates restricted Axinom DRM options). */
+export function verifyDrmPassword(password: string): boolean {
+  if (!password) return false;
+  const env =
+    process.env.DRM_UPLOAD_PASSWORD ||
+    process.env.SUPERADMIN_ACTION_PASSWORD ||
+    process.env.SUPERADMIN_MASTER_PASSWORD;
+  if (!env) return false;
+  return timingSafeCompare(password, env);
+}
+
 // ─── Activity logging ─────────────────────────────────────────────────────────
 
 export interface ActivityLogParams {

@@ -56,3 +56,12 @@ prisma/backups/
 whatsapp-auth/
 logs/
 
+
+# Python bytecode from the curriculum ingestion scripts
+__pycache__/
+*.pyc
+
+# Local video uploads & encrypted DRM assets
+uploads/
+bin/
+
