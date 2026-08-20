@@ -34,13 +34,16 @@ Code-UP is a premium Egyptian EdTech platform targeting secondary and primary st
 │              ▼                                           ▼                              │
 │  ┌───────────────────────┐   ┌───────────────────────────────────────────────────────┐  │
 │  │ Video Delivery Engine │   │         Resilient Payment & Messaging Subsystems      │  │
-│  │ • Native Security     │   │   • Sha7nawy (Mobile Wallets + 12s Timeout Guard)     │  │
-│  │   (Google Drive Auto- │   │   • Shake-Out / Fawry (Cards & Invoicing)             │  │
-│  │    Ingest & Stream)   │   │   • Adaptive 1-Click Fallback (InstaPay/Fawry/Wallet) │  │
-│  │ • VdoCipher (DRM)     │   │   • WhatsApp (Worker-0 Baileys + Meta Cloud API)      │  │
+│  │ • Axinom Multi-DRM    │   │   • Sha7nawy (Mobile Wallets + 12s Timeout Guard)     │  │
+│  │   (Widevine/PlayReady)│   │   • Shake-Out / Fawry (Cards & Invoicing)             │  │
+│  │ • Native Security     │   │   • Adaptive 1-Click Fallback (InstaPay/Fawry/Wallet) │  │
+│  │   (Google Drive Auto- │   │   • WhatsApp (Worker-0 Baileys + Meta Cloud API)      │  │
+│  │    Ingest & Stream)   │   │                                                       │  │
+│  │ • VdoCipher (DRM)     │   │                                                       │  │
 │  │ • Bunny (Signed URL)  │   │                                                       │  │
 │  │ • YouTube (Unlisted)  │   │                                                       │  │
 │  └───────────────────────┘   └───────────────────────────────────────────────────────┘  │
+
 └─────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -126,6 +129,25 @@ The database contains 78 models across educational, financial, security, messagi
   - **Payload Normalization**: Normalizes incoming client payment requests across legacy naming formats (`vodafone_cash`, `orange_cash`, `etisalat_cash`, `we_cash`, `wallet` → `WALLET`; `phoneNumber` → `walletNumber`) with support for both single-course and monthly plan purchases.
 
 ### 3. Video Protection & Multi-Provider Video Pipeline
+- **Axinom Hardware Multi-DRM Pipeline (`videoProvider: "axinom"`, `src/lib/axinom.ts`)**:
+  - **Hardware-Enforced Multi-DRM Architecture**:
+    - Protects high-value premium lectures via hardware-level Common Encryption (CENC) across **Google Widevine (L1/L3 Modular)**, **Microsoft PlayReady**, and **Apple FairPlay Streaming**.
+    - Token generation follows the official Axinom License Service Message envelope specification (`version: 1`, `com_key_id`, and `entitlement_message` with `content_keys_source`), cryptographically signed via HMAC-SHA256 using `AXINOM_COMMUNICATION_KEY`.
+  - **Server-Side Video Packaging & Storage Management (`scripts/encrypt-video.js`)**:
+    - Transforms raw videos into multi-key Common Encryption (CENC) MPEG-DASH manifests (`manifest.mpd`) and HLS playlists with dual Widevine/PlayReady PSSH boxes.
+    - **Isolated Key Storage**: Stores encryption keys and asset metadata in private directory `uploads/drm-keys/<assetId>.json`, never exposed to client-accessible paths.
+    - **Disk Footprint Reclamation**: Automatically verifies the validity and non-zero byte size of encrypted output segments before deleting original raw MP4 files, conserving VPS disk storage within strict quotas.
+  - **Hardened Streaming Proxy Route (`/api/videos/drm/[...slug]/route.ts`)**:
+    - **Strict Path Traversal Prevention**: Enforces canonical path containment (`resolvedPath.startsWith(DRM_STORAGE_DIR + path.sep)`), regex segment validation (`/^[a-zA-Z0-9_.-]+$/`), and disallows any relative traversal indicators (`.` or `..`).
+    - **Strict Whitelisting**: Limits served files strictly to media streaming formats (`.mpd`, `.m3u8`, `.m4s`, `.mp4`, `.ts`), blocking access to any configuration or environment files.
+    - **Suffix Range Support**: Supports full HTTP 206 partial content byte-range requests including suffix range queries (`bytes=-N`) required by Safari and DASH players.
+    - **Fail-Closed Authorization**: Verifies active student enrollment (`checkVideoAccess`), while seamlessly allowing teacher/superadmin staff preview on newly uploaded assets.
+  - **Restricted DRM Password Gate & Teacher Anti-Abuse Control (`src/lib/admin-auth.ts`, `/api/teacher/drm-gate`)**:
+    - Protects the platform's multi-DRM license quota from unmetered usage by password-protecting the Axinom DRM provider option in the Teacher Dashboard via `DRM_UPLOAD_PASSWORD` (or `SUPERADMIN_ACTION_PASSWORD`).
+    - Server-side mutation gate on `/api/admin/folders/[id]/videos` strictly rejects unverified Axinom DRM additions.
+  - **Teacher 2-Hour DRM Preview & Independent Testing Engine (`/api/teacher/drm-preview`, `/preview/drm`)**:
+    - Generates standalone, signed 2-hour preview tokens (`expiresInSeconds: 7200`) allowing teachers to preview and test hardware DRM decryption, audio/video sync, and multi-device playback before publishing lectures to course folders.
+    - Includes a dedicated cinema-grade preview interface (`/preview/drm?assetId=...&token=...`) with Shaka Player, real-time 2-hour countdown timer, DRM health telemetry, and 1-click test URL sharing for mobile device verification.
 - **Native Video Security Engine (`videoProvider: "alasly"`)**:
   - **Google Drive Direct Cloud Stream & Zero VPS Storage (`src/lib/google-drive.ts`)**:
     - **Zero VPS Disk Footprint**: Eliminates `ENOSPC: no space left on device` by removing the need to store 3 GB–5 GB video files locally on the hosting server.
