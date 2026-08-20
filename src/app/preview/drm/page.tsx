@@ -302,7 +302,9 @@ function DrmPreviewContent() {
               <span>خادم الرخص والتوكن</span>
               <span className="text-emerald-400">Active (2h Token)</span>
             </div>
-            <p className="text-xs font-mono text-gray-300 truncate">Kid: {AXINOM_CONFIG.communicationKeyId}</p>
+            <p className="text-xs font-mono text-gray-300 truncate">
+              Kid: {isAxinomDemo ? "b3364eb5-51f6-4ae3-8c98-33ced5e31c78" : AXINOM_CONFIG.communicationKeyId}
+            </p>
             <p className="text-[10px] text-gray-500">توكن ترخيص آمن صالح لمدة ساعتين كاملتين للتجربة.</p>
           </div>
 

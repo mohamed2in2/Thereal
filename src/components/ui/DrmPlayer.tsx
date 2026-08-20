@@ -268,8 +268,13 @@ export function DrmPlayer({
 
         // Injects credentials and Axinom JWT Token on License requests
         localPlayer.getNetworkingEngine().registerRequestFilter((type: any, request: any) => {
-          // Allow cross-site credentials for session authentication cookies on protected media segments
-          request.allowCrossSiteCredentials = true;
+          // Only send credentials (cookies) to same-origin API routes to avoid CORS wildcard rejection on external CDNs
+          const isSameOrigin = request.uris?.some((u: string) =>
+            u.startsWith("/") || (typeof window !== "undefined" && u.includes(window.location.host))
+          );
+          if (isSameOrigin) {
+            request.allowCrossSiteCredentials = true;
+          }
 
           if (type === shaka.net.NetworkingEngine.RequestType.LICENSE && drmToken) {
             request.headers["X-AxDRM-Message"] = drmToken;
