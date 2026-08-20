@@ -235,8 +235,13 @@ export function DrmPlayer({
 
     async function initPlayer() {
       if (!videoRef.current || !manifestUrl) return;
+      if (licenseServers?.widevine && !drmToken) {
+        setIsLoading(true);
+        return;
+      }
       setIsLoading(true);
       setErrorMsg(null);
+
 
       try {
         await loadShakaPlayerLib();
