@@ -27,8 +27,22 @@ function DrmPreviewContent() {
 
   // Expiration countdown
   useEffect(() => {
-    if (!exp) return;
-    const targetTime = parseInt(exp, 10) * 1000;
+    let targetTime = 0;
+    if (exp) {
+      if (/^\d+$/.test(exp)) {
+        const num = Number(exp);
+        targetTime = num > 1e11 ? num : num * 1000;
+      } else {
+        const parsed = new Date(decodeURIComponent(exp)).getTime();
+        if (!isNaN(parsed) && parsed > 0) {
+          targetTime = parsed;
+        }
+      }
+    }
+    // Fallback: 2 hours from now if exp is missing or invalid
+    if (!targetTime || isNaN(targetTime) || targetTime <= Date.now() - 60000) {
+      targetTime = Date.now() + 2 * 60 * 60 * 1000;
+    }
 
     const updateTimer = () => {
       const now = Date.now();
@@ -40,6 +54,7 @@ function DrmPreviewContent() {
         return;
       }
 
+      setIsExpired(false);
       const hours = Math.floor(diff / (1000 * 60 * 60));
       const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
       const seconds = Math.floor((diff % (1000 * 60)) / 1000);
@@ -53,6 +68,7 @@ function DrmPreviewContent() {
     const interval = setInterval(updateTimer, 1000);
     return () => clearInterval(interval);
   }, [exp]);
+
 
   const isDirectStream = assetId.startsWith("gdrive_") || assetId.startsWith("local_");
 
