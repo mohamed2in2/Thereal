@@ -271,9 +271,12 @@ export function DrmPlayer({
 
         // Configure DRM Key Systems
         const servers: Record<string, string> = {};
-        if (licenseServers?.widevine) servers["com.widevine.alpha"] = licenseServers.widevine;
-        if (licenseServers?.playready) servers["com.microsoft.playready"] = licenseServers.playready;
-        if (licenseServers?.fairplay) servers["com.apple.fps.1_0"] = licenseServers.fairplay;
+        const origin = typeof window !== "undefined" ? window.location.origin : "";
+        const toAbsolute = (u?: string) => (u && u.startsWith("/") ? origin + u : u);
+
+        if (licenseServers?.widevine) servers["com.widevine.alpha"] = toAbsolute(licenseServers.widevine)!;
+        if (licenseServers?.playready) servers["com.microsoft.playready"] = toAbsolute(licenseServers.playready)!;
+        if (licenseServers?.fairplay) servers["com.apple.fps.1_0"] = toAbsolute(licenseServers.fairplay)!;
 
         localPlayer.configure({
           drm: {
@@ -281,7 +284,7 @@ export function DrmPlayer({
             advanced: licenseServers?.fairplayCertUrl
               ? {
                   "com.apple.fps.1_0": {
-                    serverCertificateUri: licenseServers.fairplayCertUrl,
+                    serverCertificateUri: toAbsolute(licenseServers.fairplayCertUrl)!,
                   },
                 }
               : undefined,
@@ -312,12 +315,18 @@ export function DrmPlayer({
           }
         });
 
-        // Load encrypted manifest
-        await localPlayer.load(manifestUrl);
+        // Load encrypted manifest with absolute URL
+        let resolvedManifestUrl = manifestUrl;
+        if (typeof window !== "undefined" && resolvedManifestUrl.startsWith("/")) {
+          resolvedManifestUrl = window.location.origin + resolvedManifestUrl;
+        }
+
+        await localPlayer.load(resolvedManifestUrl);
         if (isCancelled) {
           await localPlayer.destroy().catch(() => {});
           return;
         }
+
 
         setIsLoading(false);
 
