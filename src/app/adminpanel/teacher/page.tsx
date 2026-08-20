@@ -303,22 +303,29 @@ export default function TeacherDashboardPage() {
         throw new Error(data.error || "فشل استيراد الفيديو من Google Drive");
       }
 
+      const currentProvider = newVideo.videoProvider || "alasly";
       setNewVideo((prev) => ({
         ...prev,
-        videoProvider: "alasly",
+        videoProvider: currentProvider,
         providerVideoId: data.videoId,
         title: prev.title || data.title,
         durationMinutes: prev.durationMinutes || data.durationMinutes || 0,
       }));
       setLastUploadedVideoId(data.videoId);
       setGdriveUrl("");
-      notify("success", data.message || "تم استيراد وتحميل الفيديو من Google Drive وحمايته بـ Native Security بنجاح! 🎉");
+
+      if (currentProvider === "axinom") {
+        handleGenerateDrmPreview(data.videoId);
+      }
+
+      notify("success", data.message || "تم استيراد وتحميل الفيديو من Google Drive وحمايته بنجاح! 🎉");
     } catch (err: any) {
       notify("error", err.message || "تعذر استيراد الفيديو من Google Drive");
     } finally {
       setGdriveImporting(false);
       setGdriveStatus("");
     }
+
   };
 
   const handleNativeFileUpload = async (file: File) => {
@@ -331,6 +338,7 @@ export default function TeacherDashboardPage() {
       // 1. Init upload via server route
       const initRes = await fetch("/api/teacher/native-upload", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "init",
@@ -357,6 +365,7 @@ export default function TeacherDashboardPage() {
           formData.append("file", file);
 
           xhr.open("POST", "/api/teacher/native-upload", true);
+          xhr.withCredentials = true;
           xhr.setRequestHeader("X-Filename", encodeURIComponent(file.name));
 
           xhr.upload.onprogress = (e) => {
@@ -368,6 +377,14 @@ export default function TeacherDashboardPage() {
 
           xhr.onload = () => {
             try {
+              if (xhr.status === 413) {
+                reject(new Error("حجم الفيديو كبير جداً بالنسبة لإعدادات السيرفر (Nginx Body Limit). يُرجى استخدام خيار 'استيراد من Google Drive' المباشر."));
+                return;
+              }
+              if (xhr.status === 401 || xhr.status === 403) {
+                reject(new Error("انتهت جلسة تسجيل الدخول أو غير مصرح لك بالرفع."));
+                return;
+              }
               const resJson = JSON.parse(xhr.responseText);
               if (xhr.status >= 200 && xhr.status < 300 && resJson.success) {
                 resolve(resJson.videoId || resJson.assetId);
@@ -379,7 +396,9 @@ export default function TeacherDashboardPage() {
             }
           };
 
-          xhr.onerror = () => reject(new Error("حدث خطأ في شبكة الاتصال أثناء الرفع"));
+          xhr.onerror = () => {
+            reject(new Error("تعذر إكمال الرفع عبر الشبكة (قد يكون حجم الملف أكبر من الحد المسموح في السيرفر). جرّب استخدام 'استيراد من Google Drive' كبديل سريع ومباشر."));
+          };
           xhr.send(formData);
         });
 
@@ -389,6 +408,10 @@ export default function TeacherDashboardPage() {
           title: prev.title || file.name.replace(/\.[^/.]+$/, ""),
         }));
         setLastUploadedVideoId(uploadedVideoId);
+
+        if (newVideo.videoProvider === "axinom") {
+          handleGenerateDrmPreview(uploadedVideoId);
+        }
 
         notify("success", `تم رفع الفيديو بنجاح! معرّف الفيديو: ${uploadedVideoId}`);
         return;
@@ -424,6 +447,7 @@ export default function TeacherDashboardPage() {
       setNativeStatus("جاري تأكيد ومعالجة الفيديو...");
       const completeRes = await fetch("/api/teacher/native-upload", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "complete", assetId }),
       });
@@ -441,6 +465,10 @@ export default function TeacherDashboardPage() {
       }));
       setLastUploadedVideoId(finalVideoId);
 
+      if (newVideo.videoProvider === "axinom") {
+        handleGenerateDrmPreview(finalVideoId);
+      }
+
       notify("success", `تم رفع وتأكيد الفيديو بنجاح! معرّف الفيديو: ${finalVideoId}`);
     } catch (err: any) {
       notify("error", err.message || "حدث خطأ أثناء رفع الفيديو");
@@ -448,6 +476,7 @@ export default function TeacherDashboardPage() {
       setNativeUploading(false);
       setNativeProgress(0);
       setNativeStatus("");
+
     }
   };
   const [showJsonGuide, setShowJsonGuide] = useState(false);
