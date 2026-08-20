@@ -82,6 +82,21 @@ export function createAxinomDrmToken(options: AxinomTokenOptions): AxinomDrmPayl
   const expUnix = nowUnix + expiresInSeconds;
   const expiresAt = new Date(expUnix * 1000).toISOString();
 
+  // Clear DASH Test Vector (Plays on all browsers including Brave with Widevine disabled)
+  if (options.videoId === "axinom_clear" || options.videoId === "clear_demo") {
+    return {
+      token: "",
+      manifestUrl: "https://media.axprod.net/TestVectors/v7-Clear/Manifest_1080p.mpd",
+      licenseServers: {
+        widevine: "",
+        playready: "",
+        fairplay: "",
+      },
+      expiresAt,
+      expiresInSeconds,
+    };
+  }
+
   // Official Axinom Widevine + PlayReady Multi-DRM Test Vector (1080p CENC)
   if (
     options.videoId === "axinom_demo" ||

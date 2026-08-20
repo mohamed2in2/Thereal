@@ -31,12 +31,18 @@ function DrmPreviewContent() {
     assetId === "axinom_test_singlekey" ||
     assetId === "axinom_widevine_test";
 
+  const isClearDemo = assetId === "axinom_clear" || assetId === "clear_demo";
+
   const AXINOM_DEMO_TOKEN =
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ2ZXJzaW9uIjoxLCJjb21fa2V5X2lkIjoiYjMzNjRlYjUtNTFmNi00YWUzLThjOTgtMzNjZWQ1ZTMxYzc4IiwibWVzc2FnZSI6eyJ0eXBlIjoiZW50aXRsZW1lbnRfbWVzc2FnZSIsInZlcnNpb24iOjIsImxpY2Vuc2UiOnsiYWxsb3dfcGVyc2lzdGVuY2UiOnRydWV9LCJjb250ZW50X2tleXNfc291cmNlIjp7ImlubGluZSI6W3siaWQiOiI5ZWI0MDUwZC1lNDRiLTQ4MDItOTMyZS0yN2Q3NTA4M2UyNjYiLCJlbmNyeXB0ZWRfa2V5IjoibEszT2pITFlXMjRjcjJrdFI3NGZudz09IiwidXNhZ2VfcG9saWN5IjoiUG9saWN5IEEifV19LCJjb250ZW50X2tleV91c2FnZV9wb2xpY2llcyI6W3sibmFtZSI6IlBvbGljeSBBIiwicGxheXJlYWR5Ijp7Im1pbl9kZXZpY2Vfc2VjdXJpdHlfbGV2ZWwiOjE1MCwicGxheV9lbmFibGVycyI6WyI3ODY2MjdEOC1DMkE2LTQ0QkUtOEY4OC0wOEFFMjU1QjAxQTciXX19XX19.W2FbPDSDaq-LeeLfOnbpTMa-zCmXh8RLChEVDYvdcVw";
 
   const [activeToken, setActiveToken] = useState(token || (isAxinomDemo ? AXINOM_DEMO_TOKEN : ""));
   const [activeManifestUrl, setActiveManifestUrl] = useState(
-    isAxinomDemo ? "https://media.axprod.net/TestVectors/v7-MultiDRM-SingleKey/Manifest_1080p.mpd" : ""
+    isClearDemo
+      ? "https://media.axprod.net/TestVectors/v7-Clear/Manifest_1080p.mpd"
+      : isAxinomDemo
+      ? "https://media.axprod.net/TestVectors/v7-MultiDRM-SingleKey/Manifest_1080p.mpd"
+      : ""
   );
   const [activeLicenseServers, setActiveLicenseServers] = useState<{
     widevine?: string;
@@ -51,7 +57,7 @@ function DrmPreviewContent() {
         }
       : null
   );
-  const [tokenLoading, setTokenLoading] = useState(!token && !isAxinomDemo);
+  const [tokenLoading, setTokenLoading] = useState(!token && !isAxinomDemo && !isClearDemo);
 
   useEffect(() => {
     if (token) {
@@ -59,7 +65,7 @@ function DrmPreviewContent() {
       setTokenLoading(false);
       return;
     }
-    if (!assetId || isAxinomDemo) return;
+    if (!assetId || isAxinomDemo || isClearDemo) return;
 
     let isMounted = true;
     setTokenLoading(true);
@@ -137,6 +143,9 @@ function DrmPreviewContent() {
   const embedUrl = useMemo(() => {
     if (!assetId) return "";
     if (activeManifestUrl) return activeManifestUrl;
+    if (isClearDemo) {
+      return "https://media.axprod.net/TestVectors/v7-Clear/Manifest_1080p.mpd";
+    }
     if (isAxinomDemo) {
       return "https://media.axprod.net/TestVectors/v7-MultiDRM-SingleKey/Manifest_1080p.mpd";
     }
@@ -144,9 +153,10 @@ function DrmPreviewContent() {
       return `/api/videos/stream/${encodeURIComponent(assetId)}`;
     }
     return `/api/videos/drm/${encodeURIComponent(assetId)}/manifest.mpd`;
-  }, [assetId, isDirectStream, activeManifestUrl, isAxinomDemo]);
+  }, [assetId, isDirectStream, activeManifestUrl, isAxinomDemo, isClearDemo]);
 
   const drmConfig = useMemo(() => {
+    if (isClearDemo) return undefined;
     const finalToken = activeToken || token || (isAxinomDemo ? AXINOM_DEMO_TOKEN : "");
     if (!finalToken && !isDirectStream) return undefined;
 
@@ -168,7 +178,7 @@ function DrmPreviewContent() {
       token: finalToken,
       licenseServers: servers,
     };
-  }, [activeToken, token, activeLicenseServers, isAxinomDemo, isDirectStream]);
+  }, [activeToken, token, activeLicenseServers, isAxinomDemo, isClearDemo, isDirectStream]);
 
 
   const handleCopyUrl = () => {
@@ -216,7 +226,7 @@ function DrmPreviewContent() {
             <div>
               <div className="flex items-center gap-2">
                 <span className="px-2 py-0.5 rounded text-[10px] font-black bg-sky-500/20 text-sky-400 border border-sky-500/30">
-                  Axinom DRM Preview
+                  {isClearDemo ? "Clear DASH Stream" : "Axinom DRM Preview"}
                 </span>
                 <span className="text-xs text-gray-400 font-mono hidden md:inline">Asset: {assetId}</span>
               </div>
@@ -225,6 +235,32 @@ function DrmPreviewContent() {
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Quick Test Switcher for Brave / Chrome */}
+            {(isAxinomDemo || isClearDemo) && (
+              <div className="flex items-center gap-1 bg-white/5 p-1 rounded-xl border border-white/10">
+                <Link
+                  href="/preview/drm?assetId=axinom_demo&title=Axinom+Widevine+Test"
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
+                    isAxinomDemo
+                      ? "bg-sky-500 text-white shadow-sm"
+                      : "text-gray-400 hover:text-white"
+                  }`}
+                >
+                  🛡️ Widevine DRM
+                </Link>
+                <Link
+                  href="/preview/drm?assetId=axinom_clear&title=Shaka+Clear+DASH+Test"
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
+                    isClearDemo
+                      ? "bg-sky-500 text-white shadow-sm"
+                      : "text-gray-400 hover:text-white"
+                  }`}
+                >
+                  ⚡ Shaka Clear (Brave Friendly)
+                </Link>
+              </div>
+            )}
+
             {/* Live Expiration Badge */}
             <div className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-2 ${
               isExpired

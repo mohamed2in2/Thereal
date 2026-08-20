@@ -286,10 +286,22 @@ export function DrmPlayer({
           const err = event.detail;
           console.error("[Shaka Player DRM Error]", err);
           setIsLoading(false);
+          const isBrave =
+            typeof (navigator as any).brave !== "undefined" ||
+            Boolean((window as any).navigator?.brave);
+
           if (err.category === shaka.util.Error.Category.DRM) {
-            setErrorMsg("فشل الحصول على رخصة فك التشفير (DRM). يرجى التأكد من صلاحية الترخيص والاتصال بالإنترنت.");
+            if (isBrave) {
+              setErrorMsg(
+                "متصفح Brave يحظر نظام Widevine DRM افتراضياً. يرجى الضغط على أيقونة الدرع في شريط العنوان أو تفعيل Widevine من brave://settings/extensions أو استخدام متصفح Chrome / Edge."
+              );
+            } else {
+              setErrorMsg(
+                "فشل الحصول على رخصة فك التشفير (DRM). يرجى التأكد من تفعيل Widevine في المتصفح أو تجربة متصفح Google Chrome / Edge."
+              );
+            }
           } else if (err.category === shaka.util.Error.Category.NETWORK) {
-            setErrorMsg(`خطأ في شبكة البث المشفر (رمز ${err.code || "1001"})`);
+            setErrorMsg(`خطأ في شبكة البث المشفر (رمز ${err.code || "1002"})`);
           } else {
             setErrorMsg(`خطأ في تشغيل الفيديو المحمي (رمز ${err.code || "DRM"})`);
           }
