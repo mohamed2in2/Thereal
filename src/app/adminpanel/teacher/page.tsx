@@ -410,11 +410,31 @@ export default function TeacherDashboardPage() {
         setLastUploadedVideoId(uploadedVideoId);
 
         if (newVideo.videoProvider === "axinom") {
+          setNativeStatus("جاري تشفير الفيديو عتادياً بنظام CENC Widevine + PlayReady...");
+          try {
+            const packRes = await fetch("/api/teacher/drm-package", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ videoId: uploadedVideoId }),
+            });
+            const packData = await packRes.json();
+            if (packRes.ok && packData.success && packData.assetId) {
+              const packagedId = packData.assetId;
+              setNewVideo((prev) => ({ ...prev, providerVideoId: packagedId }));
+              setLastUploadedVideoId(packagedId);
+              handleGenerateDrmPreview(packagedId);
+              notify("success", "تم تشفير الفيديو عتادياً بـ CENC Widevine + PlayReady بنجاح! 🔒 (شاشة سوداء عند التصوير)");
+              return;
+            }
+          } catch (e) {
+            console.warn("Automated packaging fallback:", e);
+          }
           handleGenerateDrmPreview(uploadedVideoId);
         }
 
         notify("success", `تم رفع الفيديو بنجاح! معرّف الفيديو: ${uploadedVideoId}`);
         return;
+
       }
 
       if (uploadUrl) {
