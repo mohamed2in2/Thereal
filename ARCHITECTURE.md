@@ -35,7 +35,7 @@ Code-UP is a premium Egyptian EdTech platform targeting secondary and primary st
 │  ┌───────────────────────┐   ┌───────────────────────────────────────────────────────┐  │
 │  │ Video Delivery Engine │   │         Resilient Payment & Messaging Subsystems      │  │
 │  │ • Axinom Multi-DRM    │   │   • Sha7nawy (Mobile Wallets + 12s Timeout Guard)     │  │
-│  │   (Widevine/PlayReady)│   │   • Shake-Out / Fawry (Cards & Invoicing)             │  │
+│  │   (Widevine/PlayReady)│     • Shake-Out / Fawry (Cards & Invoicing)             │  │
 │  │ • Native Security     │   │   • Adaptive 1-Click Fallback (InstaPay/Fawry/Wallet) │  │
 │  │   (Google Drive Auto- │   │   • WhatsApp (Worker-0 Baileys + Meta Cloud API)      │  │
 │  │    Ingest & Stream)   │   │                                                       │  │
