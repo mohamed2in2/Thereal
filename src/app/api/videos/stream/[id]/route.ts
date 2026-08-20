@@ -28,14 +28,19 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       select: { id: true },
     });
 
-    if (!video) {
-      return NextResponse.json({ error: "الفيديو غير موجود" }, { status: 404 });
+    if (video) {
+      const hasAccess = await checkVideoAccess(session.id, session.role, video.id);
+      if (!hasAccess) {
+        return NextResponse.json({ error: "لا يوجد صلاحية للوصول لهذا الفيديو" }, { status: 403 });
+      }
+    } else {
+      // Newly imported video not yet saved in a lecture folder: only allow teacher/admin staff preview
+      const isStaff = session.role === "teacher" || session.role === "admin" || session.role === "superadmin";
+      if (!isStaff) {
+        return NextResponse.json({ error: "الفيديو غير موجود" }, { status: 404 });
+      }
     }
 
-    const hasAccess = await checkVideoAccess(session.id, session.role, video.id);
-    if (!hasAccess) {
-      return NextResponse.json({ error: "لا يوجد صلاحية للوصول لهذا الفيديو" }, { status: 403 });
-    }
 
     // ── Google Drive Direct Cloud Stream ──────────────────────────────────────
     if (safeFilename.startsWith("gdrive_")) {

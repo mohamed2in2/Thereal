@@ -3,22 +3,21 @@
 import { useEffect, useState, useMemo, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import DrmPlayer from "@/components/ui/DrmPlayer";
+import { SecurePlayer } from "@/components/ui/SecurePlayer";
 import { AXINOM_CONFIG } from "@/lib/axinom";
 
 function DrmPreviewContent() {
   const searchParams = useSearchParams();
-  const router = useRouter();
 
   const assetId = searchParams.get("assetId") || "";
   const token = searchParams.get("token") || "";
-  const title = searchParams.get("title") || "معاينة درس مشفر بنظام Multi-DRM";
+  const title = searchParams.get("title") || "معاينة درس مشفر";
   const exp = searchParams.get("exp") || "";
 
   const [copied, setCopied] = useState(false);
-  const [timeLeft, setTimeLeft] = useState<string>("");
+  const [timeLeft, setTimeLeft] = useState<string>("02:00:00");
   const [isExpired, setIsExpired] = useState(false);
-  const [fullUrl, setFullUrl] = useState("");
+  const [fullUrl, setFullUrl] = useState<string>("");
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -28,19 +27,15 @@ function DrmPreviewContent() {
 
   // Expiration countdown
   useEffect(() => {
-    if (!exp) {
-      setTimeLeft("ساعتان");
-      return;
-    }
-
-    const targetTime = new Date(exp).getTime();
+    if (!exp) return;
+    const targetTime = parseInt(exp, 10) * 1000;
 
     const updateTimer = () => {
       const now = Date.now();
       const diff = targetTime - now;
 
       if (diff <= 0) {
-        setTimeLeft("انتهت صلاحية جلسة المعاينة");
+        setTimeLeft("انتهت صلاحية الجلسة");
         setIsExpired(true);
         return;
       }
@@ -59,10 +54,15 @@ function DrmPreviewContent() {
     return () => clearInterval(interval);
   }, [exp]);
 
-  const manifestUrl = useMemo(() => {
+  const isDirectStream = assetId.startsWith("gdrive_") || assetId.startsWith("local_");
+
+  const embedUrl = useMemo(() => {
     if (!assetId) return "";
+    if (isDirectStream) {
+      return `/api/videos/stream/${encodeURIComponent(assetId)}`;
+    }
     return `/api/videos/drm/${encodeURIComponent(assetId)}/manifest.mpd`;
-  }, [assetId]);
+  }, [assetId, isDirectStream]);
 
   const drmConfig = useMemo(() => {
     if (!token) return undefined;
@@ -171,18 +171,13 @@ function DrmPreviewContent() {
               </Link>
             </div>
           ) : (
-            <DrmPlayer
-              manifestUrl={manifestUrl}
-              drmToken={token}
-              licenseServers={{
-                widevine: AXINOM_CONFIG.endpoints.widevine,
-                playready: AXINOM_CONFIG.endpoints.playready,
-                fairplay: AXINOM_CONFIG.endpoints.fairplay,
-              }}
+            <SecurePlayer
+              embedUrl={embedUrl}
+              provider={isDirectStream ? "alasly" : "axinom"}
+              drm={drmConfig}
               title={title}
               watermark="معاينة المعلم (Teacher Preview)"
             />
-
           )}
         </div>
 
@@ -190,12 +185,17 @@ function DrmPreviewContent() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="p-4 rounded-2xl bg-[#0f172a] border border-white/5 space-y-1.5">
             <div className="flex items-center justify-between text-xs text-gray-400 font-bold">
-              <span>نظام التشفير والأمان</span>
-              <span className="text-sky-400">CENC Multi-DRM</span>
+              <span>نظام البث والحماية</span>
+              <span className="text-sky-400">{isDirectStream ? "Native Cloud Stream" : "CENC Multi-DRM"}</span>
             </div>
-            <p className="text-xs font-mono text-gray-300">Widevine (L1/L3) + PlayReady + FairPlay</p>
-            <p className="text-[10px] text-gray-500">حماية عتادية تمنع تصوير الشاشة والتحميل غير المصرح به.</p>
+            <p className="text-xs font-mono text-gray-300">
+              {isDirectStream ? "Google Drive Direct Stream + Dynamic Watermark" : "Widevine (L1/L3) + PlayReady + FairPlay"}
+            </p>
+            <p className="text-[10px] text-gray-500">
+              {isDirectStream ? "بث سحابي مباشر عالي السرعة مع علامة مائية متحركة وحظر تصوير الشاشة." : "حماية عتادية تمنع تصوير الشاشة والتحميل غير المصرح به."}
+            </p>
           </div>
+
 
           <div className="p-4 rounded-2xl bg-[#0f172a] border border-white/5 space-y-1.5">
             <div className="flex items-center justify-between text-xs text-gray-400 font-bold">
