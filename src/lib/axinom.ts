@@ -46,7 +46,10 @@ export interface AxinomTokenOptions {
   userId?: string;
   expiresInSeconds?: number;
   allowPersistence?: boolean;
+  keyId?: string;
+  key?: string;
 }
+
 
 export interface AxinomDrmPayload {
   token: string;
@@ -82,10 +85,46 @@ export function createAxinomDrmToken(options: AxinomTokenOptions): AxinomDrmPayl
   const header = {
     alg: "HS256",
     typ: "JWT",
-    kid: AXINOM_CONFIG.communicationKeyId,
   };
 
-  const payload: Record<string, any> = {
+  // Determine content keys source (explicit inline key or Key-seed derivation)
+  let contentKeysSource: Record<string, any> = {
+    key_seed: {
+      key_seed_id: AXINOM_CONFIG.keySeedId,
+    },
+  };
+
+  try {
+    let keyId = options.keyId;
+    let key = options.key;
+    if (!keyId || !key) {
+      const fs = require("node:fs");
+      const path = require("node:path");
+      const safeId = String(options.videoId).replace(/[^a-zA-Z0-9_-]/g, "_");
+      const keyFilePath = path.resolve(process.cwd(), "uploads", "drm-keys", `${safeId}.json`);
+      if (fs.existsSync(keyFilePath)) {
+        const keyData = JSON.parse(fs.readFileSync(keyFilePath, "utf8"));
+        if (keyData.keyId && keyData.key) {
+          keyId = keyData.keyId;
+          key = keyData.key;
+        }
+      }
+    }
+    if (keyId && key) {
+      contentKeysSource = {
+        inline: [
+          {
+            id: keyId,
+            key: key,
+          },
+        ],
+      };
+    }
+  } catch {
+    // If not found, use Key-seed ID
+  }
+
+  const entitlementMessage: Record<string, any> = {
     type: "entitlement_message",
     version: 2,
     iat: nowUnix,
@@ -94,19 +133,25 @@ export function createAxinomDrmToken(options: AxinomTokenOptions): AxinomDrmPayl
     license: {
       allow_persistence: options.allowPersistence || false,
     },
-    content_keys_configuration: {
-      allow_persist_keys: options.allowPersistence || false,
-    },
+    content_keys_source: contentKeysSource,
   };
 
   // Optional user tracking metadata
   if (options.userId) {
-    payload.user_id = options.userId;
+    entitlementMessage.user_id = options.userId;
   }
 
+  // Wrap in Axinom License Service Message envelope
+  const licenseServiceMessage = {
+    version: 1,
+    com_key_id: AXINOM_CONFIG.communicationKeyId,
+    message: entitlementMessage,
+  };
+
   const encodedHeader = base64UrlEncode(JSON.stringify(header));
-  const encodedPayload = base64UrlEncode(JSON.stringify(payload));
+  const encodedPayload = base64UrlEncode(JSON.stringify(licenseServiceMessage));
   const signingInput = `${encodedHeader}.${encodedPayload}`;
+
 
   const keyBuffer = getCommunicationKeyBuffer();
   const signature = crypto
