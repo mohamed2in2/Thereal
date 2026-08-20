@@ -219,6 +219,7 @@ export function DrmPlayer({
         localPlayer.addEventListener("error", (event: any) => {
           const err = event.detail;
           console.error("[Shaka Player DRM Error]", err);
+          setIsLoading(false);
           if (err.category === shaka.util.Error.Category.DRM) {
             setErrorMsg("فشل الحصول على رخصة فك التشفير. يرجى التأكد من صلاحية اشتراكك.");
           } else {

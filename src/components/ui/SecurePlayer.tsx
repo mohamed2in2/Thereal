@@ -81,8 +81,9 @@ export function SecurePlayer({
   const [streamError, setStreamError] = useState(false);
   const { ref: wrapRef, isFs, cssFs, toggle: toggleFs } = useFullscreen<HTMLDivElement>();
 
-  // Axinom Hardware Multi-DRM Player
-  if (provider === "axinom") {
+  // Axinom Hardware Multi-DRM Player (only for DASH .mpd or HLS .m3u8 manifests)
+  const isDrmManifest = embedUrl.includes(".mpd") || embedUrl.includes(".m3u8") || embedUrl.includes("/api/videos/drm/");
+  if (provider === "axinom" && isDrmManifest) {
     return (
       <DrmPlayer
         manifestUrl={embedUrl}
@@ -99,6 +100,7 @@ export function SecurePlayer({
       />
     );
   }
+
 
   // YouTube → hardened API player (no clickable YouTube chrome).
   if (provider === "youtube") {

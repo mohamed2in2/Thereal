@@ -165,8 +165,25 @@ export function createAxinomDrmToken(options: AxinomTokenOptions): AxinomDrmPayl
   // Local or remote manifest URL
   let manifestUrl = options.videoId;
   if (!manifestUrl.startsWith("http://") && !manifestUrl.startsWith("https://")) {
-    manifestUrl = `/api/videos/drm/${encodeURIComponent(options.videoId)}/manifest.mpd`;
+    if (options.videoId.startsWith("gdrive_") || options.videoId.startsWith("local_")) {
+      try {
+        const fs = require("node:fs");
+        const path = require("node:path");
+        const safeId = String(options.videoId).replace(/[^a-zA-Z0-9_-]/g, "_");
+        const mpdPath = path.resolve(process.cwd(), "uploads", "drm", safeId, "manifest.mpd");
+        if (fs.existsSync(mpdPath)) {
+          manifestUrl = `/api/videos/drm/${encodeURIComponent(options.videoId)}/manifest.mpd`;
+        } else {
+          manifestUrl = `/api/videos/stream/${encodeURIComponent(options.videoId)}`;
+        }
+      } catch {
+        manifestUrl = `/api/videos/drm/${encodeURIComponent(options.videoId)}/manifest.mpd`;
+      }
+    } else {
+      manifestUrl = `/api/videos/drm/${encodeURIComponent(options.videoId)}/manifest.mpd`;
+    }
   }
+
 
   return {
     token,
