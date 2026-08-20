@@ -60,12 +60,36 @@ function DrmPreviewContent() {
   const [tokenLoading, setTokenLoading] = useState(!token && !isAxinomDemo && !isClearDemo);
 
   useEffect(() => {
+    if (isClearDemo) {
+      setActiveToken("");
+      setActiveManifestUrl("https://media.axprod.net/TestVectors/v7-Clear/Manifest_1080p.mpd");
+      setActiveLicenseServers(null);
+      setTokenLoading(false);
+      return;
+    }
+
+    if (isAxinomDemo) {
+      setActiveToken(token || AXINOM_DEMO_TOKEN);
+      setActiveManifestUrl("https://media.axprod.net/TestVectors/v7-MultiDRM-SingleKey/Manifest_1080p.mpd");
+      setActiveLicenseServers({
+        widevine: "https://drm-widevine-licensing.axtest.net/AcquireLicense",
+        playready: "https://drm-playready-licensing.axtest.net/AcquireLicense",
+        fairplay: "https://drm-fairplay-licensing.axtest.net/AcquireLicense",
+      });
+      setTokenLoading(false);
+      return;
+    }
+
     if (token) {
       setActiveToken(token);
       setTokenLoading(false);
       return;
     }
-    if (!assetId || isAxinomDemo || isClearDemo) return;
+
+    if (!assetId) {
+      setTokenLoading(false);
+      return;
+    }
 
     let isMounted = true;
     setTokenLoading(true);
@@ -92,7 +116,7 @@ function DrmPreviewContent() {
     return () => {
       isMounted = false;
     };
-  }, [assetId, token, title, isAxinomDemo]);
+  }, [assetId, token, title, isAxinomDemo, isClearDemo]);
 
   // Expiration countdown
   useEffect(() => {
@@ -142,13 +166,13 @@ function DrmPreviewContent() {
 
   const embedUrl = useMemo(() => {
     if (!assetId) return "";
-    if (activeManifestUrl) return activeManifestUrl;
     if (isClearDemo) {
       return "https://media.axprod.net/TestVectors/v7-Clear/Manifest_1080p.mpd";
     }
     if (isAxinomDemo) {
       return "https://media.axprod.net/TestVectors/v7-MultiDRM-SingleKey/Manifest_1080p.mpd";
     }
+    if (activeManifestUrl) return activeManifestUrl;
     if (isDirectStream) {
       return `/api/videos/stream/${encodeURIComponent(assetId)}`;
     }
@@ -157,22 +181,31 @@ function DrmPreviewContent() {
 
   const drmConfig = useMemo(() => {
     if (isClearDemo) return undefined;
-    const finalToken = activeToken || token || (isAxinomDemo ? AXINOM_DEMO_TOKEN : "");
+
+    if (isAxinomDemo) {
+      return {
+        token: activeToken || AXINOM_DEMO_TOKEN,
+        licenseServers: {
+          widevine: "https://drm-widevine-licensing.axtest.net/AcquireLicense",
+          playready: "https://drm-playready-licensing.axtest.net/AcquireLicense",
+          fairplay: "https://drm-fairplay-licensing.axtest.net/AcquireLicense",
+        },
+        clearKeys: {
+          "9eb4050de44b4802932e27d75083e266": "166634c675823c235a4a9446fad52e4d",
+        },
+      };
+    }
+
+    const finalToken = activeToken || token;
     if (!finalToken && !isDirectStream) return undefined;
 
     const servers =
       activeLicenseServers ||
-      (isAxinomDemo
-        ? {
-            widevine: "https://drm-widevine-licensing.axtest.net/AcquireLicense",
-            playready: "https://drm-playready-licensing.axtest.net/AcquireLicense",
-            fairplay: "https://drm-fairplay-licensing.axtest.net/AcquireLicense",
-          }
-        : {
-            widevine: AXINOM_CONFIG.endpoints.widevine,
-            playready: AXINOM_CONFIG.endpoints.playready,
-            fairplay: AXINOM_CONFIG.endpoints.fairplay,
-          });
+      {
+        widevine: AXINOM_CONFIG.endpoints.widevine,
+        playready: AXINOM_CONFIG.endpoints.playready,
+        fairplay: AXINOM_CONFIG.endpoints.fairplay,
+      };
 
     return {
       token: finalToken,

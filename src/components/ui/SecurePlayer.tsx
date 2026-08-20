@@ -51,13 +51,14 @@ export function SecurePlayer({
   watermark: string;
   provider?: string;
   drm?: {
-    token: string;
-    licenseServers: {
+    token?: string;
+    licenseServers?: {
       widevine?: string;
       playready?: string;
       fairplay?: string;
       fairplayCertUrl?: string;
     };
+    clearKeys?: Record<string, string>;
   } | null;
   onEnded?: () => void;
   /** Resume position in seconds. Currently honored on YouTube (the only provider
@@ -89,6 +90,7 @@ export function SecurePlayer({
         manifestUrl={embedUrl}
         drmToken={drm?.token}
         licenseServers={drm?.licenseServers}
+        clearKeys={drm?.clearKeys}
         initialPosition={startSeconds}
         watermark={watermark}
         title={title}

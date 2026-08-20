@@ -18,6 +18,7 @@ export interface DrmPlayerProps {
     fairplay?: string;
     fairplayCertUrl?: string;
   };
+  clearKeys?: Record<string, string>;
   initialPosition?: number;
   watermark?: string;
   title?: string;
@@ -77,6 +78,7 @@ export function DrmPlayer({
   manifestUrl,
   drmToken,
   licenseServers,
+  clearKeys,
   initialPosition = 0,
   watermark,
   title,
@@ -205,13 +207,8 @@ export function DrmPlayer({
 
     async function initPlayer() {
       if (!videoRef.current || !manifestUrl) return;
-      if (licenseServers?.widevine && !drmToken) {
-        setIsLoading(true);
-        return;
-      }
       setIsLoading(true);
       setErrorMsg(null);
-
 
       try {
         await loadShakaPlayerLib();
@@ -250,7 +247,8 @@ export function DrmPlayer({
 
         localPlayer.configure({
           drm: {
-            servers,
+            servers: Object.keys(servers).length > 0 ? servers : undefined,
+            clearKeys: clearKeys || undefined,
             advanced: licenseServers?.fairplayCertUrl
               ? {
                   "com.apple.fps.1_0": {
@@ -319,7 +317,6 @@ export function DrmPlayer({
           return;
         }
 
-
         setIsLoading(false);
 
         // Seek to initial position
@@ -346,7 +343,7 @@ export function DrmPlayer({
         localPlayer.destroy().catch(() => {});
       }
     };
-  }, [manifestUrl, drmToken, licenseServers, initialPosition, retryCount]);
+  }, [manifestUrl, drmToken, licenseServers, clearKeys, initialPosition, retryCount]);
 
   // ── Sync Paused Prop ───────────────────────────────────────────────────────
   useEffect(() => {
@@ -375,6 +372,7 @@ export function DrmPlayer({
   const handleLoadedMetadata = () => {
     if (!videoRef.current) return;
     setDuration(videoRef.current.duration || 0);
+    setIsLoading(false);
   };
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -443,12 +441,17 @@ export function DrmPlayer({
         playsInline
         onPlay={() => {
           setIsPlaying(true);
+          setIsLoading(false);
           onPlay?.();
         }}
         onPause={() => {
           setIsPlaying(false);
           onPause?.();
         }}
+        onLoadedData={() => setIsLoading(false)}
+        onCanPlay={() => setIsLoading(false)}
+        onPlaying={() => setIsLoading(false)}
+        onWaiting={() => setIsLoading(true)}
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleLoadedMetadata}
         onEnded={onEnded}
