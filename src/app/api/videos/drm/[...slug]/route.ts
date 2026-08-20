@@ -75,18 +75,23 @@ export async function GET(
       },
     });
 
-    if (!video) {
-      return NextResponse.json({ error: "المحتوى غير موجود" }, { status: 404 });
-    }
-
-    const isOwner = session.role === "teacher" && video.folder?.course?.teacherId === session.id;
-    const isStaff = session.role === "admin" || session.role === "superadmin" || isOwner;
-    if (!video.isFree && !isStaff) {
-      const hasAccess = await checkVideoAccess(session.id, session.role, video.id);
-      if (!hasAccess) {
-        return NextResponse.json({ error: "لا يوجد صلاحية للوصول لهذا المحتوى المحمي" }, { status: 403 });
+    if (video) {
+      const isOwner = session.role === "teacher" && video.folder?.course?.teacherId === session.id;
+      const isStaff = session.role === "admin" || session.role === "superadmin" || isOwner;
+      if (!video.isFree && !isStaff) {
+        const hasAccess = await checkVideoAccess(session.id, session.role, video.id);
+        if (!hasAccess) {
+          return NextResponse.json({ error: "لا يوجد صلاحية للوصول لهذا المحتوى المحمي" }, { status: 403 });
+        }
+      }
+    } else {
+      // If video is newly uploaded and not yet saved in a lecture folder: only allow teacher/staff preview
+      const isStaff = session.role === "teacher" || session.role === "admin" || session.role === "superadmin";
+      if (!isStaff) {
+        return NextResponse.json({ error: "المحتوى غير موجود" }, { status: 404 });
       }
     }
+
 
     // ── Canonical Path Resolution & Containment ────────────────────────────────
     const resolvedPath = path.resolve(DRM_STORAGE_DIR, videoAssetId, subPath);

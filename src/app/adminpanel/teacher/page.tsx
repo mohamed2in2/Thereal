@@ -235,6 +235,48 @@ export default function TeacherDashboardPage() {
     notify("success", "تم قفل خيار Axinom DRM مجدداً 🔒");
   };
 
+  // 🎬 Axinom 2-Hour Preview State & Handler
+  const [drmPreviewLoading, setDrmPreviewLoading] = useState(false);
+  const [drmPreviewData, setDrmPreviewData] = useState<{
+    previewUrl: string;
+    expiresAt: string;
+    assetId: string;
+  } | null>(null);
+
+  const handleGenerateDrmPreview = async (targetAssetId?: string) => {
+    const asset = (targetAssetId || newVideo.providerVideoId || "").trim();
+    if (!asset) {
+      notify("error", "يرجى إدخال أو رفع معرّف الفيديو أولاً لإنشاء رابط المعاينة");
+      return;
+    }
+    setDrmPreviewLoading(true);
+    try {
+      const res = await fetch("/api/teacher/drm-preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          assetId: asset,
+          title: newVideo.title || "معاينة درس مشفر",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "فشل إنشاء رابط المعاينة");
+      }
+      setDrmPreviewData({
+        previewUrl: data.previewUrl,
+        expiresAt: data.expiresAt,
+        assetId: asset,
+      });
+      notify("success", "تم إنشاء رابط المعاينة المباشر بنجاح (صالح لمدة ساعتين)! 🎬");
+    } catch (err: any) {
+      notify("error", err.message || "تعذر إنشاء رابط المعاينة");
+    } finally {
+      setDrmPreviewLoading(false);
+    }
+  };
+
+
   const handleGoogleDriveImport = async () => {
     if (!gdriveUrl.trim()) {
       notify("error", "يرجى إدخال رابط أو معرّف فيديو Google Drive");
@@ -2025,6 +2067,61 @@ export default function TeacherDashboardPage() {
                                   <p className="text-[11px] text-[var(--ink-muted)] m-0">
                                     أدخل معرّف الـ Asset ID في الحقل أعلاه (مثال: <code className="font-mono text-sky-300">lesson_101</code>) بعد تشفيره وحفظه في مجلد المحتوى المحمي.
                                   </p>
+                                )}
+
+                                {/* 2-Hour DRM Preview & Testing Box */}
+                                {newVideo.providerVideoId && (
+                                  <div className="p-3.5 rounded-xl border border-sky-500/30 bg-sky-500/10 space-y-2.5">
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-1.5 font-bold text-xs text-sky-400">
+                                        <span>🎬</span>
+                                        <span>معاينة وتجربة الفيديو المشفر (صلاحية ساعتان 2 Hours):</span>
+                                      </div>
+                                      <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-sky-500/20 text-sky-300 font-bold">
+                                        Asset: {newVideo.providerVideoId}
+                                      </span>
+                                    </div>
+                                    <p className="text-[11px] text-[var(--ink-muted)] m-0 leading-relaxed">
+                                      يمكنك معاينة تشغيل الفيديو وفك تشفيره والتأكد من جودته عبر رابط مباشر مستقل لمدة ساعتين كاملتين قبل نشره وإضافته لمجلد المحاضرة.
+                                    </p>
+                                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                                      <button
+                                        type="button"
+                                        disabled={drmPreviewLoading}
+                                        onClick={() => handleGenerateDrmPreview(newVideo.providerVideoId)}
+                                        className="px-3.5 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-white text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+                                      >
+                                        <span>{drmPreviewLoading ? "جاري التجهيز..." : "🚀 توليد رابط المعاينة (2 Hours)"}</span>
+                                      </button>
+                                      {drmPreviewData && drmPreviewData.assetId === newVideo.providerVideoId && (
+                                        <>
+                                          <a
+                                            href={drmPreviewData.previewUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="px-3.5 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"
+                                          >
+                                            <span>▶️ فتح مشغل المعاينة ↗</span>
+                                          </a>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              navigator.clipboard.writeText(drmPreviewData.previewUrl);
+                                              notify("success", "تم نسخ رابط المعاينة الكامل (2 Hours) للذاكرة!");
+                                            }}
+                                            className="px-3.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                                          >
+                                            <span>📋 نسخ الرابط</span>
+                                          </button>
+                                        </>
+                                      )}
+                                    </div>
+                                    {drmPreviewData && drmPreviewData.assetId === newVideo.providerVideoId && (
+                                      <div className="p-2 rounded-lg bg-black/40 border border-white/5 font-mono text-[11px] text-sky-300 select-all break-all text-left" dir="ltr">
+                                        {drmPreviewData.previewUrl}
+                                      </div>
+                                    )}
+                                  </div>
                                 )}
                               </div>
                             )}

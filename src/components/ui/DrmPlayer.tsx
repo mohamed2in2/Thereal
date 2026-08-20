@@ -514,3 +514,6 @@ export function DrmPlayer({
     </div>
   );
 }
+
+export default DrmPlayer;
+
