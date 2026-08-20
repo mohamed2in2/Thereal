@@ -427,8 +427,21 @@ export function YouTubeSecurePlayer({
     };
   }, [toggleFs]);
 
+  const [isBlackoutActive, setIsBlackoutActive] = useState(false);
+
   // PC Anti-Screenshot & Clipboard Security Guard
   useEffect(() => {
+    let blackoutTimer: NodeJS.Timeout | null = null;
+    const triggerBlackout = (durationMs = 1500) => {
+      setIsBlackoutActive(true);
+      if (blackoutTimer) clearTimeout(blackoutTimer);
+      blackoutTimer = setTimeout(() => {
+        if (document.hasFocus() && !document.hidden) {
+          setIsBlackoutActive(false);
+        }
+      }, durationMs);
+    };
+
     const handleKeySecurity = (e: KeyboardEvent) => {
       const k = e.key;
       const lowerK = k.toLowerCase();
@@ -455,6 +468,7 @@ export function YouTubeSecurePlayer({
         isBrowserScreenshot ||
         isDevTools
       ) {
+        triggerBlackout(2000);
         if (isPrtScn || isWinSnipping || isMacScreenshot) {
           e.preventDefault();
           e.stopPropagation();
@@ -468,18 +482,38 @@ export function YouTubeSecurePlayer({
 
     const handleKeyUpSecurity = (e: KeyboardEvent) => {
       if (e.key === "PrintScreen" || e.code === "PrintScreen") {
+        triggerBlackout(2000);
         if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
           navigator.clipboard.writeText("").catch(() => {});
         }
       }
     };
 
+    const handleBlur = () => {
+      setIsBlackoutActive(true);
+    };
+
+    const handleFocus = () => {
+      setIsBlackoutActive(false);
+    };
+
+    const handleVisibilityChange = () => {
+      setIsBlackoutActive(document.hidden);
+    };
+
     window.addEventListener("keydown", handleKeySecurity, true);
     window.addEventListener("keyup", handleKeyUpSecurity, true);
+    window.addEventListener("blur", handleBlur);
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
+      if (blackoutTimer) clearTimeout(blackoutTimer);
       window.removeEventListener("keydown", handleKeySecurity, true);
       window.removeEventListener("keyup", handleKeyUpSecurity, true);
+      window.removeEventListener("blur", handleBlur);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, []);
 
@@ -498,7 +532,6 @@ export function YouTubeSecurePlayer({
       }
       onContextMenu={(e) => e.preventDefault()}
     >
-
       {/* Error Card Overlay if YouTube returns an error */}
       {errorMessage && (
         <div className="absolute inset-0 z-40 bg-slate-950 flex flex-col items-center justify-center p-6 text-center text-white">
@@ -531,7 +564,13 @@ export function YouTubeSecurePlayer({
       )}
 
       {/* The Container for dynamic YT iframe mount or fallback */}
-      <div className="absolute inset-0 w-full h-full">
+      <div
+        className="absolute inset-0 w-full h-full transition-all duration-75"
+        style={{
+          filter: isBlackoutActive ? "brightness(0)" : "none",
+          opacity: isBlackoutActive ? 0 : 1,
+        }}
+      >
         {useFallbackIframe ? (
           <iframe
             src={`https://www.youtube-nocookie.com/embed/${cleanVideoId}?enablejsapi=1&playsinline=1&rel=0&modestbranding=1`}

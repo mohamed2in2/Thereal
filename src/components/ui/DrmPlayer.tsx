@@ -150,8 +150,22 @@ export function DrmPlayer({
     return () => document.removeEventListener("fullscreenchange", handleFsChange);
   }, []);
 
-  // ── Anti-Screenshot & Clipboard Security Guard ────────────────────────────
+  const [isBlackoutActive, setIsBlackoutActive] = useState(false);
+
+  // ── Anti-Screenshot & Screen-Recording Blackout Engine ─────────────────────
   useEffect(() => {
+    let blackoutTimer: NodeJS.Timeout | null = null;
+
+    const triggerBlackout = (durationMs = 1500) => {
+      setIsBlackoutActive(true);
+      if (blackoutTimer) clearTimeout(blackoutTimer);
+      blackoutTimer = setTimeout(() => {
+        if (document.hasFocus() && !document.hidden) {
+          setIsBlackoutActive(false);
+        }
+      }, durationMs);
+    };
+
     const handleKeyDown = (e: KeyboardEvent) => {
       const k = e.key;
       const lowerK = k.toLowerCase();
@@ -172,6 +186,7 @@ export function DrmPlayer({
         (e.ctrlKey && lowerK === "u");
 
       if (isPrtScn || isWinSnipping || isWinGameBar || isMacScreenshot || isBrowserScreenshot || isDevTools) {
+        triggerBlackout(2000);
         if (isPrtScn || isWinSnipping || isMacScreenshot) {
           e.preventDefault();
           e.stopPropagation();
@@ -184,18 +199,38 @@ export function DrmPlayer({
 
     const handleKeyUp = (e: KeyboardEvent) => {
       if (e.key === "PrintScreen" || e.code === "PrintScreen") {
+        triggerBlackout(2000);
         if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
           navigator.clipboard.writeText("").catch(() => {});
         }
       }
     };
 
+    const handleBlur = () => {
+      setIsBlackoutActive(true);
+    };
+
+    const handleFocus = () => {
+      setIsBlackoutActive(false);
+    };
+
+    const handleVisibilityChange = () => {
+      setIsBlackoutActive(document.hidden);
+    };
+
     window.addEventListener("keydown", handleKeyDown, true);
     window.addEventListener("keyup", handleKeyUp, true);
+    window.addEventListener("blur", handleBlur);
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
+      if (blackoutTimer) clearTimeout(blackoutTimer);
       window.removeEventListener("keydown", handleKeyDown, true);
       window.removeEventListener("keyup", handleKeyUp, true);
+      window.removeEventListener("blur", handleBlur);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, []);
 
@@ -456,7 +491,11 @@ export function DrmPlayer({
         onLoadedMetadata={handleLoadedMetadata}
         onEnded={onEnded}
         onClick={togglePlay}
-        className="w-full h-full object-contain cursor-pointer"
+        className="w-full h-full object-contain cursor-pointer transition-all duration-75"
+        style={{
+          filter: isBlackoutActive ? "brightness(0)" : "none",
+          opacity: isBlackoutActive ? 0 : 1,
+        }}
       />
 
       {/* ── Dynamic Floating Watermark (Hardware & Screen Protection) ── */}

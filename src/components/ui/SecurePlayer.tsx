@@ -235,12 +235,24 @@ export function SecurePlayer({
   }, [paused, provider]);
 
   const isDirectVideo = embedUrl.startsWith("/api/") || embedUrl.includes(".mp4") || embedUrl.includes(".webm") || embedUrl.includes(".mov");
+  const [isBlackoutActive, setIsBlackoutActive] = React.useState(false);
 
   // PC Anti-Screenshot & Clipboard Security Guard
   React.useEffect(() => {
     if (noNativeSecurity || useDriveDirect) {
       return;
     }
+
+    let blackoutTimer: NodeJS.Timeout | null = null;
+    const triggerBlackout = (durationMs = 1500) => {
+      setIsBlackoutActive(true);
+      if (blackoutTimer) clearTimeout(blackoutTimer);
+      blackoutTimer = setTimeout(() => {
+        if (document.hasFocus() && !document.hidden) {
+          setIsBlackoutActive(false);
+        }
+      }, durationMs);
+    };
 
     const handleKeyDown = (e: KeyboardEvent) => {
       const k = e.key;
@@ -270,6 +282,7 @@ export function SecurePlayer({
         (e.ctrlKey && lowerK === "u");
 
       if (isPrtScn || isWinSnipping || isWinGameBar || isMacScreenshot || isBrowserScreenshot || isDevTools) {
+        triggerBlackout(2000);
         if (isPrtScn || isWinSnipping || isMacScreenshot) {
           e.preventDefault();
           e.stopPropagation();
@@ -282,18 +295,38 @@ export function SecurePlayer({
 
     const handleKeyUp = (e: KeyboardEvent) => {
       if (e.key === "PrintScreen" || e.code === "PrintScreen") {
+        triggerBlackout(2000);
         if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
           navigator.clipboard.writeText("").catch(() => {});
         }
       }
     };
 
+    const handleBlur = () => {
+      setIsBlackoutActive(true);
+    };
+
+    const handleFocus = () => {
+      setIsBlackoutActive(false);
+    };
+
+    const handleVisibilityChange = () => {
+      setIsBlackoutActive(document.hidden);
+    };
+
     window.addEventListener("keydown", handleKeyDown, true);
     window.addEventListener("keyup", handleKeyUp, true);
+    window.addEventListener("blur", handleBlur);
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
+      if (blackoutTimer) clearTimeout(blackoutTimer);
       window.removeEventListener("keydown", handleKeyDown, true);
       window.removeEventListener("keyup", handleKeyUp, true);
+      window.removeEventListener("blur", handleBlur);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [noNativeSecurity, useDriveDirect]);
 
@@ -340,6 +373,11 @@ export function SecurePlayer({
           src={`https://drive.google.com/file/d/${driveFileId}/preview`}
           title={title}
           className="absolute inset-0 w-full h-full border-0"
+          style={{
+            filter: isBlackoutActive ? "brightness(0)" : "none",
+            opacity: isBlackoutActive ? 0 : 1,
+            transition: "opacity 0.05s ease",
+          }}
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
           referrerPolicy="no-referrer-when-downgrade"
         />
@@ -348,8 +386,14 @@ export function SecurePlayer({
           src={embedUrl}
           controls
           controlsList="nodownload noplaybackrate"
+          disablePictureInPicture
+          playsInline
           className="absolute inset-0 w-full h-full object-contain"
-          onContextMenu={(e) => e.preventDefault()}
+          style={{
+            filter: isBlackoutActive ? "brightness(0)" : "none",
+            opacity: isBlackoutActive ? 0 : 1,
+            transition: "opacity 0.05s ease",
+          }}
           onPlay={() => onPlay?.()}
           onPause={() => onPause?.()}
           onEnded={() => onEnded?.()}
