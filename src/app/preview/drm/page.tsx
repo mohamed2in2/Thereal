@@ -25,6 +25,44 @@ function DrmPreviewContent() {
     }
   }, []);
 
+  const [activeToken, setActiveToken] = useState(token);
+  const [activeManifestUrl, setActiveManifestUrl] = useState("");
+  const [tokenLoading, setTokenLoading] = useState(!token);
+
+  useEffect(() => {
+    if (token) {
+      setActiveToken(token);
+      setTokenLoading(false);
+      return;
+    }
+    if (!assetId) return;
+
+    let isMounted = true;
+    setTokenLoading(true);
+    fetch("/api/teacher/drm-preview", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ assetId, title }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!isMounted) return;
+        if (data.success && data.drm?.token) {
+          setActiveToken(data.drm.token);
+          if (data.manifestUrl) setActiveManifestUrl(data.manifestUrl);
+        }
+      })
+      .catch((e) => console.warn("Auto-token generation error:", e))
+      .finally(() => {
+        if (isMounted) setTokenLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [assetId, token, title]);
+
   // Expiration countdown
   useEffect(() => {
     let targetTime = 0;
@@ -69,28 +107,33 @@ function DrmPreviewContent() {
     return () => clearInterval(interval);
   }, [exp]);
 
-
   const isDirectStream = assetId.startsWith("gdrive_") || assetId.startsWith("local_");
 
   const embedUrl = useMemo(() => {
     if (!assetId) return "";
+    if (activeManifestUrl) return activeManifestUrl;
+    if (assetId === "axinom_demo") {
+      return "https://media.axprod.net/TestVectors/v7-MultiDRM-SingleKey/Manifest_1080p.mpd";
+    }
     if (isDirectStream) {
       return `/api/videos/stream/${encodeURIComponent(assetId)}`;
     }
     return `/api/videos/drm/${encodeURIComponent(assetId)}/manifest.mpd`;
-  }, [assetId, isDirectStream]);
+  }, [assetId, isDirectStream, activeManifestUrl]);
 
   const drmConfig = useMemo(() => {
-    if (!token) return undefined;
+    const finalToken = activeToken || token;
+    if (!finalToken) return undefined;
     return {
-      token,
+      token: finalToken,
       licenseServers: {
         widevine: AXINOM_CONFIG.endpoints.widevine,
         playready: AXINOM_CONFIG.endpoints.playready,
         fairplay: AXINOM_CONFIG.endpoints.fairplay,
       },
     };
-  }, [token]);
+  }, [activeToken, token]);
+
 
   const handleCopyUrl = () => {
     if (fullUrl) {
