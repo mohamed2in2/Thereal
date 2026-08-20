@@ -148,6 +148,86 @@ export function DrmPlayer({
     return () => document.removeEventListener("fullscreenchange", handleFsChange);
   }, []);
 
+  // ── Anti-Screenshot & Screen-Recording Blackout Engine ─────────────────────
+  const [screenCaptured, setScreenCaptured] = useState(false);
+
+  useEffect(() => {
+    let focusTimeout: NodeJS.Timeout | null = null;
+
+    const triggerBlackout = () => {
+      setScreenCaptured(true);
+      if (focusTimeout) clearTimeout(focusTimeout);
+      if (videoRef.current && !videoRef.current.paused) {
+        videoRef.current.pause();
+      }
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+        navigator.clipboard.writeText("").catch(() => {});
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const k = e.key;
+      const lowerK = k.toLowerCase();
+
+      const isPrtScn = k === "PrintScreen" || e.code === "PrintScreen";
+      const isMeta = e.metaKey || (typeof e.getModifierState === "function" && (e.getModifierState("Meta") || e.getModifierState("OS")));
+
+      const isWinSnipping = isMeta && e.shiftKey && lowerK === "s";
+      const isWinGameBar = isMeta && lowerK === "g";
+      const isMacScreenshot = isMeta && e.shiftKey && ["3", "4", "5", "#", "$", "%"].includes(k);
+      const isBrowserScreenshot = e.ctrlKey && e.shiftKey && lowerK === "s";
+      const isDevTools =
+        k === "F12" ||
+        (e.ctrlKey && e.shiftKey && (lowerK === "i" || lowerK === "j" || lowerK === "c")) ||
+        (e.ctrlKey && lowerK === "u");
+
+      if (isPrtScn || isWinSnipping || isWinGameBar || isMacScreenshot || isBrowserScreenshot || isDevTools) {
+        e.preventDefault();
+        e.stopPropagation();
+        triggerBlackout();
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === "PrintScreen" || e.code === "PrintScreen") {
+        triggerBlackout();
+      }
+    };
+
+    const handleBlur = () => {
+      triggerBlackout();
+    };
+
+    const handleFocus = () => {
+      if (focusTimeout) clearTimeout(focusTimeout);
+      focusTimeout = setTimeout(() => {
+        setScreenCaptured(false);
+      }, 4000);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        triggerBlackout();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown, true);
+    window.addEventListener("keyup", handleKeyUp, true);
+    window.addEventListener("blur", handleBlur);
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      if (focusTimeout) clearTimeout(focusTimeout);
+      window.removeEventListener("keydown", handleKeyDown, true);
+      window.removeEventListener("keyup", handleKeyUp, true);
+      window.removeEventListener("blur", handleBlur);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []);
+
+
   // ── Initialize Shaka Player Instance ───────────────────────────────────────
   useEffect(() => {
     let isCancelled = false;
@@ -380,6 +460,21 @@ export function DrmPlayer({
             <ShieldCheck className="w-3 h-3 text-sky-400/50" />
             <span>{watermark}</span>
           </div>
+        </div>
+      )}
+
+      {/* ── Screen Capture Blackout Overlay ── */}
+      {screenCaptured && (
+        <div className="absolute inset-0 z-50 bg-black flex flex-col items-center justify-center p-6 text-center text-white backdrop-blur-3xl">
+          <div className="w-12 h-12 rounded-full bg-rose-500/20 text-rose-500 flex items-center justify-center mb-3">
+            <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+          </div>
+          <h3 className="text-base font-bold mb-1 text-white">🔒 محتوى محمي ضد تسجيل والتقاط الشاشة</h3>
+          <p className="text-xs text-slate-400 max-w-sm">
+            تم إيقاف عرض الفيديو مؤقتاً لحماية حقوق النشر والملكية الفكرية. يُرجى العودة للنافذة لمتابعة المشاهدة.
+          </p>
         </div>
       )}
 

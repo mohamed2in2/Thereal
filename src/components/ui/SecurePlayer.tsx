@@ -243,10 +243,16 @@ export function SecurePlayer({
       return;
     }
 
+    let focusTimeout: NodeJS.Timeout | null = null;
+
     const triggerBlackout = () => {
       setScreenCaptured(true);
+      if (focusTimeout) clearTimeout(focusTimeout);
       if (typeof onPause === "function") {
         onPause();
+      }
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+        navigator.clipboard.writeText("").catch(() => {});
       }
     };
 
@@ -256,12 +262,11 @@ export function SecurePlayer({
 
       // PrintScreen (PrtScn) / Alt+PrtScn / Win+PrtScn
       const isPrtScn = k === "PrintScreen" || e.code === "PrintScreen";
-      
       const isMeta = e.metaKey || (typeof e.getModifierState === "function" && (e.getModifierState("Meta") || e.getModifierState("OS")));
 
       // Windows Snipping Tool (Win + Shift + S) or Xbox Game Bar (Win + G)
-      const isWinSnipping = isMeta && e.shiftKey && (lowerK === "s");
-      const isWinGameBar = isMeta && (lowerK === "g");
+      const isWinSnipping = isMeta && e.shiftKey && lowerK === "s";
+      const isWinGameBar = isMeta && lowerK === "g";
 
       // Mac Screenshot Shortcuts: Cmd + Shift + 3, Cmd + Shift + 4, Cmd + Shift + 5
       const isMacScreenshot = isMeta && e.shiftKey && ["3", "4", "5", "#", "$", "%"].includes(k);
@@ -279,20 +284,12 @@ export function SecurePlayer({
         e.preventDefault();
         e.stopPropagation();
         triggerBlackout();
-
-        // Clear clipboard if screenshot attempted
-        if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
-          navigator.clipboard.writeText("").catch(() => {});
-        }
       }
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
       if (e.key === "PrintScreen" || e.code === "PrintScreen") {
         triggerBlackout();
-        if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
-          navigator.clipboard.writeText("").catch(() => {});
-        }
       }
     };
 
@@ -302,7 +299,11 @@ export function SecurePlayer({
     };
 
     const handleFocus = () => {
-      setScreenCaptured(false);
+      // Hold blackout for 4 seconds after refocus to prevent Snipping Tool capture buffer
+      if (focusTimeout) clearTimeout(focusTimeout);
+      focusTimeout = setTimeout(() => {
+        setScreenCaptured(false);
+      }, 4000);
     };
 
     const handleVisibilityChange = () => {
@@ -318,6 +319,7 @@ export function SecurePlayer({
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
+      if (focusTimeout) clearTimeout(focusTimeout);
       window.removeEventListener("keydown", handleKeyDown, true);
       window.removeEventListener("keyup", handleKeyUp, true);
       window.removeEventListener("blur", handleBlur);
