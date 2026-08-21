@@ -207,6 +207,21 @@ export function DrmPlayer({
   useEffect(() => {
     let blackoutTimer: NodeJS.Timeout | null = null;
 
+    // Visibility, not focus. document.hasFocus() is false on mobile in ordinary
+    // use (address bar, keyboard, notification shade), and gating the *release*
+    // on it latched the blackout on permanently — the video simply stayed black.
+    // visibilityState is the signal that actually tracks "the user can see this".
+    const isVisible = () =>
+      typeof document === "undefined" || document.visibilityState === "visible";
+
+    // Touch devices fire blur constantly, including when tapping the player's own
+    // controls, so blur is not a usable capture signal there. visibilitychange
+    // still covers backgrounding, which is the case that matters.
+    const isTouchDevice =
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(pointer: coarse)").matches;
+
     const triggerBlackout = (durationMs = 2500) => {
       setIsBlackoutActive(true);
       try {
@@ -221,7 +236,7 @@ export function DrmPlayer({
       }
       if (blackoutTimer) clearTimeout(blackoutTimer);
       blackoutTimer = setTimeout(() => {
-        if (document.hasFocus() && !document.hidden) {
+        if (isVisible()) {
           setIsBlackoutActive(false);
         }
       }, durationMs);
@@ -268,7 +283,7 @@ export function DrmPlayer({
     const handleFocus = () => {
       // Keep small grace period before unblacking
       setTimeout(() => {
-        if (document.hasFocus() && !document.hidden) {
+        if (isVisible()) {
           setIsBlackoutActive(false);
         }
       }, 300);
@@ -282,9 +297,17 @@ export function DrmPlayer({
       }
     };
 
+    // Safety net: if anything above latched the blackout while the page is
+    // visible, release it rather than leaving a permanently black player.
+    const stuckGuard = setInterval(() => {
+      if (isVisible()) {
+        setIsBlackoutActive((active) => (active ? false : active));
+      }
+    }, 4000);
+
     window.addEventListener("keydown", handleKeyDown, true);
     window.addEventListener("keyup", handleKeyUp, true);
-    window.addEventListener("blur", handleBlur);
+    if (!isTouchDevice) window.addEventListener("blur", handleBlur);
     window.addEventListener("focus", handleFocus);
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
@@ -293,6 +316,7 @@ export function DrmPlayer({
       window.removeEventListener("keydown", handleKeyDown, true);
       window.removeEventListener("keyup", handleKeyUp, true);
       window.removeEventListener("blur", handleBlur);
+      clearInterval(stuckGuard);
       window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
