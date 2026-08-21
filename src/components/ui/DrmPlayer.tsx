@@ -184,6 +184,8 @@ export function DrmPlayer({
   // Distinct from the transient blackout: this one is driven by the CDM and
   // stays up for as long as the platform reports an unprotected output path.
   const [outputRestricted, setOutputRestricted] = useState(false);
+  // What the CDM actually granted, so the UI can stop claiming "hardware".
+  const [protectionLabel, setProtectionLabel] = useState("جارٍ التفاوض على الحماية…");
 
   // Remote playback and picture-in-picture both hand the decoded frames to a
   // surface this player no longer controls, so they are refused outright.
@@ -382,6 +384,11 @@ export function DrmPlayer({
         );
         const playreadyHardware = await supportsRobustness(PLAYREADY_HW, "3000", "3000");
         const playreadyKeySystem = playreadyHardware ? PLAYREADY_HW : PLAYREADY_SW;
+        setProtectionLabel(
+          widevineHardware || playreadyHardware
+            ? "حماية عتادية (Hardware DRM)"
+            : "حماية برمجية فقط — تصوير الشاشة ممكن"
+        );
 
         if (licenseServers?.widevine) servers["com.widevine.alpha"] = toAbsolute(licenseServers.widevine)!;
         if (licenseServers?.playready) servers[playreadyKeySystem] = toAbsolute(licenseServers.playready)!;
@@ -700,7 +707,7 @@ export function DrmPlayer({
         <div className="flex items-center gap-2">
           <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-500/20 text-sky-400 border border-sky-500/30 flex items-center gap-1">
             <ShieldCheck className="w-3 h-3" />
-            Hardware Multi-DRM
+            {protectionLabel}
           </span>
           {title && <span className="text-xs font-semibold text-white/90 truncate max-w-md">{title}</span>}
         </div>

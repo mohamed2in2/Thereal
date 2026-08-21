@@ -362,10 +362,18 @@ function DrmPreviewContent() {
               <span className="text-sky-400">{isDirectStream ? "Native Cloud Stream" : "CENC Multi-DRM"}</span>
             </div>
             <p className="text-xs font-mono text-gray-300">
-              {isDirectStream ? "Google Drive Direct Stream + Dynamic Watermark" : "Widevine (L1/L3) + PlayReady + FairPlay"}
+              {isDirectStream
+                ? "Google Drive Direct Stream + Dynamic Watermark"
+                : isClearDemo
+                  ? "Clear DASH — بدون تشفير (عيّنة اختبار)"
+                  : "Widevine / PlayReady / FairPlay (المستوى يحدده الجهاز)"}
             </p>
             <p className="text-[10px] text-gray-500">
-              {isDirectStream ? "بث سحابي مباشر عالي السرعة مع علامة مائية متحركة وحظر تصوير الشاشة." : "حماية عتادية تمنع تصوير الشاشة والتحميل غير المصرح به."}
+              {isDirectStream
+                ? "بث سحابي مباشر عالي السرعة مع علامة مائية متحركة."
+                : isClearDemo
+                  ? "هذه العيّنة غير مشفّرة عمدًا وتُستخدم للتحقق من أن برنامج التسجيل يعمل. تصويرها أمر طبيعي ولا يدل على خلل في الحماية."
+                  : "منع تصوير الشاشة يتحقق فقط عند توفّر فك تشفير عتادي على الجهاز والمتصفح (Edge/PlayReady SL3000 أو Widevine L1). راجع صفحة فحص القدرات."}
             </p>
           </div>
 

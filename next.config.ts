@@ -28,7 +28,7 @@ const CSP = [
   "font-src 'self' data: https://fonts.gstatic.com",
   "media-src 'self' blob: https:",
   `frame-src 'self' ${VIDEO_FRAME_HOSTS.join(" ")} https://www.google.com`,
-  "connect-src 'self' https://recaptchaenterprise.googleapis.com https://www.google.com https://fonts.googleapis.com https://fonts.gstatic.com https://www.youtube.com https://www.youtube-nocookie.com https://*.googlevideo.com https://*.youtube.com https://*.axprod.net https://*.drm-widevine-licensing.axprod.net https://*.drm-playready-licensing.axprod.net https://*.drm-fairplay-licensing.axprod.net",
+  "connect-src 'self' https://recaptchaenterprise.googleapis.com https://www.google.com https://fonts.googleapis.com https://fonts.gstatic.com https://www.youtube.com https://www.youtube-nocookie.com https://*.googlevideo.com https://*.youtube.com https://*.axprod.net https://*.drm-widevine-licensing.axprod.net https://*.drm-playready-licensing.axprod.net https://*.drm-fairplay-licensing.axprod.net https://*.axtest.net https://drm-widevine-licensing.axtest.net https://drm-playready-licensing.axtest.net https://drm-fairplay-licensing.axtest.net",
   // Nothing in this app should ever be framed by a third party.
   "frame-ancestors 'self'",
   "base-uri 'self'",
