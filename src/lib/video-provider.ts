@@ -55,6 +55,9 @@ export function cleanProviderVideoId(provider: VideoProvider, input: string): st
 export interface ResolveEmbedOptions {
   userId?: string;
   domain?: string;
+  apiKey?: string;
+  playerId?: string | null;
+  watermarkText?: string;
 }
 
 /**
@@ -115,7 +118,12 @@ export async function resolveEmbedUrl(
     }
     case "vdocipher":
     default: {
-      const result = await getVdoCipherOtp(id);
+      const result = await getVdoCipherOtp(id, {
+        apiKey: options?.apiKey,
+        playerId: options?.playerId,
+        userId: options?.userId,
+        watermarkText: options?.watermarkText,
+      });
       return { embedUrl: result.embedUrl, provider: "vdocipher", signed: true, expiresInSeconds: 3600 };
     }
   }

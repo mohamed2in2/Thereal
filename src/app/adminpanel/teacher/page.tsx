@@ -235,6 +235,65 @@ export default function TeacherDashboardPage() {
     notify("success", "تم قفل خيار Axinom DRM مجدداً 🔒");
   };
 
+  // 🔐 VdoCipher Security Gate & State
+  const [vdocipherUnlocked, setVdocipherUnlocked] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return sessionStorage.getItem("gate_vdocipher") === "1";
+  });
+  const [vdocipherPasswordModal, setVdocipherPasswordModal] = useState(false);
+  const [vdocipherPasswordInput, setVdocipherPasswordInput] = useState("");
+  const [vdocipherChecking, setVdocipherChecking] = useState(false);
+  const [vdocipherError, setVdocipherError] = useState("");
+  const [vdocipherVerifiedPassword, setVdocipherVerifiedPassword] = useState(() => {
+    if (typeof window === "undefined") return "";
+    return sessionStorage.getItem("vdocipher_verified_pass") || "";
+  });
+
+  const handleUnlockVdocipher = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!vdocipherPasswordInput.trim()) {
+      setVdocipherError("يرجى إدخال كلمة مرور حماية VdoCipher");
+      return;
+    }
+    setVdocipherChecking(true);
+    setVdocipherError("");
+    try {
+      const res = await fetch("/api/teacher/vdocipher/gate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: vdocipherPasswordInput.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setVdocipherError(data.error || "كلمة مرور حماية VdoCipher غير صحيحة");
+        return;
+      }
+      sessionStorage.setItem("gate_vdocipher", "1");
+      sessionStorage.setItem("vdocipher_verified_pass", vdocipherPasswordInput.trim());
+      setVdocipherVerifiedPassword(vdocipherPasswordInput.trim());
+      setVdocipherUnlocked(true);
+      setVdocipherPasswordModal(false);
+      setVdocipherPasswordInput("");
+      setNewVideo((prev) => ({ ...prev, videoProvider: "vdocipher", providerVideoId: "" }));
+      notify("success", "تم إلغاء قفل حماية VdoCipher بنجاح! 🚀");
+    } catch {
+      setVdocipherError("تعذر الاتصال بالخادم للتحقق من كلمة المرور");
+    } finally {
+      setVdocipherChecking(false);
+    }
+  };
+
+  const handleLockVdocipher = () => {
+    sessionStorage.removeItem("gate_vdocipher");
+    sessionStorage.removeItem("vdocipher_verified_pass");
+    setVdocipherUnlocked(false);
+    setVdocipherVerifiedPassword("");
+    if (newVideo.videoProvider === "vdocipher") {
+      setNewVideo((prev) => ({ ...prev, videoProvider: "alasly", providerVideoId: "" }));
+    }
+    notify("success", "تم قفل خيار VdoCipher DRM مجدداً 🔒");
+  };
+
   // 🎬 Axinom 2-Hour Preview State & Handler
   const [drmPreviewLoading, setDrmPreviewLoading] = useState(false);
   const [drmPreviewData, setDrmPreviewData] = useState<{
@@ -287,6 +346,40 @@ export default function TeacherDashboardPage() {
     setGdriveStatus("جاري الاتصال بـ Google Drive والتحقق من الصلاحيات...");
 
     try {
+      const currentProvider = newVideo.videoProvider || "vdocipher";
+
+      if (currentProvider === "vdocipher") {
+        if (!newVideo.folderId) {
+          throw new Error("يرجى اختيار المحاضرة أولاً قبل استيراد الفيديو");
+        }
+        setGdriveStatus("جاري استيراد الفيديو وتمريره مباشرة إلى خوادم VdoCipher...");
+        const res = await fetch("/api/teacher/vdocipher/gdrive-import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            driveUrl: gdriveUrl.trim(),
+            title: newVideo.title || undefined,
+            folderId: newVideo.folderId,
+            durationMinutes: newVideo.durationMinutes || undefined,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || "فشل استيراد الفيديو من Google Drive");
+        }
+        setNewVideo((prev) => ({
+          ...prev,
+          videoProvider: "vdocipher",
+          providerVideoId: data.providerVideoId,
+          title: prev.title || data.title,
+          durationMinutes: prev.durationMinutes || data.durationMinutes || 0,
+        }));
+        setLastUploadedVideoId(data.providerVideoId);
+        setGdriveUrl("");
+        notify("success", data.message || "تم استيراد وحماية الفيديو في VdoCipher بنجاح! 🚀");
+        return;
+      }
+
       setGdriveStatus("جاري تنزيل الفيديو من Google Drive وحمايته بنظام Native Security...");
       const res = await fetch("/api/teacher/gdrive-import", {
         method: "POST",
@@ -303,7 +396,6 @@ export default function TeacherDashboardPage() {
         throw new Error(data.error || "فشل استيراد الفيديو من Google Drive");
       }
 
-      const currentProvider = newVideo.videoProvider || "alasly";
       setNewVideo((prev) => ({
         ...prev,
         videoProvider: currentProvider,
@@ -335,6 +427,78 @@ export default function TeacherDashboardPage() {
     setNativeStatus("جاري تحضير رابط الرفع الموقّع...");
 
     try {
+      if (newVideo.videoProvider === "vdocipher") {
+        if (!newVideo.folderId) {
+          throw new Error("يرجى اختيار المحاضرة أولاً قبل رفع الفيديو");
+        }
+        setNativeStatus("جاري حجز تذكرة الرفع من أفضل حساب VdoCipher...");
+        const ticketRes = await fetch("/api/teacher/vdocipher/upload-ticket", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: newVideo.title || file.name.replace(/\.[^/.]+$/, ""),
+            folderId: newVideo.folderId,
+            durationMinutes: newVideo.durationMinutes,
+            estimatedSizeBytes: file.size,
+          }),
+        });
+        const ticketData = await ticketRes.json();
+        if (!ticketRes.ok || !ticketData.success) {
+          throw new Error(ticketData.error || "تعذر إنشاء تذكرة رفع VdoCipher");
+        }
+
+        setNativeStatus("جاري رفع الفيديو مباشرة إلى VdoCipher...");
+        await new Promise<void>((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          const formData = new FormData();
+          const payload = ticketData.clientPayload;
+          for (const key of Object.keys(payload)) {
+            if (key !== "uploadLink") {
+              formData.append(key, payload[key]);
+            }
+          }
+          formData.append("file", file);
+
+          xhr.open("POST", ticketData.uploadLink, true);
+          xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable) {
+              const percent = Math.round((e.loaded / e.total) * 100);
+              setNativeProgress(percent);
+            }
+          };
+
+          xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              resolve();
+            } else {
+              reject(new Error(`فشل رفع الفيديو إلى خوادم التخزين (رمز: ${xhr.status})`));
+            }
+          };
+          xhr.onerror = () => reject(new Error("حدث انقطاع في الاتصال أثناء الرفع"));
+          xhr.send(formData);
+        });
+
+        setNativeStatus("جاري معالجة وتأكيد إرفاق الفيديو...");
+        await fetch("/api/teacher/vdocipher/complete-upload", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            videoId: ticketData.videoId,
+            durationMinutes: newVideo.durationMinutes,
+            sizeBytes: file.size,
+          }),
+        });
+
+        setNewVideo((prev) => ({
+          ...prev,
+          providerVideoId: ticketData.providerVideoId,
+          title: prev.title || file.name.replace(/\.[^/.]+$/, ""),
+        }));
+        setLastUploadedVideoId(ticketData.providerVideoId);
+        notify("success", `تم رفع الفيديو بنجاح وحمايته بأعلى درجات الـ DRM! (معرف: ${ticketData.providerVideoId}) 🚀`);
+        return;
+      }
+
       // 1. Init upload via server route
       const initRes = await fetch("/api/teacher/native-upload", {
         method: "POST",
@@ -1901,7 +2065,13 @@ export default function TeacherDashboardPage() {
                                 level: "أعلى حماية عتادية",
                                 locked: !drmUnlocked,
                               },
-                              { value: "vdocipher", label: "VdoCipher", badge: "DRM سحابي", level: "أعلى أماناً", locked: false },
+                              {
+                                value: "vdocipher",
+                                label: "VdoCipher",
+                                badge: vdocipherUnlocked ? "مفعّل 🔓" : "مقيد بكلمة سر 🔒",
+                                level: "أعلى أماناً",
+                                locked: !vdocipherUnlocked,
+                              },
                               { value: "alasly", label: "Native", badge: "Super Native", level: "عالي", locked: false },
                               { value: "bunny", label: "Bunny CDN", badge: "حماية متوسطة", level: "متوسط", locked: false },
                               { value: "youtube", label: "YouTube", badge: "اقتصادي", level: "منخفض", locked: false },
@@ -1914,6 +2084,10 @@ export default function TeacherDashboardPage() {
                                   onClick={() => {
                                     if (value === "axinom" && !drmUnlocked) {
                                       setDrmPasswordModal(true);
+                                      return;
+                                    }
+                                    if (value === "vdocipher" && !vdocipherUnlocked) {
+                                      setVdocipherPasswordModal(true);
                                       return;
                                     }
                                     setNewVideo({ ...newVideo, videoProvider: value, providerVideoId: "" });
@@ -2192,9 +2366,43 @@ export default function TeacherDashboardPage() {
                               </div>
                             )}
 
-                            {/* Native Video SaaS Direct Upload & Google Drive Downloader */}
-                            {newVideo.videoProvider === "alasly" && (
+                            {/* VdoCipher Locked Security Card */}
+                            {newVideo.videoProvider === "vdocipher" && !vdocipherUnlocked && (
+                              <div className="mt-2.5 p-4 rounded-2xl border border-amber-500/30 bg-amber-500/5 space-y-2 text-center">
+                                <div className="text-2xl">🔒🎬</div>
+                                <p className="text-xs font-bold text-[var(--ink)]">حماية VdoCipher مقفلة بكلمة مرور</p>
+                                <p className="text-[11px] text-[var(--ink-muted)] m-0">يجب إدخال كلمة مرور الحماية المعتمدة للمتابعة ورفع الفيديوهات إلى VdoCipher.</p>
+                                <div className="pt-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => setVdocipherPasswordModal(true)}
+                                    className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-white font-bold text-xs cursor-pointer shadow-sm transition-all inline-flex items-center gap-1.5"
+                                  >
+                                    <span>🔐</span>
+                                    <span>إدخال كلمة المرور لفتح VdoCipher</span>
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* SaaS Direct Upload & Google Drive Downloader (VdoCipher DRM & Native Security) */}
+                            {(newVideo.videoProvider === "alasly" || (newVideo.videoProvider === "vdocipher" && vdocipherUnlocked)) && (
                               <div className="mt-2.5 p-3.5 rounded-2xl border border-sky-500/30 bg-sky-500/5 space-y-3">
+                                {newVideo.videoProvider === "vdocipher" && (
+                                  <div className="flex items-center justify-between pb-1 border-b border-white/5">
+                                    <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-bold">
+                                      <span>🔓</span>
+                                      <span>حماية VdoCipher مفتوحة ومفعلة للرفع</span>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={handleLockVdocipher}
+                                      className="text-[10px] px-2 py-0.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 font-bold transition-all cursor-pointer"
+                                    >
+                                      🔒 قفل الخيار
+                                    </button>
+                                  </div>
+                                )}
                                 {/* Tab selector between Direct Upload & Google Drive */}
                                 <div className="flex items-center gap-2 p-1 rounded-xl bg-black/20 border border-white/5">
                                   <button
@@ -2230,7 +2438,11 @@ export default function TeacherDashboardPage() {
                                       <label className="text-xs font-bold text-[var(--ink)] flex items-center gap-1.5">
                                         <span>🔗</span> رابط فيديو Google Drive:
                                       </label>
-                                      <span className="text-[10px] text-sky-400 font-bold">⚡ استيراد سحابي فوري (Zero VPS Storage - يدعم حتى 6GB)</span>
+                                      <span className="text-[10px] text-sky-400 font-bold">
+                                        {newVideo.videoProvider === "vdocipher"
+                                          ? "⚡ نقل سحابي ذكي إلى VdoCipher DRM"
+                                          : "⚡ استيراد سحابي فوري (Zero VPS Storage - يدعم حتى 6GB)"}
+                                      </span>
                                     </div>
 
                                     <div className="flex flex-col sm:flex-row gap-2">
@@ -2284,7 +2496,7 @@ export default function TeacherDashboardPage() {
                                         </button>
                                       </div>
                                       <p className="m-0 leading-relaxed">
-                                        يتم تنزيل الملفات الكبيرة (حتى 6 جيجابايت) مباشرة عبر Stream Pipeline محمي خاص بالمعلمين فقط. تأكد من مشاركة الفيديو في Google Drive مع الإيميل: <code className="font-mono text-sky-300 select-all px-1 bg-black/40 rounded">code-up-drive-downloader@gen-lang-client-0511580613.iam.gserviceaccount.com</code> أو جعل الرابط متاحاً لأي شخص يملك الرابط (Anyone with the link).
+                                        يتم تنزيل واستيراد الملفات الكبيرة مباشرة عبر Pipeline محمي خاص بالمعلمين. تأكد من مشاركة الفيديو في Google Drive مع الإيميل: <code className="font-mono text-sky-300 select-all px-1 bg-black/40 rounded">code-up-drive-downloader@gen-lang-client-0511580613.iam.gserviceaccount.com</code> أو جعل الرابط متاحاً لأي شخص يملك الرابط (Anyone with the link).
                                       </p>
                                     </div>
                                   </div>
@@ -2295,7 +2507,7 @@ export default function TeacherDashboardPage() {
                                   <div className="space-y-2">
                                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                                       <label className="text-xs font-bold text-[var(--ink)] flex items-center gap-1.5">
-                                        <span>⚡</span> رفع ملف فيديو من جهازك إلى Native Engine:
+                                        <span>⚡</span> {newVideo.videoProvider === "vdocipher" ? "رفع ملف فيديو مباشرة إلى VdoCipher DRM:" : "رفع ملف فيديو من جهازك إلى Native Engine:"}
                                       </label>
                                       <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-white text-xs font-bold transition-all cursor-pointer shrink-0">
                                         <span>📁 اختر فيديو من جهازك</span>
@@ -2334,7 +2546,7 @@ export default function TeacherDashboardPage() {
                                   <div className="mt-2.5 p-3 rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 space-y-2">
                                     <div className="flex items-center justify-between">
                                       <span className="text-xs font-bold text-emerald-400 flex items-center gap-1">
-                                        <span>🎉</span> تم تجهيز وحماية الفيديو بنجاح عبر Native Security!
+                                        <span>🎉</span> {newVideo.videoProvider === "vdocipher" ? "تم رفع وحماية الفيديو بنجاح عبر VdoCipher DRM!" : "تم تجهيز وحماية الفيديو بنجاح عبر Native Security!"}
                                       </span>
                                       <button
                                         type="button"
@@ -3451,6 +3663,100 @@ export default function TeacherDashboardPage() {
                   className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white text-xs font-bold shadow-lg transition-all disabled:opacity-50 cursor-pointer"
                 >
                   {drmChecking ? "جارٍ التحقق..." : "دخول وفك القفل"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 🔐 VdoCipher DRM Password Gate Modal */}
+      {vdocipherPasswordModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" dir="rtl">
+          <div className="w-full max-w-md p-6 rounded-3xl bg-[var(--card)] border border-sky-500/30 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">🔒🎬</span>
+                <h3 className="text-base font-black text-[var(--ink)]">
+                  كلمة مرور حماية VdoCipher DRM
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setVdocipherPasswordModal(false);
+                  setVdocipherPasswordInput("");
+                  setVdocipherError("");
+                }}
+                className="text-[var(--ink-muted)] hover:text-white text-lg font-bold cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-[var(--ink-muted)] leading-relaxed m-0">
+              خدمة VdoCipher ذات التشفير المتقدم تتطلب إدخال كلمة مرور الحماية المعتمدة الخاصة بالمعلمين للمتابعة ورفع الفيديوهات.
+              <br />
+              <span className="text-sky-400 font-bold mt-1 inline-block">
+                💡 إذا لم تكن تملك كلمة المرور، يرجى طلبها من إدارة المنصة.
+              </span>
+            </p>
+
+            <form onSubmit={handleUnlockVdocipher} className="space-y-3.5">
+              <div>
+                <label className="block text-xs font-bold text-[var(--ink)] mb-1">
+                  كلمة مرور حماية VdoCipher للمعلمين *
+                </label>
+                <input
+                  type="password"
+                  required
+                  autoFocus
+                  dir="ltr"
+                  placeholder="••••••••"
+                  value={vdocipherPasswordInput}
+                  onChange={(e) => {
+                    setVdocipherPasswordInput(e.target.value);
+                    if (vdocipherError) setVdocipherError("");
+                  }}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-black/30 border border-white/10 font-mono text-sm text-[var(--ink)] focus:outline-none focus:border-sky-500"
+                />
+              </div>
+
+              {vdocipherError && (
+                <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
+                  <span>⚠️</span>
+                  <span>{vdocipherError}</span>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-white/10">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setVdocipherPasswordModal(false);
+                    setVdocipherPasswordInput("");
+                    setVdocipherError("");
+                  }}
+                  className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-[var(--ink-muted)] text-xs font-bold transition-all cursor-pointer"
+                >
+                  إلغاء
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={vdocipherChecking || !vdocipherPasswordInput.trim()}
+                  className="px-5 py-2 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-black text-xs shadow-md transition-all disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+                >
+                  {vdocipherChecking ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      <span>جارٍ التحقق...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>🔓 فتح القفل وتفعيل VdoCipher</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>

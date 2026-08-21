@@ -27,6 +27,7 @@ const superadminSections = [
   { id: "deleted-teachers",    label: "المعلمون المحذوفون" },
   { id: "create",              label: "إضافة مدرس" },
   { id: "wallet",              label: "💰 إدارة الرصيد" },
+  { id: "vdocipher-accounts",  label: "🎬 باقات VdoCipher (Bandwidth)" },
   { id: "daily-exams",         label: "امتحانات لوحة الشرف" },
   { id: "leaderboard-prizes",  label: "🏆 جوائز لوحة الشرف (24 ساعة)" },
   { id: "logs",                label: "سجلات النشاط" },

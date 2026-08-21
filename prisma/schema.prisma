@@ -344,6 +344,7 @@ model Video {
   planSources         PlanLessonSource[]
   unmatchedPlans      UnmatchedPlanContent[]
   viewRequests        VideoViewRequest[]
+  vdoCipherAssets     VdoCipherVideoAsset[]
 
   @@index([folderId])
 }
@@ -1710,6 +1711,66 @@ model TesterActivityLog {
   @@index([createdAt])
 }
 
+/// Superadmin-managed VdoCipher accounts. Each account has its own API secret (AES-256-GCM encrypted),
+/// player ID, 5GB bandwidth limit (configurable), and expiration date.
+model VdoCipherAccount {
+  id                  String                 @id @default(cuid())
+  name                String                 // e.g. "Account 001"
+  apiKeyEnc           String                 // AES-256-GCM ciphertext (never returned to client)
+  playerId            String?                // Optional custom player theme ID
+  bandwidthLimitBytes BigInt                 @default(5368709120) // 5 GB default (5 * 1024^3)
+  bandwidthUsedBytes  BigInt                 @default(0)
+  expiresAt           DateTime               // Account validity expiration
+  isActive            Boolean                @default(true)
+  notes               String?
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
 
+  videoAssets         VdoCipherVideoAsset[]
+  reservations        VdoCipherReservation[]
 
+  @@index([isActive, expiresAt])
+}
 
+/// Tracks the instance of a video asset uploaded to a specific VdoCipher account.
+model VdoCipherVideoAsset {
+  id                  String                 @id @default(cuid())
+  videoId             String
+  accountId           String
+  vdoCipherVideoId    String                 // The actual VdoCipher video ID in that account
+  status              String                 @default("ready") // "pre-upload" | "uploading" | "processing" | "ready" | "error"
+  durationSeconds     Int                    @default(0)
+  sizeBytes           BigInt                 @default(0)
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+
+  video               Video                  @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  account             VdoCipherAccount       @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([videoId, accountId])
+  @@index([accountId])
+  @@index([videoId])
+  @@index([vdoCipherVideoId])
+}
+
+/// Secret internal viewer bandwidth reservation.
+/// When a student begins watching, estimated bandwidth is reserved atomically
+/// to prevent oversubscribing an account before it reaches capacity.
+model VdoCipherReservation {
+  id                  String                 @id @default(cuid())
+  accountId           String
+  videoId             String
+  studentId           String
+  sessionToken        String
+  reservedBytes       BigInt
+  status              String                 @default("active") // "active" | "completed" | "expired" | "released"
+  expiresAt           DateTime
+  releasedAt          DateTime?
+  createdAt           DateTime               @default(now())
+
+  account             VdoCipherAccount       @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId, status])
+  @@index([sessionToken])
+  @@index([expiresAt])
+}

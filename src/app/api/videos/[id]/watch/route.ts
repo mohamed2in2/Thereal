@@ -386,7 +386,31 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const domain = req.headers.get("x-forwarded-host") || req.headers.get("host") || undefined;
     const studentIdentifier = session.phone || session.name || session.id;
-    const embedResult = await resolveEmbedUrl(video, { userId: studentIdentifier, domain });
+
+    let activeVdoSelection: any = null;
+    if ((video.videoProvider || "vdocipher") === "vdocipher") {
+      const activeRes = await prisma.vdoCipherReservation.findFirst({
+        where: { sessionToken: activeSession.sessionToken, status: "active" },
+        include: { account: true },
+      });
+      if (activeRes) {
+        try {
+          const { decryptVdoCipherSecret } = await import("@/lib/vdocipher-accounts");
+          activeVdoSelection = {
+            apiKey: decryptVdoCipherSecret(activeRes.account.apiKeyEnc),
+            playerId: activeRes.account.playerId,
+          };
+        } catch {}
+      }
+    }
+
+    const embedResult = await resolveEmbedUrl(video, {
+      userId: studentIdentifier,
+      domain,
+      apiKey: activeVdoSelection?.apiKey,
+      playerId: activeVdoSelection?.playerId,
+      watermarkText: session.phone || session.name || "",
+    });
 
     const profile = await prisma.teacherProfile.findUnique({
       where: { teacherId: course.teacherId },
@@ -504,7 +528,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const QUOTA_EXCEEDED = "QUOTA_EXCEEDED";
   const isPg = (process.env.DATABASE_URL ?? "").startsWith("postgres");
   try {
-    const { used, ws } = await prisma.$transaction(
+    const { used, ws, vdoAccountSelection } = await prisma.$transaction(
       async (tx: any) => {
         const usedCount = await tx.videoWatchSession.count({
           where: { studentId: session.id, videoId, usedWatchSlot: true },
@@ -520,7 +544,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         const created = await tx.videoWatchSession.create({
           data: { sessionToken, videoId, studentId: session.id, expiresAt, usedWatchSlot: true, ipAddress, userAgent },
         });
-        return { used: usedCount, ws: created };
+        const isVdo = (video.videoProvider || "vdocipher") === "vdocipher";
+        let vdoAccountSelection: any = null;
+        if (isVdo) {
+          const { reserveViewerBandwidth } = await import("@/lib/vdocipher-accounts");
+          vdoAccountSelection = await reserveViewerBandwidth(tx, {
+            videoId: video.id,
+            studentId: session.id,
+            sessionToken,
+            durationMinutes: video.durationMinutes,
+            rawVdoCipherId: video.providerVideoId || video.vdoCipherId,
+          });
+        }
+        return { used: usedCount, ws: created, vdoAccountSelection };
       },
       isPg ? { isolationLevel: "Serializable" } : undefined
     );
@@ -570,7 +606,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const domain = req.headers.get("x-forwarded-host") || req.headers.get("host") || undefined;
     const studentIdentifier = session.phone || session.name || session.id;
-    const embedResult = await resolveEmbedUrl(video, { userId: studentIdentifier, domain });
+    const embedResult = await resolveEmbedUrl(video, {
+      userId: studentIdentifier,
+      domain,
+      apiKey: vdoAccountSelection?.apiKey,
+      playerId: vdoAccountSelection?.playerId,
+      watermarkText: session.phone || session.name || "",
+    });
     const progress = await prisma.progress.findUnique({
       where: { studentId_videoId: { studentId: session.id, videoId } },
       select: { lastPositionSeconds: true },

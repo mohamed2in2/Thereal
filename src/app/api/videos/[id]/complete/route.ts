@@ -35,6 +35,10 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
         { status: 400 }
       );
     }
+    if (watchSession) {
+      const { releaseViewerBandwidth } = await import("@/lib/vdocipher-accounts");
+      await releaseViewerBandwidth(watchSession.sessionToken, { completed: true }).catch(() => {});
+    }
   }
 
   await prisma.progress.upsert({

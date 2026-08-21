@@ -96,6 +96,30 @@ export function verifyDrmPassword(password: string): boolean {
   return timingSafeCompare(password, env);
 }
 
+/** Verifies the VdoCipher security passkey (gates VdoCipher uploading in teacher panel). */
+export async function verifyVdoCipherSecurityPassword(password: string): Promise<boolean> {
+  if (!password) return false;
+  try {
+    const dbConfig = await prisma.platformConfig.findUnique({
+      where: { key: "vdocipher_security_password" },
+    });
+    if (dbConfig?.value && dbConfig.value.trim().length > 0) {
+      return timingSafeCompare(password.trim(), dbConfig.value.trim());
+    }
+  } catch {
+    // fallback to env
+  }
+
+  const env =
+    process.env.VDOCIPHER_SECURITY_PASSWORD ||
+    process.env.DRM_UPLOAD_PASSWORD ||
+    process.env.SUPERADMIN_ACTION_PASSWORD ||
+    process.env.SUPERADMIN_MASTER_PASSWORD;
+
+  if (!env) return false;
+  return timingSafeCompare(password.trim(), env.trim());
+}
+
 // ─── Activity logging ─────────────────────────────────────────────────────────
 
 export interface ActivityLogParams {

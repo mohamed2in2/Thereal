@@ -34,6 +34,7 @@ export const CONFIG_DEFINITIONS: ConfigDef[] = [
   { key: "watch_session_hours", type: "number", category: "video", label: "مدة جلسة المشاهدة (ساعات)", default: "4" },
   { key: "mark_complete_threshold", type: "number", category: "video", label: "نسبة إنهاء المحاضرة (%)", default: "80" },
   { key: "max_videos_per_folder", type: "number", category: "video", label: "الحد الأقصى للفيديوهات في المجلد", default: "100" },
+  { key: "vdocipher_security_password", type: "string", category: "video", label: "كلمة مرور حماية VdoCipher للمعلمين (Security Passkey)", default: "" },
 
   // ── Access Codes ──
   { key: "code_expiry_days", type: "number", category: "codes", label: "مدة صلاحية كود الوصول (أيام)", default: "365" },

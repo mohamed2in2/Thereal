@@ -23,6 +23,7 @@ import { WalletSection } from "@/components/admin/superadmin/WalletSection";
 import { PlansSection } from "@/components/admin/superadmin/PlansSection";
 import { WhatsAppSection } from "@/components/admin/WhatsAppSection";
 import { SecuritySection } from "@/components/admin/SecuritySection";
+import { VdoCipherSection } from "@/components/admin/superadmin/VdoCipherSection";
 import { IconMenu, IconTrash } from "@/components/admin/AdminIcons";
 import dynamic from "next/dynamic";
 
@@ -121,6 +122,7 @@ const SECTION_TITLES: Record<string, string> = {
   "daily-exams": "امتحانات لوحة الشرف",
   "leaderboard-prizes": "جوائز لوحة الشرف اليومية (24 ساعة)",
   "staff-accounts": "المشرفون والموظفون",
+  "vdocipher-accounts": "باقات VdoCipher ومجمع الباندويث (Bandwidth Pool)",
   "site-text": "نصوص الموقع",
   "advanced-settings": "الإعدادات المتقدمة",
   errors: "مراقبة الأخطاء والتحذيرات",
@@ -484,6 +486,8 @@ export default function SuperadminPage() {
           {activeSection === "plans" && <PlansSection userRole={userRole} />}
 
           {activeSection === "wallet" && <WalletSection />}
+
+          {activeSection === "vdocipher-accounts" && <VdoCipherSection />}
 
           {activeSection === "students" && <StudentsSection userRole={userRole} />}
 
