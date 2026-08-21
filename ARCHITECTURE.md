@@ -41,7 +41,7 @@ Code-UP is a premium Egyptian EdTech platform targeting secondary and primary st
 │  │    Ingest & Stream)   │   │                                                       │  │
 │  │ • VdoCipher (DRM)     │   │                                                       │  │
 │  │ • Bunny (Signed URL)  │   │                                                       │  │
-│  │ • YouTube (Unlisted)  │   │                                                       │  │
+│  │ • YouTube (Unlisted)  │   │                                                      │  │
 │  └───────────────────────┘   └───────────────────────────────────────────────────────┘  │
 
 └─────────────────────────────────────────────────────────────────────────────────────────┘
