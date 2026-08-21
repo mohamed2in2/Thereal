@@ -262,7 +262,14 @@ export function DrmPlayer({
         ((e.ctrlKey || isMeta) && lowerK === "u");
 
       if (isPrtScn || isWinSnipping || isWinGameBar || isMacScreenshot || isBrowserScreenshot || isDevTools) {
-        triggerBlackout(3000);
+        // Deliberately no blackout here.
+        //
+        // Win+Shift+S, PrintScreen and Cmd+Shift+3/4/5 are intercepted by the OS
+        // shell, so this handler mostly never runs — and when it does, the frame
+        // is already captured before React can repaint. It bought nothing, while
+        // a single stuck trigger blanked the player for the whole session, which
+        // is what students were actually experiencing. Real capture protection
+        // comes from the hardware DRM path and the CDM key-status lock below.
         e.preventDefault();
         e.stopPropagation();
       }
@@ -270,14 +277,16 @@ export function DrmPlayer({
 
     const handleKeyUp = (e: KeyboardEvent) => {
       if (e.key === "PrintScreen" || e.code === "PrintScreen" || e.keyCode === 44) {
-        triggerBlackout(3000);
         e.preventDefault();
         e.stopPropagation();
       }
     };
 
     const handleBlur = () => {
-      triggerBlackout(2000);
+      // Focus loss is not evidence of capture: clicking the address bar, an
+      // extension popup or a second monitor all fire it. Backgrounding the tab
+      // is handled by visibilitychange, which is the signal that means the
+      // student genuinely cannot see the player.
     };
 
     const handleFocus = () => {

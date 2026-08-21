@@ -244,15 +244,6 @@ export function SecurePlayer({
     }
 
     let blackoutTimer: NodeJS.Timeout | null = null;
-    const triggerBlackout = (durationMs = 1500) => {
-      setIsBlackoutActive(true);
-      if (blackoutTimer) clearTimeout(blackoutTimer);
-      blackoutTimer = setTimeout(() => {
-        if (document.hasFocus() && !document.hidden) {
-          setIsBlackoutActive(false);
-        }
-      }, durationMs);
-    };
 
     const handleKeyDown = (e: KeyboardEvent) => {
       const k = e.key;
@@ -282,7 +273,9 @@ export function SecurePlayer({
         (e.ctrlKey && lowerK === "u");
 
       if (isPrtScn || isWinSnipping || isWinGameBar || isMacScreenshot || isBrowserScreenshot || isDevTools) {
-        triggerBlackout(2000);
+        // No blackout: these shortcuts are swallowed by the OS shell, so the
+        // handler rarely fires, and when it does the frame is already captured.
+        // A single stuck trigger left the player black for the whole session.
         if (isPrtScn || isWinSnipping || isMacScreenshot) {
           e.preventDefault();
           e.stopPropagation();
@@ -295,7 +288,6 @@ export function SecurePlayer({
 
     const handleKeyUp = (e: KeyboardEvent) => {
       if (e.key === "PrintScreen" || e.code === "PrintScreen") {
-        triggerBlackout(2000);
         if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
           navigator.clipboard.writeText("").catch(() => {});
         }
@@ -303,7 +295,10 @@ export function SecurePlayer({
     };
 
     const handleBlur = () => {
-      setIsBlackoutActive(true);
+      // Focus loss is not capture. Clicking the address bar, an extension popup
+      // or a second monitor all fire blur, and on touch devices it fires
+      // constantly — which left the player permanently black. Backgrounding is
+      // covered by visibilitychange below.
     };
 
     const handleFocus = () => {
