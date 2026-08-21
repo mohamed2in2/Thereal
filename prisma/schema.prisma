@@ -61,6 +61,8 @@ model User {
   studyPlans          DailyStudyPlan[]         @relation("StudentStudyPlans")
   gradeRequests       GradeAdjustmentRequest[] @relation("StudentGradeRequests")
   reviewedGradeReqs   GradeAdjustmentRequest[] @relation("TeacherGradeRequests")
+  viewRequests        VideoViewRequest[]       @relation("StudentViewRequests")
+  reviewedViewReqs    VideoViewRequest[]       @relation("TeacherViewRequests")
   progress            Progress[]
   quizResults         QuizResult[]
   feedbacks           StudentFeedback[]        @relation("StudentFeedbacks")
@@ -341,8 +343,39 @@ model Video {
   homeworks           Homework[]
   planSources         PlanLessonSource[]
   unmatchedPlans      UnmatchedPlanContent[]
+  viewRequests        VideoViewRequest[]
 
   @@index([folderId])
+}
+
+/// A student asking for extra views after exhausting Video.maxWatchesPerUser.
+/// Grants are per student and per video: the quota check adds up grantedViews
+/// from approved rows, so approving one student never widens the limit for
+/// everyone else the way editing maxWatchesPerUser would.
+model VideoViewRequest {
+  id           String    @id @default(cuid())
+  studentId    String
+  videoId      String
+  reason       String?
+  /// pending | approved | rejected
+  status       String    @default("pending")
+  /// Extra views granted on approval. Always 0 while pending or rejected.
+  grantedViews Int       @default(0)
+  teacherId    String?
+  teacherNotes String?
+  reviewedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  student      User      @relation("StudentViewRequests", fields: [studentId], references: [id], onDelete: Cascade)
+  teacher      User?     @relation("TeacherViewRequests", fields: [teacherId], references: [id])
+  video        Video     @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+  @@index([videoId])
+  @@index([teacherId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([studentId, videoId])
 }
 
 model VideoWatchSession {

@@ -25,8 +25,12 @@ export const AXINOM_CONFIG = {
 function getCommunicationKeyBuffer(): Buffer {
   const rawKey = (process.env.AXINOM_COMMUNICATION_KEY || "").trim();
   if (!rawKey) {
-    console.error("[Axinom DRM] Warning: AXINOM_COMMUNICATION_KEY is not configured in .env. DRM tokens will be rejected by Axinom license servers.");
-    return Buffer.from("0000000000000000000000000000000000000000000000000000000000000000", "hex");
+    // Signing with a placeholder key produces a token that looks valid but is
+    // rejected by Axinom with an opaque error, which is far harder to diagnose
+    // than failing here.
+    throw new Error(
+      "[Axinom DRM] AXINOM_COMMUNICATION_KEY is not configured. Cannot mint a license token."
+    );
   }
 
   // 64-char Hex format
@@ -41,6 +45,52 @@ function getCommunicationKeyBuffer(): Buffer {
   return Buffer.from(rawKey, "utf-8");
 }
 
+/**
+ * Axinom identifies content keys by GUID, while Shaka Packager emits and
+ * consumes them as unseparated hex. Convert without changing the value.
+ */
+function toKeyGuid(value: string): string {
+  const hex = value.replace(/-/g, "").toLowerCase();
+  if (!/^[0-9a-f]{32}$/.test(hex)) return value;
+  return [
+    hex.slice(0, 8),
+    hex.slice(8, 12),
+    hex.slice(12, 16),
+    hex.slice(16, 20),
+    hex.slice(20),
+  ].join("-");
+}
+
+/**
+ * Wraps a content key for transport inside the entitlement token.
+ *
+ * Axinom expects the raw 16-byte key encrypted with the communication key and
+ * base64-encoded — one AES block, no padding and no IV prefix, which is what
+ * the reference token in this file decodes to.
+ */
+function encryptContentKey(keyHex: string, communicationKey: Buffer): string {
+  const keyBytes = Buffer.from(keyHex.replace(/-/g, ""), "hex");
+  if (keyBytes.length !== 16) {
+    throw new Error(`[Axinom DRM] Content key must be 16 bytes, got ${keyBytes.length}.`);
+  }
+  const cipher = crypto.createCipheriv(
+    "aes-256-cbc",
+    communicationKey,
+    Buffer.alloc(16, 0)
+  );
+  cipher.setAutoPadding(false);
+  return Buffer.concat([cipher.update(keyBytes), cipher.final()]).toString("base64");
+}
+
+export interface AxinomContentKey {
+  keyId: string;
+  key: string;
+  /** Rendition tier this key protects, e.g. "SD" or "HD". */
+  label?: string;
+  /** When true, only hardware-backed CDMs are licensed for this key. */
+  hardwareOnly?: boolean;
+}
+
 export interface AxinomTokenOptions {
   videoId: string;
   userId?: string;
@@ -48,7 +98,35 @@ export interface AxinomTokenOptions {
   allowPersistence?: boolean;
   keyId?: string;
   key?: string;
+  /** Tiered keys. Takes precedence over the single keyId/key pair. */
+  keys?: AxinomContentKey[];
 }
+
+/**
+ * Security policies attached to content keys.
+ *
+ * Splitting renditions across two keys is what lets hardware and software
+ * devices coexist: a software (L3 / SL2000) CDM is licensed for the SD key
+ * only, so Shaka drops the HD renditions for it rather than refusing to play.
+ * PlayReady security levels are 2000 for software and 3000 for hardware.
+ */
+const HARDWARE_POLICY = "hw-secure";
+const SOFTWARE_POLICY = "sw-secure";
+
+const USAGE_POLICIES = [
+  {
+    name: HARDWARE_POLICY,
+    playready: { min_device_security_level: 3000 },
+    widevine: {
+      device_security_level: "HW_SECURE_ALL",
+    },
+  },
+  {
+    name: SOFTWARE_POLICY,
+    playready: { min_device_security_level: 2000 },
+    widevine: { device_security_level: "SW_SECURE_DECODE" },
+  },
+];
 
 
 export interface AxinomDrmPayload {
@@ -77,7 +155,7 @@ function base64UrlEncode(input: Buffer | string): string {
  * Creates a signed Axinom DRM Entitlement Token (JWT) with X-AxDRM-Message schema.
  */
 export function createAxinomDrmToken(options: AxinomTokenOptions): AxinomDrmPayload {
-  const expiresInSeconds = options.expiresInSeconds || 4 * 60 * 60; // 4 hours default
+  const expiresInSeconds = options.expiresInSeconds || 2 * 60 * 60; // 2 hours
   const nowUnix = Math.floor(Date.now() / 1000);
   const expUnix = nowUnix + expiresInSeconds;
   const expiresAt = new Date(expUnix * 1000).toISOString();
@@ -123,7 +201,10 @@ export function createAxinomDrmToken(options: AxinomTokenOptions): AxinomDrmPayl
     typ: "JWT",
   };
 
+  const keyBuffer = getCommunicationKeyBuffer();
+
   // Determine content keys source (explicit inline key or Key-seed derivation)
+  let usesTieredPolicies = false;
   let contentKeysSource: Record<string, any> = {
     key_seed: {
       key_seed_id: AXINOM_CONFIG.keySeedId,
@@ -131,30 +212,38 @@ export function createAxinomDrmToken(options: AxinomTokenOptions): AxinomDrmPayl
   };
 
   try {
+    let tieredKeys: AxinomContentKey[] | undefined = options.keys;
     let keyId = options.keyId;
     let key = options.key;
-    if (!keyId || !key) {
+    if (!tieredKeys?.length && (!keyId || !key)) {
       const fs = require("node:fs");
       const path = require("node:path");
       const safeId = String(options.videoId).replace(/[^a-zA-Z0-9_-]/g, "_");
       const keyFilePath = path.resolve(process.cwd(), "uploads", "drm-keys", `${safeId}.json`);
       if (fs.existsSync(keyFilePath)) {
         const keyData = JSON.parse(fs.readFileSync(keyFilePath, "utf8"));
-        if (keyData.keyId && keyData.key) {
+        if (Array.isArray(keyData.keys) && keyData.keys.length) {
+          tieredKeys = keyData.keys;
+        } else if (keyData.keyId && keyData.key) {
           keyId = keyData.keyId;
           key = keyData.key;
         }
       }
     }
-    if (keyId && key) {
+
+    if (!tieredKeys?.length && keyId && key) {
+      tieredKeys = [{ keyId, key, hardwareOnly: false }];
+    }
+
+    if (tieredKeys?.length) {
       contentKeysSource = {
-        inline: [
-          {
-            id: keyId,
-            key: key,
-          },
-        ],
+        inline: tieredKeys.map((entry) => ({
+          id: toKeyGuid(entry.keyId),
+          encrypted_key: encryptContentKey(entry.key, keyBuffer),
+          usage_policy: entry.hardwareOnly ? HARDWARE_POLICY : SOFTWARE_POLICY,
+        })),
       };
+      usesTieredPolicies = true;
     }
   } catch {
     // If not found, use Key-seed ID
@@ -171,6 +260,11 @@ export function createAxinomDrmToken(options: AxinomTokenOptions): AxinomDrmPayl
     },
     content_keys_source: contentKeysSource,
   };
+
+  // Policies are only meaningful when keys reference them by name.
+  if (usesTieredPolicies) {
+    entitlementMessage.content_key_usage_policies = USAGE_POLICIES;
+  }
 
   // Optional user tracking metadata
   if (options.userId) {
@@ -189,7 +283,6 @@ export function createAxinomDrmToken(options: AxinomTokenOptions): AxinomDrmPayl
   const signingInput = `${encodedHeader}.${encodedPayload}`;
 
 
-  const keyBuffer = getCommunicationKeyBuffer();
   const signature = crypto
     .createHmac("sha256", keyBuffer)
     .update(signingInput)

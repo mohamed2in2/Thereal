@@ -1,6 +1,14 @@
 import { prisma } from "@/lib/prisma";
 
-type NotificationType = "streak_milestone" | "exam_live" | "grade_resolved" | "referral_joined" | "project_graded" | "parent_verification_required";
+type NotificationType =
+  | "streak_milestone"
+  | "exam_live"
+  | "grade_resolved"
+  | "referral_joined"
+  | "project_graded"
+  | "parent_verification_required"
+  | "view_request_submitted"
+  | "view_request_resolved";
 
 interface NotificationPayload {
   userId: string;
@@ -98,5 +106,40 @@ export async function notifyProjectGraded(
     title: `تم تقييم مشروعك في درس ${lessonTitle} 🎉`,
     body: `حصلت على درجة ${grade}% في مشروعك الأخير. تحقق من التقييم الآن.`,
     link: "/library",
+  });
+}
+
+/** Notify teacher when a student requests extra views. */
+export async function notifyViewRequestSubmitted(
+  teacherId: string,
+  studentName: string,
+  videoTitle: string
+): Promise<void> {
+  await createNotification({
+    userId: teacherId,
+    type: "view_request_submitted",
+    title: "طلب تمديد مشاهدات جديد 👁️",
+    body: `طلب الطالب ${studentName} مشاهدات إضافية لمحاضرة "${videoTitle}".`,
+    link: "/adminpanel/teacher?tab=requests",
+  });
+}
+
+/** Notify student when their view request is approved or rejected. */
+export async function notifyViewRequestResolved(
+  studentId: string,
+  approved: boolean,
+  videoTitle: string,
+  grantedViews: number,
+  courseId?: string,
+  videoId?: string
+): Promise<void> {
+  await createNotification({
+    userId: studentId,
+    type: "view_request_resolved",
+    title: approved ? "تمت الموافقة على طلب المشاهدات ✅" : "تم رفض طلب المشاهدات",
+    body: approved
+      ? `وافق المعلم على طلبك وتم منحك ${grantedViews} مشاهدة إضافية لمحاضرة "${videoTitle}".`
+      : `عذرًا، لم تتم الموافقة على طلب المشاهدات الإضافية لمحاضرة "${videoTitle}".`,
+    link: courseId && videoId ? `/courses/${courseId}/watch/${videoId}` : "/courses",
   });
 }

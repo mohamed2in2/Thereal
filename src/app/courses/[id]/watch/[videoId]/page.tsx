@@ -78,14 +78,72 @@ export default function VideoWatchPage() {
   const [session, setSession] = useState<WatchSessionData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [errorCode, setErrorCode] = useState("");
   const [countdown, setCountdown] = useState("");
   const [iframeSrc, setIframeSrc] = useState("");
   const [wmLabel, setWmLabel] = useState("");
   const [resumeSeconds, setResumeSeconds] = useState(0);
   const [resumeLoaded, setResumeLoaded] = useState(false);
   const [showNotesModal, setShowNotesModal] = useState(false);
-  const [directDriveMode, setDirectDriveMode] = useState(false);
+  // Protection level is decided by the platform, never by the student. The
+  // unprotected Google Drive path stays in SecurePlayer for staff preview, but
+  // nothing in the student player may switch it on.
+  const directDriveMode = false;
   const [drmConfig, setDrmConfig] = useState<any>(null);
+
+  // View request state for quota-exceeded handling
+  const [viewRequestState, setViewRequestState] = useState<{
+    pending: { id: string; createdAt: string; reason?: string | null } | null;
+    grantedViews: number;
+    canRequest: boolean;
+  } | null>(null);
+  const [viewRequestLoading, setViewRequestLoading] = useState(false);
+  const [requestReason, setRequestReason] = useState("");
+  const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
+  const [requestFeedback, setRequestFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+  const fetchViewRequestStatus = useCallback(async () => {
+    if (!videoId) return;
+    setViewRequestLoading(true);
+    try {
+      const res = await fetch(`/api/videos/${videoId}/view-request`, { credentials: "include" });
+      if (res.ok) {
+        const data = await res.json();
+        setViewRequestState(data);
+      }
+    } catch {
+      // non-critical
+    } finally {
+      setViewRequestLoading(false);
+    }
+  }, [videoId]);
+
+  const handleSendViewRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!videoId || isSubmittingRequest) return;
+    setIsSubmittingRequest(true);
+    setRequestFeedback(null);
+
+    try {
+      const res = await fetch(`/api/videos/${videoId}/view-request`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: requestReason.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setRequestFeedback({ type: "error", message: data.error || "تعذر إرسال الطلب" });
+        return;
+      }
+      setRequestFeedback({ type: "success", message: "تم إرسال طلبك للمعلم بنجاح! سيصلك إشعار فور مراجعته." });
+      await fetchViewRequestStatus();
+    } catch {
+      setRequestFeedback({ type: "error", message: "حدث خطأ في الاتصال، حاول مرة أخرى" });
+    } finally {
+      setIsSubmittingRequest(false);
+    }
+  };
 
   // ── Smart Progress Sync Manager (Pillar 1: 30s Debounced Heartbeat + Event-based Flush) ──
   const lastSyncedSecondsRef = useRef<number>(0);
@@ -159,6 +217,7 @@ export default function VideoWatchPage() {
   const loadSession = useCallback(async () => {
     setLoading(true);
     setError("");
+    setErrorCode("");
 
     try {
       // Single atomic request: mints token, gets embed URL, watermark, and saved resume position in 1 trip
@@ -178,6 +237,15 @@ export default function VideoWatchPage() {
           return;
         }
         setError(data.error || "تعذر تحميل جلسة المشاهدة");
+        if (data.code) {
+          setErrorCode(data.code);
+          if (data.code === "NO_WATCHES_REMAINING") {
+            void fetchViewRequestStatus();
+          }
+        } else if (data.error && data.error.includes("استنفدت")) {
+          setErrorCode("NO_WATCHES_REMAINING");
+          void fetchViewRequestStatus();
+        }
         setLoading(false);
         return;
       }
@@ -224,7 +292,7 @@ export default function VideoWatchPage() {
     } finally {
       setLoading(false);
     }
-  }, [courseId, videoId, tokenFromUrl]);
+  }, [courseId, videoId, tokenFromUrl, fetchViewRequestStatus, router]);
 
   useEffect(() => {
     if (!courseId || !videoId) return;
@@ -271,9 +339,6 @@ export default function VideoWatchPage() {
   };
 
   const buildReturnUrl = () => {
-    if (session) {
-      return `/courses/${courseId}/learn`;
-    }
     return `/courses/${courseId}/learn`;
   };
 
@@ -294,32 +359,121 @@ export default function VideoWatchPage() {
   }
 
   if (error || !session) {
+    const isQuotaExceeded = errorCode === "NO_WATCHES_REMAINING" || error?.includes("استنفدت");
+
     return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6">
-        <div className="bg-slate-900 border border-slate-700 rounded-3xl p-8 max-w-md w-full text-center space-y-6">
+      <div className="min-h-screen bg-[#020617] flex flex-col items-center justify-center p-6" dir="rtl">
+        <div className="bg-slate-900/90 border border-slate-800 backdrop-blur-xl rounded-3xl p-8 max-w-lg w-full text-center space-y-6 shadow-2xl">
           {/* Icon */}
-          <div className="w-16 h-16 bg-red-500/20 rounded-2xl flex items-center justify-center mx-auto text-3xl">
-            {error?.includes("استنفدت") ? "🚫" : "⚠️"}
+          <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto text-3xl ${
+            isQuotaExceeded ? "bg-amber-500/20 text-amber-400" : "bg-red-500/20 text-red-400"
+          }`}>
+            {isQuotaExceeded ? "👁️" : "⚠️"}
           </div>
+
           <div>
-            <h2 className="text-xl font-black text-white mb-2">
-              {error?.includes("استنفدت") ? "استنفذت المحاولات" : "لا يمكن تشغيل الفيديو"}
+            <h2 className="text-2xl font-black text-white mb-2">
+              {isQuotaExceeded ? "استنفدت مشاهدات هذا الدرس" : "تعذر تشغيل الفيديو"}
             </h2>
             <p className="text-slate-400 text-sm leading-relaxed">
-              {error || "حدث خطأ غير متوقع"}
+              {error || "حدث خطأ غير متوقع أثناء بدء جلسة المشاهدة"}
             </p>
           </div>
-          <div className="space-y-2">
+
+          {/* Quota Exceeded Request Flow */}
+          {isQuotaExceeded && (
+            <div className="text-right space-y-4 pt-2 border-t border-slate-800">
+              {viewRequestLoading ? (
+                <div className="text-center py-4 text-slate-400 text-sm">جارٍ التحقق من حالة طلباتك...</div>
+              ) : viewRequestState?.pending ? (
+                <div className="bg-amber-950/30 border border-amber-500/30 rounded-2xl p-5 text-right space-y-2">
+                  <div className="flex items-center gap-2 text-amber-400 font-bold text-sm">
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse" />
+                    <span>طلبك قيد المراجعة لدى المعلم</span>
+                  </div>
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    تم إرسال طلبك للمعلم لمراجعة منحك مشاهدات إضافية. سيتم إشعارك فور الموافقة وتفعيل المشاهدات.
+                  </p>
+                  {viewRequestState.pending.reason && (
+                    <p className="text-xs text-slate-400 bg-black/40 p-2.5 rounded-lg">
+                      <span className="text-slate-300 font-semibold">ملاحظتك:</span> {viewRequestState.pending.reason}
+                    </p>
+                  )}
+                  <p className="text-[11px] text-slate-500">
+                    تاريخ الطلب: {new Date(viewRequestState.pending.createdAt).toLocaleDateString("ar-EG")}
+                  </p>
+                </div>
+              ) : viewRequestState?.canRequest ? (
+                <form onSubmit={handleSendViewRequest} className="space-y-4">
+                  <div className="bg-sky-950/30 border border-sky-500/20 rounded-2xl p-4">
+                    <p className="text-xs text-sky-200 leading-relaxed font-medium">
+                      هل تحتاج لمراجعة الدرس قبل الامتحان أو لاستكمال المذاكرة؟ يمكنك إرسال طلب للمعلم لمنحك مشاهدات إضافية.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                      سبب طلب المشاهدات الإضافية (اختياري):
+                    </label>
+                    <textarea
+                      value={requestReason}
+                      onChange={(e) => setRequestReason(e.target.value)}
+                      maxLength={500}
+                      rows={3}
+                      placeholder="مثال: محتاج مراجعة جزء معين قبل الامتحان، أو انقطع النت أثناء المشاهدة..."
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-xs placeholder:text-slate-500 focus:outline-none focus:border-sky-500 transition-colors resize-none"
+                    />
+                  </div>
+
+                  {requestFeedback && (
+                    <div className={`p-3 rounded-xl text-xs font-semibold ${
+                      requestFeedback.type === "success"
+                        ? "bg-emerald-950/50 border border-emerald-500/30 text-emerald-300"
+                        : "bg-red-950/50 border border-red-500/30 text-red-300"
+                    }`}>
+                      {requestFeedback.message}
+                    </div>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={isSubmittingRequest}
+                    className="w-full py-3 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-bold rounded-xl transition-all shadow-lg hover:shadow-sky-500/25 active:scale-95 text-sm disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    {isSubmittingRequest ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        <span>جارٍ إرسال الطلب...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>✉️</span>
+                        <span>إرسال طلب مشاهدات إضافية للمعلم</span>
+                      </>
+                    )}
+                  </button>
+                </form>
+              ) : (
+                <div className="bg-slate-950/60 border border-slate-800 rounded-2xl p-4 text-center">
+                  <p className="text-xs text-slate-400">
+                    تم استنفاد الحد الأقصى للطلبات المتاحة. يرجى التواصل مع المعلم أو الدعم الفني مباشرة.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="space-y-2 pt-2">
             <Link
               href={buildReturnUrl()}
-              className="block w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors text-center"
+              className="block w-full py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl transition-colors text-center text-sm"
             >
               العودة لصفحة التعلم
             </Link>
-            {!error?.includes("استنفدت") && (
+            {!isQuotaExceeded && (
               <button
                 onClick={loadSession}
-                className="w-full py-2.5 border border-slate-600 hover:border-slate-500 text-slate-400 hover:text-white rounded-xl transition-colors text-sm"
+                className="w-full py-2.5 border border-slate-700 hover:border-slate-600 text-slate-400 hover:text-white rounded-xl transition-colors text-sm"
               >
                 إعادة المحاولة
               </button>
@@ -505,21 +659,6 @@ export default function VideoWatchPage() {
                 </p>
               </div>
               <div className="flex items-center gap-3">
-                {/* Direct Google Drive fallback mode switch */}
-                {(iframeSrc.includes("gdrive") || session.video.videoProvider === "alasly") && (
-                  <button
-                    type="button"
-                    onClick={() => setDirectDriveMode((prev) => !prev)}
-                    className={`px-3 py-2 text-xs font-bold rounded-xl transition-all border flex items-center gap-1.5 shrink-0 cursor-pointer ${
-                      directDriveMode
-                        ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
-                        : "bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-700"
-                    }`}
-                    title="تشغيل عبر Google Drive المباشر بدون قيود الأمان في حال واجهت مشكلة في البث"
-                  >
-                    <span>{directDriveMode ? "🛡️ المشغل الآمن" : "📁 مشغل Drive المباشر"}</span>
-                  </button>
-                )}
                 <button
                   type="button"
                   onClick={() => setShowNotesModal(true)}
@@ -562,22 +701,10 @@ export default function VideoWatchPage() {
                     </span>
                   </Link>
                 )}
-                {/* Provider badge */}
-                <div className={`shrink-0 flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1.5 rounded-lg border ${
-                  session.video.videoProvider === "bunny"
-                    ? "border-orange-500/20 bg-orange-500/10 text-orange-400"
-                    : session.video.videoProvider === "youtube"
-                    ? "border-red-500/20 bg-red-500/10 text-red-400"
-                    : session.video.videoProvider === "alasly"
-                    ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
-                    : "border-blue-500/20 bg-blue-500/10 text-blue-400"
-                }`}>
-                  <span>
-                    {session.video.videoProvider === "bunny" ? "🐰" : session.video.videoProvider === "youtube" ? "▶️" : session.video.videoProvider === "alasly" ? "🛡️" : "🔐"}
-                  </span>
-                  <span>
-                    {session.video.videoProvider === "bunny" ? "Bunny" : session.video.videoProvider === "youtube" ? "YouTube" : session.video.videoProvider === "alasly" ? "Alasly" : "VdoCipher"}
-                  </span>
+                {/* Security badge */}
+                <div className="shrink-0 flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-xl border border-sky-500/20 bg-sky-500/10 text-sky-400">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>بث محمي</span>
                 </div>
               </div>
             </div>

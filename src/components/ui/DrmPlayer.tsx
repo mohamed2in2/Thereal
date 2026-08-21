@@ -151,6 +151,25 @@ export function DrmPlayer({
   }, []);
 
   const [isBlackoutActive, setIsBlackoutActive] = useState(false);
+  // Distinct from the transient blackout: this one is driven by the CDM and
+  // stays up for as long as the platform reports an unprotected output path.
+  const [outputRestricted, setOutputRestricted] = useState(false);
+
+  // Remote playback and picture-in-picture both hand the decoded frames to a
+  // surface this player no longer controls, so they are refused outright.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    try {
+      (video as HTMLVideoElement & { disableRemotePlayback?: boolean }).disableRemotePlayback = true;
+      video.setAttribute("disablePictureInPicture", "");
+    } catch {
+      /* not supported everywhere */
+    }
+    const blockPip = (event: Event) => event.preventDefault();
+    video.addEventListener("enterpictureinpicture", blockPip);
+    return () => video.removeEventListener("enterpictureinpicture", blockPip);
+  }, []);
 
   // ── Anti-Screenshot & Screen-Recording Blackout Engine ─────────────────────
   useEffect(() => {
@@ -271,6 +290,37 @@ export function DrmPlayer({
         }
         playerRef.current = localPlayer;
 
+        // The only trustworthy "this screen is being captured" signal available
+        // to a web page. When the platform cannot guarantee a protected output
+        // path - capture card, mirrored/duplicated display, some recorders and
+        // VMs - the CDM downgrades the key to output-restricted (or
+        // output-downscaled) instead of decrypting to the screen.
+        localPlayer.addEventListener("keystatuschanged", () => {
+          try {
+            const statuses = Object.values(localPlayer.getKeyStatuses?.() || {});
+            if (!statuses.length) return;
+            // With tiered keys a software device is legitimately refused the HD
+            // key while the SD key stays usable, and Shaka just drops the HD
+            // renditions. Only lock the screen when NO key is usable, which is
+            // the real "this output cannot be protected at all" case.
+            const anyUsable = statuses.some((status) => status === "usable");
+            const anyRestricted = statuses.some(
+              (status) => status === "output-restricted" || status === "output-downscaled"
+            );
+            const restricted = anyRestricted && !anyUsable;
+            setOutputRestricted(restricted);
+            if (restricted) {
+              try {
+                videoRef.current?.pause();
+              } catch {
+                /* pausing is best effort */
+              }
+            }
+          } catch {
+            /* key status is advisory; never break playback reading it */
+          }
+        });
+
         // Configure DRM Key Systems
         const servers: Record<string, string> = {};
         const origin = typeof window !== "undefined" ? window.location.origin : "";
@@ -280,17 +330,33 @@ export function DrmPlayer({
         if (licenseServers?.playready) servers["com.microsoft.playready"] = toAbsolute(licenseServers.playready)!;
         if (licenseServers?.fairplay) servers["com.apple.fps.1_0"] = toAbsolute(licenseServers.fairplay)!;
 
+        // Robustness here is the *minimum* the client asks for, so it must stay
+        // permissive: demanding HW_SECURE_ALL makes an L3 device fail to create
+        // a session at all, which would defeat the tiered setup. The device
+        // reports its real security level in the license challenge, and Axinom
+        // decides per key which tiers to issue — so an L1 device still gets HD.
+        // Strict mode is the opt-out: hardware or nothing, no SD fallback.
+        const requireHardware = process.env.NEXT_PUBLIC_DRM_REQUIRE_HARDWARE === "true";
+        const advanced: Record<string, Record<string, unknown>> = {
+          "com.widevine.alpha": {
+            videoRobustness: requireHardware ? "HW_SECURE_ALL" : "SW_SECURE_DECODE",
+            audioRobustness: requireHardware ? "HW_SECURE_CRYPTO" : "SW_SECURE_CRYPTO",
+          },
+          "com.microsoft.playready": {
+            videoRobustness: requireHardware ? "3000" : "2000",
+          },
+        };
+        if (licenseServers?.fairplayCertUrl) {
+          advanced["com.apple.fps.1_0"] = {
+            serverCertificateUri: toAbsolute(licenseServers.fairplayCertUrl)!,
+          };
+        }
+
         localPlayer.configure({
           drm: {
             servers: Object.keys(servers).length > 0 ? servers : undefined,
             clearKeys: clearKeys || undefined,
-            advanced: licenseServers?.fairplayCertUrl
-              ? {
-                  "com.apple.fps.1_0": {
-                    serverCertificateUri: toAbsolute(licenseServers.fairplayCertUrl)!,
-                  },
-                }
-              : undefined,
+            advanced,
           },
           streaming: {
             bufferingGoal: 30,
@@ -493,10 +559,22 @@ export function DrmPlayer({
         onClick={togglePlay}
         className="w-full h-full object-contain cursor-pointer transition-all duration-75"
         style={{
-          filter: isBlackoutActive ? "brightness(0)" : "none",
-          opacity: isBlackoutActive ? 0 : 1,
+          filter: isBlackoutActive || outputRestricted ? "brightness(0)" : "none",
+          opacity: isBlackoutActive || outputRestricted ? 0 : 1,
         }}
       />
+
+      {/* ── Protected-output lock (raised by the CDM, not by key guessing) ── */}
+      {outputRestricted && (
+        <div className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-3 bg-black px-6 text-center">
+          <ShieldCheck className="h-10 w-10 text-red-400" />
+          <p className="text-base font-bold text-white">تم إيقاف العرض مؤقتًا</p>
+          <p className="max-w-md text-sm leading-relaxed text-slate-300">
+            تعذر تأمين مسار العرض على هذا الجهاز. أوقف أي برنامج تسجيل للشاشة أو مشاركة
+            للشاشة، وافصل الشاشات المكرّرة أو أجهزة الالتقاط، ثم أعد تشغيل الدرس.
+          </p>
+        </div>
+      )}
 
       {/* ── Dynamic Floating Watermark (Hardware & Screen Protection) ── */}
       {watermark && (

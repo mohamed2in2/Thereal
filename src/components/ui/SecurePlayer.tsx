@@ -343,31 +343,7 @@ export function SecurePlayer({
       }
       onContextMenu={(e) => e.preventDefault()}
     >
-      {/* Quick Google Drive Direct Fallback Switcher */}
-      {driveFileId && (
-        <button
-          type="button"
-          onClick={() => {
-            setUseDriveDirect((prev) => !prev);
-            setStreamError(false);
-          }}
-          title={useDriveDirect ? "العودة للمشغل السريع" : "تشغيل مباشر من Google Drive بدون حظر المتصفح"}
-          className="absolute top-3 left-3 z-30 flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg bg-black/70 hover:bg-black/90 text-white text-[10px] sm:text-[11px] font-bold backdrop-blur-md border border-white/15 transition-all shadow-md cursor-pointer"
-        >
-          {useDriveDirect ? (
-            <>
-              <span className="text-emerald-400">🛡️</span>
-              <span>المشغل الآمن</span>
-            </>
-          ) : (
-            <>
-              <span className="text-amber-400">📁</span>
-              <span>مشغل Drive المباشر</span>
-            </>
-          )}
-        </button>
-      )}
-
+      {/* Player rendering: Direct Drive preview (staff only), direct video stream, or secure iframe */}
       {driveFileId && useDriveDirect ? (
         <iframe
           src={`https://drive.google.com/file/d/${driveFileId}/preview`}

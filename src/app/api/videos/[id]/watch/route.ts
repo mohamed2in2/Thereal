@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { resolveEmbedUrl } from "@/lib/video-provider";
 import { isScheduledLocked, unlockAtISO } from "@/lib/publish";
 import { getConfigNumberClamped } from "@/lib/config";
+import { getWatchAllowance } from "@/lib/watch-allowance";
 import { checkVideoAccess } from "@/lib/authorization";
 import { isVpnOrProxy, logVpnViolation } from "@/lib/vpn-guard";
 
@@ -107,7 +108,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const video = watchSession.video;
   const course = video.folder.course;
-  const total = video.maxWatchesPerUser;
+  const total = await getWatchAllowance(prisma, session.id, videoId, video.maxWatchesPerUser);
 
   const profile = await prisma.teacherProfile.findUnique({
     where: { teacherId: course.teacherId },
@@ -376,6 +377,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const activeUsedWatchCount = await prisma.videoWatchSession.count({
       where: { studentId: session.id, videoId, usedWatchSlot: true },
     });
+    const activeAllowance = await getWatchAllowance(
+      prisma,
+      session.id,
+      videoId,
+      video.maxWatchesPerUser
+    );
 
     const domain = req.headers.get("x-forwarded-host") || req.headers.get("host") || undefined;
     const studentIdentifier = session.phone || session.name || session.id;
@@ -442,8 +449,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       sessionId: activeSession.id,
       expiresAt: activeSession.expiresAt.toISOString(),
       watchDurationHours: WATCH_DURATION_HOURS,
-      remainingWatches: Math.max(0, video.maxWatchesPerUser - activeUsedWatchCount),
-      totalWatches: video.maxWatchesPerUser,
+      remainingWatches: Math.max(0, activeAllowance - activeUsedWatchCount),
+      totalWatches: activeAllowance,
       usedWatches: activeUsedWatchCount,
       embedUrl: embedResult.embedUrl,
       provider: embedResult.provider,
@@ -502,7 +509,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         const usedCount = await tx.videoWatchSession.count({
           where: { studentId: session.id, videoId, usedWatchSlot: true },
         });
-        if (!isTesterUser && usedCount >= video.maxWatchesPerUser) throw new Error(QUOTA_EXCEEDED);
+        // Read grants inside the transaction too: outside it, a request approved
+        // between the read and the insert would not be honoured.
+        const allowance = await getWatchAllowance(tx, session.id, videoId, video.maxWatchesPerUser);
+        if (!isTesterUser && usedCount >= allowance) throw new Error(QUOTA_EXCEEDED);
         await tx.videoWatchSession.updateMany({
           where: { studentId: session.id, videoId, endedAt: null, expiresAt: { lt: now } },
           data: { endedAt: now },
