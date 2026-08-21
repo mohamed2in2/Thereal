@@ -175,8 +175,18 @@ export function DrmPlayer({
   useEffect(() => {
     let blackoutTimer: NodeJS.Timeout | null = null;
 
-    const triggerBlackout = (durationMs = 1500) => {
+    const triggerBlackout = (durationMs = 2500) => {
       setIsBlackoutActive(true);
+      try {
+        if (videoRef.current && !videoRef.current.paused) {
+          videoRef.current.pause();
+        }
+      } catch {
+        /* best effort pause */
+      }
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+        navigator.clipboard.writeText("").catch(() => {});
+      }
       if (blackoutTimer) clearTimeout(blackoutTimer);
       blackoutTimer = setTimeout(() => {
         if (document.hasFocus() && !document.hidden) {
@@ -189,7 +199,7 @@ export function DrmPlayer({
       const k = e.key;
       const lowerK = k.toLowerCase();
 
-      const isPrtScn = k === "PrintScreen" || e.code === "PrintScreen";
+      const isPrtScn = k === "PrintScreen" || e.code === "PrintScreen" || e.keyCode === 44;
       const isMeta =
         e.metaKey ||
         (typeof e.getModifierState === "function" &&
@@ -198,43 +208,46 @@ export function DrmPlayer({
       const isWinSnipping = isMeta && e.shiftKey && lowerK === "s";
       const isWinGameBar = isMeta && lowerK === "g";
       const isMacScreenshot = isMeta && e.shiftKey && ["3", "4", "5", "#", "$", "%"].includes(k);
-      const isBrowserScreenshot = e.ctrlKey && e.shiftKey && lowerK === "s";
+      const isBrowserScreenshot = (e.ctrlKey || isMeta) && e.shiftKey && lowerK === "s";
       const isDevTools =
         k === "F12" ||
-        (e.ctrlKey && e.shiftKey && (lowerK === "i" || lowerK === "j" || lowerK === "c")) ||
-        (e.ctrlKey && lowerK === "u");
+        ((e.ctrlKey || isMeta) && e.shiftKey && (lowerK === "i" || lowerK === "j" || lowerK === "c")) ||
+        ((e.ctrlKey || isMeta) && lowerK === "u");
 
       if (isPrtScn || isWinSnipping || isWinGameBar || isMacScreenshot || isBrowserScreenshot || isDevTools) {
-        triggerBlackout(2000);
-        if (isPrtScn || isWinSnipping || isMacScreenshot) {
-          e.preventDefault();
-          e.stopPropagation();
-        }
-        if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
-          navigator.clipboard.writeText("").catch(() => {});
-        }
+        triggerBlackout(3000);
+        e.preventDefault();
+        e.stopPropagation();
       }
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.key === "PrintScreen" || e.code === "PrintScreen") {
-        triggerBlackout(2000);
-        if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
-          navigator.clipboard.writeText("").catch(() => {});
-        }
+      if (e.key === "PrintScreen" || e.code === "PrintScreen" || e.keyCode === 44) {
+        triggerBlackout(3000);
+        e.preventDefault();
+        e.stopPropagation();
       }
     };
 
     const handleBlur = () => {
-      setIsBlackoutActive(true);
+      triggerBlackout(2000);
     };
 
     const handleFocus = () => {
-      setIsBlackoutActive(false);
+      // Keep small grace period before unblacking
+      setTimeout(() => {
+        if (document.hasFocus() && !document.hidden) {
+          setIsBlackoutActive(false);
+        }
+      }, 300);
     };
 
     const handleVisibilityChange = () => {
-      setIsBlackoutActive(document.hidden);
+      if (document.hidden) {
+        triggerBlackout(2000);
+      } else {
+        handleFocus();
+      }
     };
 
     window.addEventListener("keydown", handleKeyDown, true);
@@ -563,6 +576,17 @@ export function DrmPlayer({
           opacity: isBlackoutActive || outputRestricted ? 0 : 1,
         }}
       />
+
+      {/* ── Active Anti-Screenshot / Blur Blackout Barrier ── */}
+      {isBlackoutActive && !outputRestricted && (
+        <div className="absolute inset-0 z-50 bg-black flex flex-col items-center justify-center gap-3 select-none pointer-events-auto">
+          <div className="w-12 h-12 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-400 animate-pulse">
+            <ShieldCheck className="w-6 h-6" />
+          </div>
+          <p className="text-sm font-bold text-white tracking-wide">تم تعتيم الشاشة لحماية المحتوى</p>
+          <p className="text-xs text-slate-400 font-mono">Screen Capture Protected</p>
+        </div>
+      )}
 
       {/* ── Protected-output lock (raised by the CDM, not by key guessing) ── */}
       {outputRestricted && (

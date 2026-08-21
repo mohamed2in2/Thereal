@@ -584,6 +584,17 @@ export function YouTubeSecurePlayer({
         )}
       </div>
 
+      {/* ── Active Anti-Screenshot / Blur Blackout Barrier ── */}
+      {isBlackoutActive && (
+        <div className="absolute inset-0 z-50 bg-black flex flex-col items-center justify-center gap-3 select-none pointer-events-auto">
+          <div className="w-12 h-12 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-400 animate-pulse text-xl">
+            🛡️
+          </div>
+          <p className="text-sm font-bold text-white tracking-wide">تم تعتيم الشاشة لحماية المحتوى</p>
+          <p className="text-xs text-slate-400 font-mono">Screen Capture Protected</p>
+        </div>
+      )}
+
       {/* Full-surface click shield: swallows every click so no YouTube chrome is
           reachable; tapping toggles play/pause through our API instead. (Inactive when in fallback iframe mode) */}
       {!useFallbackIframe && !errorMessage && (

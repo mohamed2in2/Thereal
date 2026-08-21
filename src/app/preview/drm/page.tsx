@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { SecurePlayer } from "@/components/ui/SecurePlayer";
+import { VideoGuard } from "@/components/ui/VideoGuard";
 import { AXINOM_CONFIG } from "@/lib/axinom";
 
 function DrmPreviewContent() {
@@ -190,9 +191,6 @@ function DrmPreviewContent() {
           playready: "https://drm-playready-licensing.axtest.net/AcquireLicense",
           fairplay: "https://drm-fairplay-licensing.axtest.net/AcquireLicense",
         },
-        clearKeys: {
-          "9eb4050de44b4802932e27d75083e266": "166634c675823c235a4a9446fad52e4d",
-        },
       };
     }
 
@@ -340,13 +338,19 @@ function DrmPreviewContent() {
               <p className="text-xs font-bold text-gray-300">جارٍ تجهيز رخصة الأمان والتشفير (DRM)...</p>
             </div>
           ) : (
-            <SecurePlayer
-              embedUrl={embedUrl}
-              provider={isDirectStream ? "alasly" : "axinom"}
-              drm={drmConfig}
-              title={title}
-              watermark="معاينة المعلم (Teacher Preview)"
-            />
+            <VideoGuard
+              studentName="معاينة المعلم"
+              studentPhone="Teacher Preview"
+              videoId={assetId}
+            >
+              <SecurePlayer
+                embedUrl={embedUrl}
+                provider={isDirectStream ? "alasly" : "axinom"}
+                drm={drmConfig}
+                title={title}
+                watermark="معاينة المعلم (Teacher Preview)"
+              />
+            </VideoGuard>
           )}
         </div>
 
