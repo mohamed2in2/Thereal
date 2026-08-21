@@ -85,7 +85,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     if (watchSession.videoId !== id) {
       return NextResponse.json({ error: "الفيديو لا يتطابق مع الجلسة" }, { status: 400 });
     }
-    if (watchSession.expiresAt < new Date()) {
+    // Match the watch route, which treats an explicitly ended session as over.
+    // Checking only expiresAt let a closed session keep resolving playable URLs
+    // until its 4h window happened to run out.
+    if (watchSession.expiresAt < new Date() || watchSession.endedAt) {
       return NextResponse.json({ error: "انتهت جلسة المشاهدة" }, { status: 403 });
     }
   }

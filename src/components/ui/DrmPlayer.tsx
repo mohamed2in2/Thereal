@@ -74,6 +74,36 @@ function loadShakaPlayerLib(): Promise<void> {
   return shakaLoadPromise;
 }
 
+
+/** Cheap EME capability probe: does this device offer the requested robustness? */
+async function supportsRobustness(
+  keySystem: string,
+  videoRobustness: string,
+  audioRobustness: string
+): Promise<boolean> {
+  if (typeof navigator === "undefined" || !navigator.requestMediaKeySystemAccess) return false;
+  try {
+    await navigator.requestMediaKeySystemAccess(keySystem, [
+      {
+        initDataTypes: ["cenc"],
+        videoCapabilities: [
+          { contentType: 'video/mp4; codecs="avc1.42E01E"', robustness: videoRobustness },
+        ],
+        audioCapabilities: [
+          { contentType: 'audio/mp4; codecs="mp4a.40.2"', robustness: audioRobustness },
+        ],
+      },
+    ]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** PlayReady hardware DRM (SL3000) is exposed under its own key system on Edge. */
+const PLAYREADY_HW = "com.microsoft.playready.recommendation.3000";
+const PLAYREADY_SW = "com.microsoft.playready";
+
 export function DrmPlayer({
   manifestUrl,
   drmToken,
@@ -339,8 +369,22 @@ export function DrmPlayer({
         const origin = typeof window !== "undefined" ? window.location.origin : "";
         const toAbsolute = (u?: string) => (u && u.startsWith("/") ? origin + u : u);
 
+        // Ask for the hardware-backed CDM first and only fall back to software
+        // when the device genuinely cannot provide it. This matters more than
+        // anything else in this file: a software CDM never engages the OS
+        // protected media path, so the captured frame is never blank. On
+        // Windows the only desktop browser that can give a black capture is
+        // Edge via PlayReady SL3000, which is exposed as its own key system.
+        const widevineHardware = await supportsRobustness(
+          "com.widevine.alpha",
+          "HW_SECURE_ALL",
+          "HW_SECURE_CRYPTO"
+        );
+        const playreadyHardware = await supportsRobustness(PLAYREADY_HW, "3000", "3000");
+        const playreadyKeySystem = playreadyHardware ? PLAYREADY_HW : PLAYREADY_SW;
+
         if (licenseServers?.widevine) servers["com.widevine.alpha"] = toAbsolute(licenseServers.widevine)!;
-        if (licenseServers?.playready) servers["com.microsoft.playready"] = toAbsolute(licenseServers.playready)!;
+        if (licenseServers?.playready) servers[playreadyKeySystem] = toAbsolute(licenseServers.playready)!;
         if (licenseServers?.fairplay) servers["com.apple.fps.1_0"] = toAbsolute(licenseServers.fairplay)!;
 
         // Robustness here is the *minimum* the client asks for, so it must stay
@@ -350,13 +394,22 @@ export function DrmPlayer({
         // decides per key which tiers to issue — so an L1 device still gets HD.
         // Strict mode is the opt-out: hardware or nothing, no SD fallback.
         const requireHardware = process.env.NEXT_PUBLIC_DRM_REQUIRE_HARDWARE === "true";
+        if (requireHardware && !widevineHardware && !playreadyHardware) {
+          setErrorMsg(
+            "هذا الجهاز أو المتصفح لا يوفر فك تشفير عتادي (Hardware DRM) المطلوب لتشغيل هذا الدرس. جرّب متصفح Edge على ويندوز، أو تطبيق الهاتف."
+          );
+          setIsLoading(false);
+          return;
+        }
+
+        const useWidevineHardware = widevineHardware;
         const advanced: Record<string, Record<string, unknown>> = {
           "com.widevine.alpha": {
-            videoRobustness: requireHardware ? "HW_SECURE_ALL" : "SW_SECURE_DECODE",
-            audioRobustness: requireHardware ? "HW_SECURE_CRYPTO" : "SW_SECURE_CRYPTO",
+            videoRobustness: useWidevineHardware ? "HW_SECURE_ALL" : "SW_SECURE_DECODE",
+            audioRobustness: useWidevineHardware ? "HW_SECURE_CRYPTO" : "SW_SECURE_CRYPTO",
           },
-          "com.microsoft.playready": {
-            videoRobustness: requireHardware ? "3000" : "2000",
+          [playreadyKeySystem]: {
+            videoRobustness: playreadyHardware ? "3000" : "2000",
           },
         };
         if (licenseServers?.fairplayCertUrl) {

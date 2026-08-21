@@ -25,13 +25,46 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     // plan gating were all bypassed for locally hosted video.
     const video = await prisma.video.findFirst({
       where: { OR: [{ providerVideoId: safeFilename }, { vdoCipherId: safeFilename }] },
-      select: { id: true },
+      select: { id: true, isFree: true },
     });
 
     if (video) {
       const hasAccess = await checkVideoAccess(session.id, session.role, video.id);
       if (!hasAccess) {
         return NextResponse.json({ error: "لا يوجد صلاحية للوصول لهذا الفيديو" }, { status: 403 });
+      }
+
+      // A student must present the watch-session token they were issued.
+      //
+      // Enrollment alone used to be enough here, which quietly voided the whole
+      // per-video watch limit: this URL is what the player loads, so a student
+      // could lift it from their own network tab on the first legitimate watch
+      // and replay the lesson forever without ever consuming another slot.
+      // /api/videos/[id]/secure-url already required a token; this path did not.
+      if (session.role === "student" && !video.isFree) {
+        const token = req.nextUrl.searchParams.get("token");
+        if (!token) {
+          return NextResponse.json(
+            { error: "يجب بدء جلسة مشاهدة أولاً" },
+            { status: 403 }
+          );
+        }
+        const watchSession = await prisma.videoWatchSession.findUnique({
+          where: { sessionToken: token },
+          select: { studentId: true, videoId: true, expiresAt: true, endedAt: true },
+        });
+        if (
+          !watchSession ||
+          watchSession.studentId !== session.id ||
+          watchSession.videoId !== video.id ||
+          watchSession.endedAt ||
+          watchSession.expiresAt < new Date()
+        ) {
+          return NextResponse.json(
+            { error: "جلسة المشاهدة غير صالحة أو منتهية" },
+            { status: 403 }
+          );
+        }
       }
     } else {
       // Newly imported video not yet saved in a lecture folder: only allow teacher/admin staff preview

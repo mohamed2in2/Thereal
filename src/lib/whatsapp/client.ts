@@ -57,6 +57,9 @@ class WhatsAppClientManager {
         syncFullHistory: false,
         markOnlineOnConnect: true,
         connectTimeoutMs: 15000,
+        // Keep the socket's own pairing window aligned with MAX_QR_ATTEMPTS
+        // (3 codes at ~20s each) so the two cannot expire out of step.
+        qrTimeout: 60000,
         keepAliveIntervalMs: 25000,
         retryRequestDelayMs: 250,
       });
@@ -96,11 +99,33 @@ class WhatsAppClientManager {
         logger.error("Failed to generate QR code Data URL", { error: qrErr.message });
       }
 
-      // If we've shown too many QR codes without a successful scan,
-      // clear auth and start fresh so stale session data doesn't block pairing
+      // If we've shown too many QR codes without a successful scan, clear auth
+      // and start fresh so stale session data doesn't block pairing.
+      //
+      // This previously only reset the counter, so the recovery the comment
+      // describes never actually ran and a half-written auth folder could keep
+      // rejecting every scan indefinitely.
       if (this.qrAttempts >= WhatsAppClientManager.MAX_QR_ATTEMPTS) {
         logger.warn("QR code expired after max attempts, clearing auth for fresh pairing", { attempts: this.qrAttempts });
         this.qrAttempts = 0;
+        this.rawQrCode = null;
+        this.qrCodeDataUrl = null;
+        try {
+          await clearAuthState();
+        } catch (clearErr) {
+          logger.error("Failed to clear auth state for fresh pairing", {
+            error: clearErr instanceof Error ? clearErr.message : String(clearErr),
+          });
+        }
+        try {
+          this.socket?.end(undefined);
+        } catch {
+          /* socket may already be torn down */
+        }
+        this.socket = null;
+        this.state = "DISCONNECTED";
+        setTimeout(() => void this.initialize(), 1000);
+        return;
       }
     }
 
@@ -138,6 +163,14 @@ class WhatsAppClientManager {
       this.connectedUser = null;
       this.connectedAtTime = null;
       this.socket = null;
+
+      // A QR is only valid for the socket that issued it. Clearing it here — not
+      // just on logout — is the actual fix for "the QR shows but scanning does
+      // nothing": once Baileys timed the pairing out, the admin panel kept
+      // rendering the last QR from the dead socket, so every scan was against a
+      // code WhatsApp had already discarded.
+      this.rawQrCode = null;
+      this.qrCodeDataUrl = null;
 
       const statusCode = (lastDisconnect?.error as any)?.output?.statusCode;
       const isForbidden = statusCode === 403 || statusCode === 405;

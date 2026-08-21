@@ -1,3 +1,11 @@
+import { createWriteStream, openAsBlob } from "node:fs";
+import { stat, unlink } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
+import { randomUUID } from "node:crypto";
+
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -13,7 +21,41 @@ import {
   requestVdoCipherUploadTicket,
 } from "@/lib/vdocipher-accounts";
 
+/**
+ * An S3 POST policy is a base64 JSON document carrying an expiry and a
+ * content-length-range condition. Reading the range lets an oversized file fail
+ * with a precise message instead of an opaque 403 from S3.
+ */
+function readPolicyLimits(policy: unknown): { maxBytes?: number; expiration?: string } {
+  if (typeof policy !== "string") return {};
+  try {
+    const decoded = JSON.parse(Buffer.from(policy, "base64").toString("utf-8")) as {
+      expiration?: string;
+      conditions?: unknown[];
+    };
+    let maxBytes: number | undefined;
+    for (const condition of decoded.conditions || []) {
+      if (Array.isArray(condition) && condition[0] === "content-length-range") {
+        const upper = Number(condition[2]);
+        if (Number.isFinite(upper)) maxBytes = upper;
+      }
+    }
+    return { maxBytes, expiration: decoded.expiration };
+  } catch {
+    return {};
+  }
+}
+
+/** Pulls the human-readable <Message> out of an S3 XML error body. */
+function s3ErrorMessage(body: string): string {
+  const message = /<Message>([\s\S]*?)<\/Message>/.exec(body)?.[1];
+  const code = /<Code>([\s\S]*?)<\/Code>/.exec(body)?.[1];
+  if (message && code) return `${code}: ${message}`;
+  return message || code || body.slice(0, 300);
+}
+
 export async function POST(req: NextRequest) {
+  let tempPath: string | null = null;
   try {
     const session = await getSession();
     if (!session || (session.role !== "teacher" && session.role !== "superadmin")) {
@@ -101,13 +143,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 3. Request upload ticket from VdoCipher
-    const ticket = await requestVdoCipherUploadTicket({
-      apiKey: bestAccount.apiKey,
-      title: videoTitle,
-    });
-
-    // 4. Stream video directly from Google Drive to VdoCipher S3
+    // 3. Download from Google Drive to disk FIRST.
+    //
+    // The previous order minted the upload ticket before downloading, then held
+    // it while buffering the whole file into memory with arrayBuffer(). For the
+    // multi-GB lectures this endpoint advertises that meant two failures: the
+    // buffer alone could exhaust the box, and the S3 POST policy — which carries
+    // a hard expiry — routinely died before the upload ever started, surfacing
+    // as a bare 403. Downloading to a temp file first keeps memory flat and
+    // makes the ticket as fresh as possible when the upload begins.
     const token = await getGoogleDriveAccessToken();
     const downloadUrl = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`;
 
@@ -120,9 +164,32 @@ export async function POST(req: NextRequest) {
       throw new Error(`فشل تنزيل الفيديو من Google Drive (${gdriveRes.status})`);
     }
 
-    // Convert download stream to buffer / blob for S3 form-data POST
-    const arrayBuffer = await gdriveRes.arrayBuffer();
-    const videoBlob = new Blob([arrayBuffer], {
+    tempPath = path.join(os.tmpdir(), `codeup-vdocipher-${randomUUID()}.mp4`);
+    await pipeline(
+      Readable.fromWeb(gdriveRes.body as Parameters<typeof Readable.fromWeb>[0]),
+      createWriteStream(tempPath)
+    );
+    const downloadedBytes = (await stat(tempPath)).size;
+    if (downloadedBytes === 0) {
+      throw new Error("تم تنزيل ملف فارغ من Google Drive. تأكد من صلاحيات مشاركة الملف.");
+    }
+
+    // 4. Mint the upload ticket now that the bytes are already local.
+    const ticket = await requestVdoCipherUploadTicket({
+      apiKey: bestAccount.apiKey,
+      title: videoTitle,
+    });
+
+    const limits = readPolicyLimits(ticket.clientPayload?.policy);
+    if (limits.maxBytes && downloadedBytes > limits.maxBytes) {
+      const limitGb = (limits.maxBytes / (1024 * 1024 * 1024)).toFixed(2);
+      const fileGb = (downloadedBytes / (1024 * 1024 * 1024)).toFixed(2);
+      throw new Error(
+        `حجم الفيديو (${fileGb} جيجابايت) يتجاوز الحد المسموح به من VdoCipher لهذا الحساب (${limitGb} جيجابايت).`
+      );
+    }
+
+    const videoBlob = await openAsBlob(tempPath, {
       type: metadata.mimeType || "video/mp4",
     });
 
@@ -142,8 +209,13 @@ export async function POST(req: NextRequest) {
 
     if (!s3Res.ok && s3Res.status !== 201 && s3Res.status !== 204) {
       const s3ErrorText = await s3Res.text();
-      console.error("[VdoCipher S3 Upload Error]:", s3ErrorText);
-      throw new Error(`تعذر إتمام رفع الفيديو إلى VdoCipher (${s3Res.status})`);
+      console.error("[VdoCipher S3 Upload Error]:", s3Res.status, s3ErrorText);
+      // Surface S3's own reason. A bare status code sent whoever is debugging
+      // into the server logs; "Policy expired" or "EntityTooLarge" is actionable
+      // from the teacher panel itself.
+      throw new Error(
+        `تعذر إتمام رفع الفيديو إلى VdoCipher (${s3Res.status}): ${s3ErrorMessage(s3ErrorText)}`
+      );
     }
 
     // 5. Create Video & VdoCipherVideoAsset records
@@ -200,5 +272,11 @@ export async function POST(req: NextRequest) {
       { error: error.message || "حدث خطأ أثناء استيراد الفيديو من Google Drive" },
       { status: 500 }
     );
+  } finally {
+    if (tempPath) {
+      await unlink(tempPath).catch(() => {
+        /* the OS temp dir is swept anyway */
+      });
+    }
   }
 }

@@ -5,10 +5,26 @@ import { resolveEmbedUrl } from "@/lib/video-provider";
 import { isScheduledLocked, unlockAtISO } from "@/lib/publish";
 import { getConfigNumberClamped } from "@/lib/config";
 import { getWatchAllowance } from "@/lib/watch-allowance";
+import { checkSequentialAccess } from "@/lib/sequential-access";
 import { checkVideoAccess } from "@/lib/authorization";
 import { isVpnOrProxy, logVpnViolation } from "@/lib/vpn-guard";
 
 // Verify an existing watch session (used when loading the watch page on refresh)
+
+/**
+ * Binds a locally-served playback URL to the student's watch session.
+ *
+ * /api/videos/stream/... now refuses a student without a valid token, so the
+ * URL handed to the player has to carry it. Only same-origin API paths are
+ * touched — a provider embed (VdoCipher, Bunny, YouTube) must never receive our
+ * session token.
+ */
+function withWatchToken(embedUrl: string, token: string): string {
+  if (!embedUrl || !token) return embedUrl;
+  if (!embedUrl.startsWith("/api/videos/stream/")) return embedUrl;
+  return `${embedUrl}${embedUrl.includes("?") ? "&" : "?"}token=${encodeURIComponent(token)}`;
+}
+
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
@@ -183,7 +199,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     usedWatches: usedWatchCount,
     teacherSlug,
     studentPlan,
-    embedUrl: embedResult.embedUrl,
+    embedUrl: withWatchToken(embedResult.embedUrl, sessionToken),
     provider: embedResult.provider,
     drm: embedResult.drm || null,
     resumeSeconds: progress?.lastPositionSeconds ?? 0,
@@ -240,6 +256,25 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       },
       { status: 403 }
     );
+  }
+
+  // ── Sequential lesson gating ──────────────────────────────────────────────
+  // Runs after the schedule check and before the free/demo bypass, so a course
+  // that requires lessons in order gates its free lessons too. Staff preview is
+  // unaffected: only students reach this branch with a student role.
+  if (session && session.role === "student") {
+    const lock = await checkSequentialAccess(session.id, videoId);
+    if (lock) {
+      return NextResponse.json(
+        {
+          error: `يجب إكمال الدرس السابق أولًا: ${lock.requiredVideoTitle}`,
+          code: "SEQUENTIAL_LOCKED",
+          requiredVideoId: lock.requiredVideoId,
+          requiredVideoTitle: lock.requiredVideoTitle,
+        },
+        { status: 403 }
+      );
+    }
   }
 
   // ── FREE / DEMO video: bypass enrollment + quota, no session row consumed ──
@@ -476,7 +511,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       remainingWatches: Math.max(0, activeAllowance - activeUsedWatchCount),
       totalWatches: activeAllowance,
       usedWatches: activeUsedWatchCount,
-      embedUrl: embedResult.embedUrl,
+      embedUrl: withWatchToken(embedResult.embedUrl, activeSession.sessionToken),
       provider: embedResult.provider,
       drm: embedResult.drm || null,
       resumeSeconds: progress?.lastPositionSeconds ?? 0,
@@ -627,7 +662,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       remainingWatches: isTesterUser ? null : video.maxWatchesPerUser - used - 1,
       totalWatches: isTesterUser ? null : video.maxWatchesPerUser,
       usedWatches: used + 1,
-      embedUrl: embedResult.embedUrl,
+      embedUrl: withWatchToken(embedResult.embedUrl, sessionToken),
       provider: embedResult.provider,
       drm: embedResult.drm || null,
       resumeSeconds: progress?.lastPositionSeconds ?? 0,
