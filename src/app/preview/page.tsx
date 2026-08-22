@@ -320,64 +320,91 @@ function PreviewDashboardContent() {
     }
   }, [testWatermarkLabel]);
 
-  // ── Direct File Upload to VdoCipher (Server Stream with Live Progress) ────
+  // ── Direct File Upload to VdoCipher (S3 Direct Upload with Live Progress) ───
   const handleVdoDirectUpload = async (file: File) => {
     if (!file) return;
     setIsUploadingVdo(true);
     setVdoUploadProgress(0);
     setVdoError(null);
     setVdoUploadSuccess(null);
-    setVdoUploadStatus("جاري تحضير ورفع ملف الفيديو...");
+    setVdoUploadStatus("جاري حجز تذكرة الرفع من خوادم VdoCipher...");
 
     try {
-      const uploadResult = await new Promise<{ providerVideoId: string }>((resolve, reject) => {
+      // 1. Request upload ticket from the platform API
+      const ticketRes = await fetch("/api/teacher/vdocipher/upload-ticket", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: file.name.replace(/\.[^/.]+$/, "") || "معاينة درس مشفر",
+          estimatedSizeBytes: file.size,
+        }),
+      });
+
+      const ticketData = await ticketRes.json().catch(() => ({}));
+      if (!ticketRes.ok || !ticketData.success) {
+        throw new Error(ticketData.error || `تعذر حجز تذكرة الرفع من VdoCipher (رمز: ${ticketRes.status})`);
+      }
+
+      const { uploadLink, clientPayload, providerVideoId, videoId } = ticketData;
+      const finalVideoId = providerVideoId || videoId;
+
+      if (!uploadLink || !clientPayload) {
+        throw new Error("بيانات تذكرة الرفع غير مكتملة من VdoCipher API");
+      }
+
+      // 2. Direct S3 Upload (Browser to VdoCipher AWS S3)
+      setVdoUploadStatus("جاري رفع الفيديو مباشرة إلى سحابة VdoCipher المشفرة...");
+      await new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         const formData = new FormData();
-        formData.append("file", file);
-        formData.append("title", file.name.replace(/\.[^/.]+$/, "") || "معاينة درس مشفر");
 
-        xhr.open("POST", "/api/teacher/vdocipher/server-upload", true);
-        xhr.withCredentials = true;
+        // Append all policy and signature fields first
+        for (const key of Object.keys(clientPayload)) {
+          if (key !== "uploadLink") {
+            formData.append(key, clientPayload[key]);
+          }
+        }
+        // Append the video file last as required by S3 POST policy
+        formData.append("file", file);
+
+        xhr.open("POST", uploadLink, true);
+        // Note: do NOT set withCredentials on AWS S3 cross-origin endpoint
 
         xhr.upload.onprogress = (e) => {
           if (e.lengthComputable) {
             const percent = Math.round((e.loaded / e.total) * 100);
             setVdoUploadProgress(percent);
             if (percent >= 100) {
-              setVdoUploadStatus("اكتمل الرفع! جاري المعالجة وتشفير البث عبر خوادم VdoCipher...");
+              setVdoUploadStatus("اكتمل الرفع! جاري بدء تشفير البث وتوليد رمز OTP...");
             } else {
-              setVdoUploadStatus(`جاري رفع الفيديو إلى الخادم (${percent}%)...`);
+              setVdoUploadStatus(`جاري رفع الفيديو إلى VdoCipher (${percent}%)...`);
             }
           }
         };
 
         xhr.onload = () => {
-          try {
-            const res = JSON.parse(xhr.responseText || "{}");
-            if (xhr.status >= 200 && xhr.status < 300 && res.success) {
-              resolve(res);
-            } else {
-              reject(new Error(res.error || `فشل رفع الفيديو (رمز: ${xhr.status})`));
-            }
-          } catch (e) {
-            reject(new Error(`استجابة غير صالحة من الخادم (رمز: ${xhr.status})`));
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve();
+          } else {
+            const s3Err = xhr.responseText ? xhr.responseText.slice(0, 250) : "";
+            reject(new Error(`رفض خادم التخزين S3 استلام الملف (رمز: ${xhr.status})${s3Err ? " - " + s3Err : ""}`));
           }
         };
 
-        xhr.onerror = () => reject(new Error("حدث انقطاع في الاتصال أثناء الرفع"));
+        xhr.onerror = () => reject(new Error("حدث انقطاع في الاتصال أثناء الرفع إلى سحابة S3"));
         xhr.ontimeout = () => reject(new Error("انتهت مهلة الرفع، يرجى المحاولة مجدداً"));
-        xhr.timeout = 600000; // 10 minutes timeout for large files
+        xhr.timeout = 1800000; // 30 minutes for large videos
 
         xhr.send(formData);
       });
 
-      const newVideoId = uploadResult.providerVideoId;
-      setVdoAssetId(newVideoId);
-      setVdoUploadSuccess(`تم رفع الفيديو بنجاح! معرّف الفيديو: ${newVideoId}`);
-      setVdoUploadStatus("تم الرفع بنجاح! جاري توليد رمز البث (OTP)...");
+      setVdoAssetId(finalVideoId);
+      setVdoUploadSuccess(`تم رفع الفيديو بنجاح إلى VdoCipher! معرّف الفيديو: ${finalVideoId}`);
+      setVdoUploadStatus("تم الرفع بنجاح! جاري تفعيل المشغل المشفر...");
 
       // 3. Immediately generate OTP and load player
-      await generateVdoCipherOtp(newVideoId);
+      await generateVdoCipherOtp(finalVideoId);
     } catch (err: any) {
       setVdoError(err.message || "حدث خطأ أثناء رفع الفيديو");
     } finally {

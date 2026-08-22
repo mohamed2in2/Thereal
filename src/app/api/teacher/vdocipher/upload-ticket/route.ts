@@ -6,6 +6,7 @@ import { parsePublishAt } from "@/lib/publish";
 import {
   selectBestAccountForUpload,
   requestVdoCipherUploadTicket,
+  decryptVdoCipherSecret,
 } from "@/lib/vdocipher-accounts";
 import { timingSafeEqual } from "node:crypto";
 
@@ -51,16 +52,38 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "عنوان الفيديو لا يمكن أن يزيد عن 100 حرف" }, { status: 400 });
     }
 
-    // Select the best VdoCipher account automatically
-    const bestAccount = await selectBestAccountForUpload({
+    // Select the best VdoCipher account automatically with multi-level fallback
+    let bestAccount = await selectBestAccountForUpload({
       estimatedSizeBytes: body.estimatedSizeBytes,
     });
 
-    if (!bestAccount) {
+    let apiKey = bestAccount?.apiKey || "";
+    let accountId = bestAccount?.id || "";
+
+    if (!apiKey) {
+      const anyActive = await prisma.vdoCipherAccount.findFirst({
+        where: { isActive: true },
+        orderBy: { createdAt: "asc" },
+      });
+      if (anyActive?.apiKeyEnc) {
+        try {
+          apiKey = decryptVdoCipherSecret(anyActive.apiKeyEnc);
+          accountId = anyActive.id;
+        } catch (e) {
+          console.error("[upload-ticket] Fallback decrypt error:", e);
+        }
+      }
+    }
+
+    if (!apiKey && process.env.VDOCIPHER_API_SECRET) {
+      apiKey = process.env.VDOCIPHER_API_SECRET;
+    }
+
+    if (!apiKey) {
       return NextResponse.json(
         {
           error:
-            "لا توجد حسابات VdoCipher نشطة تملك سعة كافية للرفع حالياً. يرجى مراجعة لوحة التحكم العامة (Superadmin).",
+            "لا توجد حسابات VdoCipher نشطة أو مفاتيح API مهيأة في المنصة. يرجى إضافة حساب من لوحة التحكم العامة (Superadmin).",
         },
         { status: 503 }
       );
@@ -68,7 +91,7 @@ export async function POST(req: NextRequest) {
 
     // Request S3 upload ticket from VdoCipher
     const ticket = await requestVdoCipherUploadTicket({
-      apiKey: bestAccount.apiKey,
+      apiKey,
       title,
     });
 
