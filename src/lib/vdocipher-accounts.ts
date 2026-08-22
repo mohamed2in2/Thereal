@@ -583,7 +583,14 @@ export async function requestVdoCipherUploadTicket(params: {
   if (!response.ok) {
     const errorText = await response.text();
     console.error(`[VdoCipher API] Upload ticket error ${response.status}: ${errorText}`);
-    throw new Error(`تعذر إنشاء تذكرة رفع VdoCipher (${response.status})`);
+    let detailedMsg = "";
+    try {
+      const parsed = JSON.parse(errorText);
+      detailedMsg = parsed.message || parsed.error || errorText;
+    } catch {
+      detailedMsg = errorText.slice(0, 200);
+    }
+    throw new Error(`تعذر إنشاء تذكرة رفع VdoCipher (${response.status}): ${detailedMsg || "طلب غير مصرح به"}`);
   }
 
   const data = await response.json();

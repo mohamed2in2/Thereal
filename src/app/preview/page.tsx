@@ -446,11 +446,36 @@ function PreviewDashboardContent() {
       // 3. Automatically generate OTP and start playback
       await generateVdoCipherOtp(importedVideoId);
     } catch (err: any) {
-      setVdoError(err.message || "حدث خطأ أثناء استيراد الفيديو من Google Drive");
+      const errorMsg = err.message || "حدث خطأ أثناء استيراد الفيديو من Google Drive";
+      if (errorMsg.includes("403")) {
+        setVdoError("خوادم VdoCipher رفضت تذكرة الرفع (403 Forbidden). تأكد من صحة مفتاح الـ API Secret أو سريان اشتراك VdoCipher في لوحة التحكم العامة (Superadmin)، أو استخدم زر 'التشغيل المباشر الفوري' أدناه.");
+      } else {
+        setVdoError(errorMsg);
+      }
     } finally {
       setIsImportingGdrive(false);
       setGdriveStatus("");
     }
+  };
+
+  // ── Instant Direct Google Drive Stream (Native High-Security Player) ───────
+  const handleDirectDrivePlay = () => {
+    const trimmedUrl = gdriveUrl.trim();
+    if (!trimmedUrl) {
+      setVdoError("يرجى إدخال رابط مشاركة Google Drive صالح أو معرّف الملف");
+      return;
+    }
+    const match = trimmedUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || trimmedUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+    const fileId = match?.[1] || (trimmedUrl.length >= 20 && !trimmedUrl.includes("/") ? trimmedUrl : null);
+    if (!fileId) {
+      setVdoError("تعذر استخراج معرّف الملف من رابط Google Drive");
+      return;
+    }
+    const streamUrl = `/api/videos/stream/gdrive_${fileId}`;
+    setVdoEmbedUrl(streamUrl);
+    setVdoAssetId(`gdrive_${fileId}`);
+    setVdoUploadSuccess(`تم تفعيل البث المباشر المحمي لملف Google Drive! (معرف: ${fileId}) 🚀`);
+    setVdoError(null);
   };
 
   // ── Active Player Configuration ────────────────────────────────────────────
@@ -875,7 +900,7 @@ function PreviewDashboardContent() {
                 </div>
               )}
 
-              {/* Mode 2: Google Drive Import */}
+              {/* Mode 2: Google Drive Import & Direct Stream */}
               {vdoUploadMode === "gdrive" && (
                 <div className="space-y-3 pt-1">
                   <div className="flex flex-wrap items-center gap-2">
@@ -884,16 +909,25 @@ function PreviewDashboardContent() {
                         type="url"
                         value={gdriveUrl}
                         onChange={(e) => setGdriveUrl(e.target.value)}
-                        placeholder="https://drive.google.com/file/d/1A2B3C.../view?usp=sharing"
+                        placeholder="https://drive.google.com/file/d/1u1StNX.../view?usp=sharing"
                         className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-xs font-mono text-white text-left focus:outline-none focus:border-sky-500"
                         dir="ltr"
                         disabled={isImportingGdrive}
                       />
                     </div>
+
+                    <button
+                      onClick={handleDirectDrivePlay}
+                      disabled={isImportingGdrive || !gdriveUrl.trim()}
+                      className="px-4 py-2.5 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white text-xs font-bold rounded-xl transition-all shadow-md shadow-sky-600/20 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    >
+                      <span>▶ تشغيل مباشر فوري (Native)</span>
+                    </button>
+
                     <button
                       onClick={handleGdriveImport}
                       disabled={isImportingGdrive || !gdriveUrl.trim()}
-                      className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold rounded-xl transition-all shadow-md shadow-emerald-600/20 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                      className="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold rounded-xl transition-all shadow-md shadow-emerald-600/20 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                     >
                       {isImportingGdrive ? (
                         <>
@@ -909,7 +943,7 @@ function PreviewDashboardContent() {
                     </button>
                   </div>
                   <p className="text-[11px] text-slate-400">
-                    * تأكد أن إعدادات مشاركة الرابط على Google Drive هي: <span className="text-emerald-400 font-medium">"أي شخص لديه الرابط (Anyone with the link)"</span>.
+                    * يمكنك اختيار <strong className="text-sky-400">"تشغيل مباشر فوري"</strong> للمشاهدة فورياً عبر مشغل المنصة المحمي بالعلامة المائية، أو <strong className="text-emerald-400">"استيراد وتشفير في VdoCipher"</strong> لإرساله إلى خوادم VdoCipher.
                   </p>
                 </div>
               )}
