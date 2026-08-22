@@ -14,6 +14,10 @@ import {
   Check,
   RefreshCw,
   ExternalLink,
+  Upload,
+  UploadCloud,
+  FileVideo,
+  CheckCircle,
 } from "lucide-react";
 import { SecurePlayer } from "@/components/ui/SecurePlayer";
 import { VideoWatermark } from "@/components/ui/VideoWatermark";
@@ -150,6 +154,12 @@ function PreviewDashboardContent() {
   const [isGeneratingVdoOtp, setIsGeneratingVdoOtp] = useState(false);
   const [vdoError, setVdoError] = useState<string | null>(null);
 
+  // ── VdoCipher Direct Upload State ──────────────────────────────────────────
+  const [isUploadingVdo, setIsUploadingVdo] = useState(false);
+  const [vdoUploadProgress, setVdoUploadProgress] = useState(0);
+  const [vdoUploadStatus, setVdoUploadStatus] = useState("");
+  const [vdoUploadSuccess, setVdoUploadSuccess] = useState<string | null>(null);
+
   // ── EME Capabilities Probe State ───────────────────────────────────────────
   const [probeResults, setProbeResults] = useState<Record<string, "checking" | "yes" | "no">>({});
   const [isSecureContext, setIsSecureContext] = useState<boolean | null>(null);
@@ -275,7 +285,7 @@ function PreviewDashboardContent() {
   const generateVdoCipherOtp = useCallback(async (videoIdToSign: string) => {
     const trimmedId = videoIdToSign.trim();
     if (!trimmedId) {
-      setVdoError("يرجى إدخال معرّف فيديو VdoCipher (Video ID)");
+      setVdoError("يرجى إدخال معرّف فيديو VdoCipher (Video ID) أو رفع فيديو جديد");
       return;
     }
     setIsGeneratingVdoOtp(true);
@@ -309,6 +319,78 @@ function PreviewDashboardContent() {
       setIsGeneratingVdoOtp(false);
     }
   }, [testWatermarkLabel]);
+
+  // ── Direct File Upload to VdoCipher (S3 Upload with Progress) ─────────────
+  const handleVdoDirectUpload = async (file: File) => {
+    if (!file) return;
+    setIsUploadingVdo(true);
+    setVdoUploadProgress(0);
+    setVdoError(null);
+    setVdoUploadSuccess(null);
+    setVdoUploadStatus("جاري حجز تذكرة الرفع من أفضل حساب VdoCipher...");
+
+    try {
+      // 1. Request upload ticket from best account
+      const ticketRes = await fetch("/api/teacher/vdocipher/upload-ticket", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: file.name.replace(/\.[^/.]+$/, "") || "معاينة درس مشفر",
+          estimatedSizeBytes: file.size,
+        }),
+      });
+
+      const ticketData = await ticketRes.json();
+      if (!ticketRes.ok || !ticketData.success) {
+        throw new Error(ticketData.error || "تعذر الحصول على تذكرة الرفع من VdoCipher");
+      }
+
+      // 2. Direct S3 Upload with live progress
+      setVdoUploadStatus("جاري رفع الفيديو مباشرة إلى سحابة VdoCipher المشفرة...");
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        const formData = new FormData();
+        const payload = ticketData.clientPayload;
+        for (const key of Object.keys(payload)) {
+          if (key !== "uploadLink") {
+            formData.append(key, payload[key]);
+          }
+        }
+        formData.append("file", file);
+
+        xhr.open("POST", ticketData.uploadLink, true);
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            const percent = Math.round((e.loaded / e.total) * 100);
+            setVdoUploadProgress(percent);
+          }
+        };
+
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve();
+          } else {
+            reject(new Error(`فشل نقل الفيديو إلى خادم التخزين (رمز: ${xhr.status})`));
+          }
+        };
+        xhr.onerror = () => reject(new Error("حدث انقطاع في الاتصال أثناء الرفع"));
+        xhr.send(formData);
+      });
+
+      const newVideoId = ticketData.providerVideoId || ticketData.videoId;
+      setVdoAssetId(newVideoId);
+      setVdoUploadSuccess(`تم رفع الفيديو بنجاح! معرّف الفيديو: ${newVideoId}`);
+      setVdoUploadStatus("تم الرفع بنجاح! جاري تشفير وتوليد رمز البث (OTP)...");
+
+      // 3. Immediately generate OTP and load player
+      await generateVdoCipherOtp(newVideoId);
+    } catch (err: any) {
+      setVdoError(err.message || "حدث خطأ أثناء رفع الفيديو");
+    } finally {
+      setIsUploadingVdo(false);
+    }
+  };
 
   // ── Active Player Configuration ────────────────────────────────────────────
   const currentManifestUrl = useMemo(() => {
@@ -666,6 +748,66 @@ function PreviewDashboardContent() {
               </a>
             </div>
 
+            {/* Direct Video Upload Card */}
+            <div className="p-4 bg-slate-900 border border-slate-800 rounded-2xl space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-sky-500/10 border border-sky-500/30 flex items-center justify-center text-sky-400">
+                    <UploadCloud className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-white">رفع فيديو تجريبي إلى VdoCipher (Direct Test Upload)</h4>
+                    <p className="text-[11px] text-slate-400">
+                      ارفع أي ملف فيديو (MP4/MOV/WebM) وسيتم رفعه وتشفيره وتوليد Video ID وتفعيله فورياً في المشغل.
+                    </p>
+                  </div>
+                </div>
+
+                <label className={`px-4 py-2 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white text-xs font-bold rounded-xl transition-all shadow-md shadow-sky-600/20 flex items-center gap-2 cursor-pointer ${isUploadingVdo ? "opacity-50 pointer-events-none" : ""}`}>
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>{isUploadingVdo ? "جاري الرفع..." : "اختر ملف فيديو للرفع 📤"}</span>
+                  <input
+                    type="file"
+                    accept="video/mp4,video/quicktime,video/webm,video/x-matroska"
+                    className="hidden"
+                    disabled={isUploadingVdo}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleVdoDirectUpload(file);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+              </div>
+
+              {/* Upload Progress Bar */}
+              {isUploadingVdo && (
+                <div className="p-3.5 bg-slate-950/80 border border-sky-500/30 rounded-xl space-y-2">
+                  <div className="flex items-center justify-between text-xs font-bold">
+                    <span className="text-sky-400 flex items-center gap-1.5">
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>{vdoUploadStatus}</span>
+                    </span>
+                    <span className="text-white font-mono">{vdoUploadProgress}%</span>
+                  </div>
+                  <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-sky-500 to-indigo-500 transition-all duration-300 rounded-full"
+                      style={{ width: `${vdoUploadProgress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Upload Success Alert */}
+              {vdoUploadSuccess && !isUploadingVdo && (
+                <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-300 text-xs font-semibold flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>{vdoUploadSuccess}</span>
+                </div>
+              )}
+            </div>
+
             {/* VdoCipher Dynamic OTP Interactive Control Bar */}
             <div className="p-4 bg-slate-900 border border-slate-800 rounded-2xl flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2 flex-1 min-w-[280px]">
@@ -677,7 +819,7 @@ function PreviewDashboardContent() {
                     setVdoAssetId(e.target.value);
                     if (vdoError) setVdoError(null);
                   }}
-                  placeholder="أدخل معرّف VdoCipher Video ID..."
+                  placeholder="أدخل معرّف VdoCipher Video ID أو ارفع فيديو من الزر أعلاه..."
                   className="flex-1 px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs font-mono text-white text-left focus:outline-none focus:border-sky-500"
                   dir="ltr"
                 />
@@ -686,7 +828,7 @@ function PreviewDashboardContent() {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => generateVdoCipherOtp(vdoAssetId)}
-                  disabled={isGeneratingVdoOtp}
+                  disabled={isGeneratingVdoOtp || isUploadingVdo}
                   className="px-4 py-2 bg-sky-500 hover:bg-sky-400 text-white text-xs font-bold rounded-xl transition-all shadow-md shadow-sky-500/20 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                 >
                   {isGeneratingVdoOtp ? (
@@ -737,21 +879,37 @@ function PreviewDashboardContent() {
                   <div>
                     <h4 className="text-base font-bold text-white">مشغل VdoCipher المشفر جاهز للاختبار</h4>
                     <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
-                      تتطلب حماية VdoCipher توليد رمز OTP ديناميكي مشفر مدته 120 ثانية عبر الـ API لكل جلسة مشاهدة لمنع مشاركة الروابط.
+                      تتطلب حماية VdoCipher وجود فيديو مرفوع وتوليد رمز OTP ديناميكي مشفر مدته 120 ثانية عبر الـ API لكل جلسة مشاهدة.
                     </p>
                   </div>
-                  <div className="pt-2">
+                  <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+                    <label className={`px-5 py-2.5 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-sky-600/20 inline-flex items-center gap-2 cursor-pointer ${isUploadingVdo ? "opacity-50 pointer-events-none" : ""}`}>
+                      <Upload className="w-4 h-4" />
+                      <span>{isUploadingVdo ? "جاري الرفع..." : "اختر فيديو لرفعه وتشفيره فوراً 📤"}</span>
+                      <input
+                        type="file"
+                        accept="video/mp4,video/quicktime,video/webm,video/x-matroska"
+                        className="hidden"
+                        disabled={isUploadingVdo}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleVdoDirectUpload(file);
+                          e.target.value = "";
+                        }}
+                      />
+                    </label>
+
                     <button
                       onClick={() => generateVdoCipherOtp(vdoAssetId)}
-                      disabled={isGeneratingVdoOtp || !vdoAssetId.trim()}
-                      className="px-5 py-2.5 bg-sky-500 hover:bg-sky-400 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-sky-500/20 inline-flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                      disabled={isGeneratingVdoOtp || isUploadingVdo || !vdoAssetId.trim()}
+                      className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl border border-slate-700 transition-all inline-flex items-center gap-2 cursor-pointer disabled:opacity-50"
                     >
                       {isGeneratingVdoOtp ? (
                         <RefreshCw className="w-4 h-4 animate-spin" />
                       ) : (
                         <Key className="w-4 h-4" />
                       )}
-                      <span>أدخل معرّف الفيديو واضغط توليد OTP</span>
+                      <span>توليد OTP من معرّف يدوي</span>
                     </button>
                   </div>
                 </div>

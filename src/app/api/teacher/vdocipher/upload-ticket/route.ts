@@ -7,11 +7,30 @@ import {
   selectBestAccountForUpload,
   requestVdoCipherUploadTicket,
 } from "@/lib/vdocipher-accounts";
+import { timingSafeEqual } from "node:crypto";
+
+const PREVIEW_PASSWORD = process.env.PREVIEW_PASSWORD || "codeup2030";
+const PREVIEW_COOKIE_NAME = "codeup_preview_auth";
+
+function safeCompare(a: string, b: string): boolean {
+  if (typeof a !== "string" || typeof b !== "string") return false;
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) return false;
+  return timingSafeEqual(bufA, bufB);
+}
 
 export async function POST(req: NextRequest) {
   try {
     const session = await getSession();
-    if (!session || (session.role !== "teacher" && session.role !== "superadmin")) {
+    const cookie = req.cookies.get(PREVIEW_COOKIE_NAME)?.value;
+    const isPreviewCookieValid = cookie ? safeCompare(cookie, PREVIEW_PASSWORD) : false;
+
+    const isAuthorized =
+      isPreviewCookieValid ||
+      (session && (session.role === "teacher" || session.role === "admin" || session.role === "superadmin"));
+
+    if (!isAuthorized) {
       return NextResponse.json({ error: "غير مصرح لك بالوصول" }, { status: 403 });
     }
 
@@ -32,17 +51,48 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "عنوان الفيديو لا يمكن أن يزيد عن 100 حرف" }, { status: 400 });
     }
 
-    const folderId = body.folderId;
-    if (!folderId) {
-      return NextResponse.json({ error: "معرف المحاضرة مطلوب" }, { status: 400 });
+    // Select the best VdoCipher account automatically
+    const bestAccount = await selectBestAccountForUpload({
+      estimatedSizeBytes: body.estimatedSizeBytes,
+    });
+
+    if (!bestAccount) {
+      return NextResponse.json(
+        {
+          error:
+            "لا توجد حسابات VdoCipher نشطة تملك سعة كافية للرفع حالياً. يرجى مراجعة لوحة التحكم العامة (Superadmin).",
+        },
+        { status: 503 }
+      );
     }
 
-    // Verify folder ownership
+    // Request S3 upload ticket from VdoCipher
+    const ticket = await requestVdoCipherUploadTicket({
+      apiKey: bestAccount.apiKey,
+      title,
+    });
+
+    const folderId = body.folderId;
+
+    // ── Standalone Preview Upload (without folderId) ──────────────────────────
+    if (!folderId) {
+      return NextResponse.json({
+        success: true,
+        isPreview: true,
+        providerVideoId: ticket.videoId,
+        videoId: ticket.videoId,
+        uploadLink: ticket.uploadLink,
+        clientPayload: ticket.clientPayload,
+        title,
+      });
+    }
+
+    // ── Course Lecture Upload (with folderId) ─────────────────────────────────
     const folder = await prisma.folder.findFirst({
       where:
-        session.role === "superadmin"
+        session?.role === "superadmin"
           ? { id: folderId }
-          : { id: folderId, course: { teacherId: session.id } },
+          : { id: folderId, course: { teacherId: session?.id } },
       include: { course: { select: { id: true, teacherId: true } } },
     });
 
@@ -58,27 +108,6 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-
-    // Select the best VdoCipher account automatically
-    const bestAccount = await selectBestAccountForUpload({
-      estimatedSizeBytes: body.estimatedSizeBytes,
-    });
-
-    if (!bestAccount) {
-      return NextResponse.json(
-        {
-          error:
-            "لا توجد حسابات VdoCipher نشطة تملك سعة كافية للرفع حالياً. يرجى التواصل مع المشرف العام.",
-        },
-        { status: 503 }
-      );
-    }
-
-    // Request S3 upload ticket from VdoCipher
-    const ticket = await requestVdoCipherUploadTicket({
-      apiKey: bestAccount.apiKey,
-      title,
-    });
 
     const durationMinutes =
       typeof body.durationMinutes === "number" && body.durationMinutes >= 0
