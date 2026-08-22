@@ -141,6 +141,15 @@ function PreviewDashboardContent() {
   const [customTitle, setCustomTitle] = useState(urlTitle || "معاينة درس مشفر (CTO / Teacher)");
   const [isGeneratingToken, setIsGeneratingToken] = useState(false);
 
+  // ── VdoCipher Asset & OTP State ────────────────────────────────────────────
+  const [vdoAssetId, setVdoAssetId] = useState(urlProvider === "vdocipher" ? urlAssetId : "");
+  const [vdoEmbedUrl, setVdoEmbedUrl] = useState("");
+  const [vdoOtpData, setVdoOtpData] = useState<{ otp: string; playbackInfo: string; expiresInSeconds: number } | null>(null);
+  const [vdoOtpExpiry, setVdoOtpExpiry] = useState<number | null>(null);
+  const [vdoTimeLeft, setVdoTimeLeft] = useState<number>(0);
+  const [isGeneratingVdoOtp, setIsGeneratingVdoOtp] = useState(false);
+  const [vdoError, setVdoError] = useState<string | null>(null);
+
   // ── EME Capabilities Probe State ───────────────────────────────────────────
   const [probeResults, setProbeResults] = useState<Record<string, "checking" | "yes" | "no">>({});
   const [isSecureContext, setIsSecureContext] = useState<boolean | null>(null);
@@ -151,6 +160,24 @@ function PreviewDashboardContent() {
     "Code-UP • Student: 01012345678 • Session: #9401"
   );
   const [customGridOpacity, setCustomGridOpacity] = useState(0.06);
+
+  // ── VdoCipher OTP Countdown Timer ───────────────────────────────────────────
+  useEffect(() => {
+    if (!vdoOtpExpiry) {
+      setVdoTimeLeft(0);
+      return;
+    }
+    const updateCountdown = () => {
+      const remaining = Math.max(0, Math.floor((vdoOtpExpiry - Date.now()) / 1000));
+      setVdoTimeLeft(remaining);
+      if (remaining <= 0) {
+        setVdoOtpExpiry(null);
+      }
+    };
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+    return () => clearInterval(interval);
+  }, [vdoOtpExpiry]);
 
   // ── Check Auth status on mount ─────────────────────────────────────────────
   useEffect(() => {
@@ -222,7 +249,7 @@ function PreviewDashboardContent() {
     }
   }, [isAuthenticated, runProbe]);
 
-  // ── Auto-generate Token for Custom Asset ───────────────────────────────────
+  // ── Auto-generate Token for Custom Axinom Asset ───────────────────────────
   const generatePreviewToken = useCallback(async (assetIdToSign: string) => {
     if (!assetIdToSign || assetIdToSign === "axinom_demo" || assetIdToSign === "axinom_clear") return;
     setIsGeneratingToken(true);
@@ -231,7 +258,7 @@ function PreviewDashboardContent() {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ assetId: assetIdToSign, title: customTitle }),
+        body: JSON.stringify({ assetId: assetIdToSign, title: customTitle, provider: "axinom" }),
       });
       const data = await res.json();
       if (res.ok && data.success && data.drm?.token) {
@@ -243,6 +270,45 @@ function PreviewDashboardContent() {
       setIsGeneratingToken(false);
     }
   }, [customTitle]);
+
+  // ── Generate Dynamic OTP for VdoCipher Asset ──────────────────────────────
+  const generateVdoCipherOtp = useCallback(async (videoIdToSign: string) => {
+    const trimmedId = videoIdToSign.trim();
+    if (!trimmedId) {
+      setVdoError("يرجى إدخال معرّف فيديو VdoCipher (Video ID)");
+      return;
+    }
+    setIsGeneratingVdoOtp(true);
+    setVdoError(null);
+    try {
+      const res = await fetch("/api/teacher/drm-preview", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          assetId: trimmedId,
+          provider: "vdocipher",
+          watermarkText: testWatermarkLabel,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success && data.embedUrl) {
+        setVdoEmbedUrl(data.embedUrl);
+        setVdoOtpData({
+          otp: data.otp,
+          playbackInfo: data.playbackInfo,
+          expiresInSeconds: data.expiresInSeconds || 120,
+        });
+        setVdoOtpExpiry(Date.now() + (data.expiresInSeconds || 120) * 1000);
+      } else {
+        setVdoError(data.error || "تعذر توليد رمز تشغيل VdoCipher");
+      }
+    } catch (e: any) {
+      setVdoError(e.message || "حدث خطأ أثناء الاتصال بالخادم");
+    } finally {
+      setIsGeneratingVdoOtp(false);
+    }
+  }, [testWatermarkLabel]);
 
   // ── Active Player Configuration ────────────────────────────────────────────
   const currentManifestUrl = useMemo(() => {
@@ -600,13 +666,96 @@ function PreviewDashboardContent() {
               </a>
             </div>
 
-            <div className="relative rounded-2xl overflow-hidden border border-slate-800 bg-black shadow-2xl aspect-video w-full max-h-[72vh]">
-              <SecurePlayer
-                embedUrl="https://player.vdocipher.com/v2/?otp=mock-otp-preview&playbackInfo=mock-playback-info"
-                provider="vdocipher"
-                title="VdoCipher Security Embed"
-                watermark={testWatermarkLabel}
-              />
+            {/* VdoCipher Dynamic OTP Interactive Control Bar */}
+            <div className="p-4 bg-slate-900 border border-slate-800 rounded-2xl flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2 flex-1 min-w-[280px]">
+                <span className="text-xs font-bold text-slate-300 shrink-0">معرّف الفيديو (Video ID):</span>
+                <input
+                  type="text"
+                  value={vdoAssetId}
+                  onChange={(e) => {
+                    setVdoAssetId(e.target.value);
+                    if (vdoError) setVdoError(null);
+                  }}
+                  placeholder="أدخل معرّف VdoCipher Video ID..."
+                  className="flex-1 px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs font-mono text-white text-left focus:outline-none focus:border-sky-500"
+                  dir="ltr"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => generateVdoCipherOtp(vdoAssetId)}
+                  disabled={isGeneratingVdoOtp}
+                  className="px-4 py-2 bg-sky-500 hover:bg-sky-400 text-white text-xs font-bold rounded-xl transition-all shadow-md shadow-sky-500/20 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  {isGeneratingVdoOtp ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>جاري طلب OTP...</span>
+                    </>
+                  ) : vdoEmbedUrl && vdoTimeLeft > 0 ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span>🔄 تجديد OTP ({vdoTimeLeft}s)</span>
+                    </>
+                  ) : (
+                    <>
+                      <Key className="w-3.5 h-3.5" />
+                      <span>⚡ توليد OTP وتفعيل المشغل</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Error Banner if generation fails */}
+            {vdoError && (
+              <div className="p-4 bg-rose-500/10 border border-rose-500/30 rounded-2xl text-rose-300 text-xs font-medium flex items-center gap-3">
+                <ShieldAlert className="w-5 h-5 shrink-0 text-rose-400" />
+                <div className="flex-1">
+                  <div className="font-bold text-white mb-0.5">تعذر تشغيل فيديو VdoCipher</div>
+                  <p>{vdoError}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Player Cinema Container or Standby Stage */}
+            <div className="relative rounded-2xl overflow-hidden border border-slate-800 bg-black shadow-2xl aspect-video w-full max-h-[72vh] flex items-center justify-center">
+              {vdoEmbedUrl ? (
+                <SecurePlayer
+                  embedUrl={vdoEmbedUrl}
+                  provider="vdocipher"
+                  title="VdoCipher Security Embed"
+                  watermark={testWatermarkLabel}
+                />
+              ) : (
+                <div className="p-8 text-center max-w-lg space-y-4">
+                  <div className="w-16 h-16 rounded-2xl bg-sky-500/10 border border-sky-500/30 mx-auto flex items-center justify-center text-sky-400">
+                    <Eye className="w-8 h-8" />
+                  </div>
+                  <div>
+                    <h4 className="text-base font-bold text-white">مشغل VdoCipher المشفر جاهز للاختبار</h4>
+                    <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
+                      تتطلب حماية VdoCipher توليد رمز OTP ديناميكي مشفر مدته 120 ثانية عبر الـ API لكل جلسة مشاهدة لمنع مشاركة الروابط.
+                    </p>
+                  </div>
+                  <div className="pt-2">
+                    <button
+                      onClick={() => generateVdoCipherOtp(vdoAssetId)}
+                      disabled={isGeneratingVdoOtp || !vdoAssetId.trim()}
+                      className="px-5 py-2.5 bg-sky-500 hover:bg-sky-400 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-sky-500/20 inline-flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                    >
+                      {isGeneratingVdoOtp ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Key className="w-4 h-4" />
+                      )}
+                      <span>أدخل معرّف الفيديو واضغط توليد OTP</span>
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
