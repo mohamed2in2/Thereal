@@ -350,6 +350,64 @@ async function runFinancialTests() {
       "Test L: Split Payment (Wallet 300 + Gateway 200) -> Wallet balance becomes 0, Course access granted"
     );
 
+    // ──────────────────────────────────────────────────────────────────────────
+    // Test M: Course Discount without Expiration Date (Price: 200, Discount: 10%, ExpiresAt: null -> Expected 180)
+    // ──────────────────────────────────────────────────────────────────────────
+    const courseWithDiscount = await prisma.course.create({
+      data: {
+        title: `Test Discounted Course ${timestamp}`,
+        teacherId: teacher.id,
+        subject: "Math",
+        educationalStage: "sec_1",
+        isPaid: true,
+        price: 200,
+        discountPercent: 10,
+        discountExpiresAt: null, // Indefinite teacher discount
+        slug: `test-disc-course-${timestamp}`,
+      },
+    });
+
+    const verifyCourseDisc = await verifyAuthoritativePrice({
+      amount: 180,
+      courseId: courseWithDiscount.id,
+    });
+
+    assert(
+      verifyCourseDisc.valid && verifyCourseDisc.expectedPrice === 180 && verifyCourseDisc.finalPrice === 180,
+      "Test M: Course Price 200 with 10% discount (null expiresAt) -> verifyAuthoritativePrice approves 180 EGP without error"
+    );
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Test N: Teacher Subscription with Plan Discount (Monthly 200 with 20% discount -> Expected 160)
+    // ──────────────────────────────────────────────────────────────────────────
+    const teacherWithDisc = await prisma.user.create({
+      data: {
+        email: `teacher_disc_${timestamp}@test.com`,
+        name: "Teacher Disc",
+        role: "teacher",
+        teacherProfile: {
+          create: {
+            slug: `teacher-disc-${timestamp}`,
+            displayName: "Teacher Disc",
+            priceMonthly: 200,
+            discountMonthly: 20,
+          },
+        },
+      },
+      include: { teacherProfile: true },
+    });
+
+    const verifyTeacherDisc = await verifyAuthoritativePrice({
+      amount: 160,
+      teacherId: teacherWithDisc.id,
+      planType: "monthly",
+    });
+
+    assert(
+      verifyTeacherDisc.valid && verifyTeacherDisc.expectedPrice === 160 && verifyTeacherDisc.finalPrice === 160,
+      "Test N: Teacher Subscription Monthly 200 with 20% discount -> verifyAuthoritativePrice approves 160 EGP without error"
+    );
+
   } catch (err) {
     console.error("❌ Fatal Error during test execution:", err);
     failed++;

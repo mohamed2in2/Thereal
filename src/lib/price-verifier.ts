@@ -96,8 +96,14 @@ export async function verifyAuthoritativePrice(params: {
       termly: profile.priceTermly,
       yearly: profile.priceYearly,
     };
+    const rawDiscountMap: Record<string, number | null> = {
+      monthly: profile.discountMonthly,
+      termly: profile.discountTermly,
+      yearly: profile.discountYearly,
+    };
 
     let planPrice = rawPriceMap[planType];
+    let planDiscount = rawDiscountMap[planType];
 
     // Check stage-specific pricing override & booking availability
     if (profile.stagePricing) {
@@ -116,9 +122,18 @@ export async function verifyAuthoritativePrice(params: {
                 termly: "priceTermly",
                 yearly: "priceYearly",
               };
+              const discMap: Record<string, string> = {
+                monthly: "discountMonthly",
+                termly: "discountTermly",
+                yearly: "discountYearly",
+              };
               const stageVal = requestedConfig?.[keyMap[planType]];
               if (typeof stageVal === "number" && stageVal > 0) {
                 planPrice = stageVal;
+              }
+              const stageDisc = requestedConfig?.[discMap[planType]];
+              if (typeof stageDisc === "number" && stageDisc > 0) {
+                planDiscount = stageDisc;
               }
             } else {
               return {
@@ -134,9 +149,18 @@ export async function verifyAuthoritativePrice(params: {
               termly: "priceTermly",
               yearly: "priceYearly",
             };
+            const discMap: Record<string, string> = {
+              monthly: "discountMonthly",
+              termly: "discountTermly",
+              yearly: "discountYearly",
+            };
             const stageVal = stageConfig[keyMap[planType]];
             if (typeof stageVal === "number" && stageVal > 0) {
               planPrice = stageVal;
+            }
+            const stageDisc = stageConfig[discMap[planType]];
+            if (typeof stageDisc === "number" && stageDisc > 0) {
+              planDiscount = stageDisc;
             }
           }
         }
@@ -177,7 +201,13 @@ export async function verifyAuthoritativePrice(params: {
       else if (planType === "yearly") languageSurcharge = langYearly;
     }
 
-    basePrice = Math.max(planPrice + languageSurcharge, 1);
+    const rawTeacherBase = Math.max(planPrice + languageSurcharge, 1);
+    if (planDiscount && planDiscount > 0 && planDiscount <= 100) {
+      basePrice = Math.max(+(rawTeacherBase * (1 - planDiscount / 100)).toFixed(2), 1);
+    } else {
+      basePrice = rawTeacherBase;
+    }
+
     const teacherName = profile.displayName || teacher.name;
     itemName = `اشتراك ${planType === "monthly" ? "شهري" : planType === "termly" ? "ترمي" : "سنوي"} (${isLanguages ? "لغات / إنجليزي" : "عربي"}) مع ${teacherName}`;
   }
@@ -201,8 +231,13 @@ export async function verifyAuthoritativePrice(params: {
 
     let effectivePrice = coursePrice;
     const now = new Date();
-    if (course.discountPercent && course.discountExpiresAt && course.discountExpiresAt > now) {
-      effectivePrice = Math.round(coursePrice * (1 - course.discountPercent / 100));
+    const discountActive =
+      course.discountPercent != null &&
+      course.discountPercent > 0 &&
+      (course.discountExpiresAt == null || course.discountExpiresAt > now);
+
+    if (discountActive && course.discountPercent) {
+      effectivePrice = +(coursePrice * (1 - course.discountPercent / 100)).toFixed(2);
     }
     basePrice = effectivePrice;
     itemName = course.title;

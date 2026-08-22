@@ -152,11 +152,15 @@ export function BookingButton({
     accent: string,
     accentBg: string
   ): BookingPlan => {
+    const hasDiscount = typeof discountPct === "number" && discountPct > 0 && discountPct <= 100;
+    const finalPrice = hasDiscount ? +(rawPrice * (1 - discountPct / 100)).toFixed(2) : rawPrice;
     return {
       type,
       label,
       sublabel,
-      price: rawPrice,
+      price: finalPrice,
+      originalPrice: hasDiscount ? rawPrice : undefined,
+      discountPercent: hasDiscount ? discountPct : undefined,
       icon,
       accent,
       accentBg,
@@ -221,7 +225,7 @@ export function BookingButton({
       `اشتراك شهر واحد ${isLanguages ? "(لغات)" : "(عربي)"}`,
       "شهر واحد فقط",
       monthlyPrice,
-      null,
+      stageConfig.discountMonthly,
       "📅",
       "#3B82F6",
       "rgba(59,130,246,0.1)"
@@ -231,7 +235,7 @@ export function BookingButton({
       `اشتراك الترم ${isLanguages ? "(لغات)" : "(عربي)"}`,
       "ترم دراسي كامل",
       termlyPrice,
-      null,
+      stageConfig.discountTermly,
       "📚",
       "#F59E0B",
       "rgba(245,158,11,0.1)"
@@ -241,7 +245,7 @@ export function BookingButton({
       `اشتراك سنة كاملة ${isLanguages ? "(لغات)" : "(عربي)"}`,
       "سنة دراسية كاملة",
       yearlyPrice,
-      null,
+      stageConfig.discountYearly,
       "🎓",
       "#10B981",
       "rgba(16,185,129,0.1)"
