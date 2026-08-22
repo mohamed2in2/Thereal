@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { SecurePlayer } from "@/components/ui/SecurePlayer";
 import { VideoGuard } from "@/components/ui/VideoGuard";
-import { AXINOM_CONFIG } from "@/lib/axinom";
+import { AXINOM_CONFIG } from "@/lib/axinom-config";
 
 function DrmPreviewContent() {
   const searchParams = useSearchParams();

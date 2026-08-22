@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { cookies, headers } from "next/headers";
-import { IBM_Plex_Sans_Arabic, Tajawal } from "next/font/google";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { ToastProvider } from "@/components/ui/Toast";
 import { ErrorReporter } from "@/components/ErrorReporter";
@@ -14,20 +13,6 @@ import { getMaintenanceMode, getMaintenanceMessage } from "@/lib/settings";
 import { getOverloadProtectionState } from "@/lib/overload-protection";
 import { SEO_KEYWORD_MATRIX } from "@/lib/seo-keywords";
 import "./globals.css";
-
-const ibmPlex = IBM_Plex_Sans_Arabic({
-  subsets: ["arabic"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-ibm-plex",
-  display: "swap",
-});
-
-const tajawal = Tajawal({
-  subsets: ["arabic"],
-  weight: ["500", "700", "800", "900"],
-  variable: "--font-tajawal",
-  display: "swap",
-});
 
 interface GateResult {
   gated: boolean;
@@ -231,9 +216,14 @@ export default async function RootLayout({
       dir="rtl"
       suppressHydrationWarning
       data-scroll-behavior="smooth"
-      className={`${ibmPlex.variable} ${tajawal.variable}`}
     >
       <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Tajawal:wght@500;700;800;900&display=swap"
+        />
         <meta name="facebook-domain-verification" content="fagzmwahaw0vng7nfk8xm6izl2upf4" />
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#0E6E62" />

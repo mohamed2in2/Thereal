@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { SecurePlayer } from "@/components/ui/SecurePlayer";
 import { VideoWatermark } from "@/components/ui/VideoWatermark";
-import { AXINOM_CONFIG } from "@/lib/axinom";
+import { AXINOM_CONFIG } from "@/lib/axinom-config";
 
 // ── EME Capability Probes ───────────────────────────────────────────────────
 interface Probe {
