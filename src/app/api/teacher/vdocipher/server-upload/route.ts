@@ -1,0 +1,186 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getSession } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import {
+  selectBestAccountForUpload,
+  requestVdoCipherUploadTicket,
+  decryptVdoCipherSecret,
+} from "@/lib/vdocipher-accounts";
+import { timingSafeEqual } from "node:crypto";
+
+const PREVIEW_PASSWORD = process.env.PREVIEW_PASSWORD || "codeup2030";
+const PREVIEW_COOKIE_NAME = "codeup_preview_auth";
+
+function safeCompare(a: string, b: string): boolean {
+  if (typeof a !== "string" || typeof b !== "string") return false;
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) return false;
+  return timingSafeEqual(bufA, bufB);
+}
+
+function s3ErrorMessage(body: string): string {
+  const message = /<Message>([\s\S]*?)<\/Message>/.exec(body)?.[1];
+  const code = /<Code>([\s\S]*?)<\/Code>/.exec(body)?.[1];
+  if (message && code) return `${code}: ${message}`;
+  return message || code || body.slice(0, 300);
+}
+
+export const maxDuration = 300; // 5 minutes for large video uploads
+export const dynamic = "force-dynamic";
+
+/**
+ * Server-side VdoCipher Video Upload Endpoint:
+ * Receives video file from client (within same-origin Nginx 3GB allowance),
+ * requests S3 ticket, and proxies upload to VdoCipher S3 without client CORS restrictions.
+ */
+export async function POST(req: NextRequest) {
+  try {
+    const session = await getSession();
+    const cookie = req.cookies.get(PREVIEW_COOKIE_NAME)?.value;
+    const isPreviewCookieValid = cookie ? safeCompare(cookie, PREVIEW_PASSWORD) : false;
+
+    const isAuthorized =
+      isPreviewCookieValid ||
+      (session && (session.role === "teacher" || session.role === "admin" || session.role === "superadmin"));
+
+    if (!isAuthorized) {
+      return NextResponse.json({ error: "غير مصرح لك بالوصول" }, { status: 403 });
+    }
+
+    const formData = await req.formData().catch(() => null);
+    if (!formData) {
+      return NextResponse.json({ error: "البيانات المرسلة غير صالحة" }, { status: 400 });
+    }
+
+    const file = formData.get("file") as File | null;
+    if (!file) {
+      return NextResponse.json({ error: "لم يتم تحديد أي ملف للرفع" }, { status: 400 });
+    }
+
+    const customTitle = (formData.get("title") as string | null) || "";
+    const videoTitle = customTitle.trim() || file.name.replace(/\.[^/.]+$/, "") || "معاينة درس مشفر";
+    const folderId = formData.get("folderId") as string | null;
+
+    // 1. Select the best VdoCipher account
+    let bestAccount = await selectBestAccountForUpload({
+      estimatedSizeBytes: file.size,
+    });
+
+    let apiKey = bestAccount?.apiKey || "";
+    let accountId = bestAccount?.id || "";
+
+    if (!apiKey) {
+      const anyAccount = await prisma.vdoCipherAccount.findFirst({
+        where: { isActive: true },
+        orderBy: { createdAt: "asc" },
+      });
+      if (anyAccount?.apiKeyEnc) {
+        try {
+          apiKey = decryptVdoCipherSecret(anyAccount.apiKeyEnc);
+          accountId = anyAccount.id;
+        } catch (e) {
+          console.error("[server-upload] Failed to decrypt fallback key:", e);
+        }
+      }
+    }
+
+    if (!apiKey && process.env.VDOCIPHER_API_SECRET) {
+      apiKey = process.env.VDOCIPHER_API_SECRET;
+    }
+
+    if (!apiKey) {
+      return NextResponse.json(
+        {
+          error:
+            "لا توجد حسابات VdoCipher نشطة أو مفاتيح API مهيأة في المنصة. يرجى إضافة حساب من لوحة التحكم العامة (Superadmin).",
+        },
+        { status: 503 }
+      );
+    }
+
+    // 2. Request upload ticket from VdoCipher
+    const ticket = await requestVdoCipherUploadTicket({
+      apiKey,
+      title: videoTitle,
+    });
+
+    // 3. Construct S3 multipart payload and upload from server
+    const s3FormData = new FormData();
+    const payload = ticket.clientPayload;
+    if (payload) {
+      for (const key of Object.keys(payload)) {
+        if (key !== "uploadLink") {
+          s3FormData.append(key, payload[key]);
+        }
+      }
+    }
+    s3FormData.append("file", file, file.name || "video.mp4");
+
+    const s3Res = await fetch(ticket.uploadLink, {
+      method: "POST",
+      body: s3FormData,
+    });
+
+    if (!s3Res.ok && s3Res.status !== 201 && s3Res.status !== 204) {
+      const s3ErrorText = await s3Res.text();
+      console.error("[VdoCipher S3 Server Upload Error]:", s3Res.status, s3ErrorText);
+      return NextResponse.json(
+        {
+          error: `فشل نقل الفيديو إلى خوادم VdoCipher (${s3Res.status}): ${s3ErrorMessage(s3ErrorText)}`,
+        },
+        { status: 502 }
+      );
+    }
+
+    const providerVideoId = ticket.videoId;
+
+    // 4. If folderId provided (course upload), create database records
+    if (folderId && session) {
+      try {
+        const count = await prisma.video.count({ where: { folderId } });
+        const video = await prisma.video.create({
+          data: {
+            title: videoTitle,
+            videoProvider: "vdocipher",
+            providerVideoId,
+            vdoCipherId: providerVideoId,
+            durationMinutes: 0,
+            maxWatchesPerUser: 3,
+            folderId,
+            order: count,
+          },
+        });
+
+        if (accountId) {
+          await prisma.vdoCipherVideoAsset.create({
+            data: {
+              videoId: video.id,
+              accountId,
+              vdoCipherVideoId: providerVideoId,
+              status: "ready",
+              sizeBytes: BigInt(file.size),
+            },
+          });
+        }
+      } catch (dbErr) {
+        console.warn("[server-upload] Database record creation notice:", dbErr);
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      providerVideoId,
+      videoId: providerVideoId,
+      title: videoTitle,
+      sizeBytes: file.size,
+      message: "تم رفع الفيديو إلى VdoCipher وتشفيره بنجاح! 🚀",
+    });
+  } catch (error: any) {
+    console.error("[Teacher VdoCipher Server Upload] Error:", error.message || error);
+    return NextResponse.json(
+      { error: error.message || "حدث خطأ غير متوقع أثناء معالجة رفع الفيديو" },
+      { status: 500 }
+    );
+  }
+}

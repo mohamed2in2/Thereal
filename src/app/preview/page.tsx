@@ -320,68 +320,61 @@ function PreviewDashboardContent() {
     }
   }, [testWatermarkLabel]);
 
-  // ── Direct File Upload to VdoCipher (S3 Upload with Progress) ─────────────
+  // ── Direct File Upload to VdoCipher (Server Stream with Live Progress) ────
   const handleVdoDirectUpload = async (file: File) => {
     if (!file) return;
     setIsUploadingVdo(true);
     setVdoUploadProgress(0);
     setVdoError(null);
     setVdoUploadSuccess(null);
-    setVdoUploadStatus("جاري حجز تذكرة الرفع من أفضل حساب VdoCipher...");
+    setVdoUploadStatus("جاري تحضير ورفع ملف الفيديو...");
 
     try {
-      // 1. Request upload ticket from best account
-      const ticketRes = await fetch("/api/teacher/vdocipher/upload-ticket", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: file.name.replace(/\.[^/.]+$/, "") || "معاينة درس مشفر",
-          estimatedSizeBytes: file.size,
-        }),
-      });
-
-      const ticketData = await ticketRes.json();
-      if (!ticketRes.ok || !ticketData.success) {
-        throw new Error(ticketData.error || "تعذر الحصول على تذكرة الرفع من VdoCipher");
-      }
-
-      // 2. Direct S3 Upload with live progress
-      setVdoUploadStatus("جاري رفع الفيديو مباشرة إلى سحابة VdoCipher المشفرة...");
-      await new Promise<void>((resolve, reject) => {
+      const uploadResult = await new Promise<{ providerVideoId: string }>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         const formData = new FormData();
-        const payload = ticketData.clientPayload;
-        for (const key of Object.keys(payload)) {
-          if (key !== "uploadLink") {
-            formData.append(key, payload[key]);
-          }
-        }
         formData.append("file", file);
+        formData.append("title", file.name.replace(/\.[^/.]+$/, "") || "معاينة درس مشفر");
 
-        xhr.open("POST", ticketData.uploadLink, true);
+        xhr.open("POST", "/api/teacher/vdocipher/server-upload", true);
+        xhr.withCredentials = true;
+
         xhr.upload.onprogress = (e) => {
           if (e.lengthComputable) {
             const percent = Math.round((e.loaded / e.total) * 100);
             setVdoUploadProgress(percent);
+            if (percent >= 100) {
+              setVdoUploadStatus("اكتمل الرفع! جاري المعالجة وتشفير البث عبر خوادم VdoCipher...");
+            } else {
+              setVdoUploadStatus(`جاري رفع الفيديو إلى الخادم (${percent}%)...`);
+            }
           }
         };
 
         xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            resolve();
-          } else {
-            reject(new Error(`فشل نقل الفيديو إلى خادم التخزين (رمز: ${xhr.status})`));
+          try {
+            const res = JSON.parse(xhr.responseText || "{}");
+            if (xhr.status >= 200 && xhr.status < 300 && res.success) {
+              resolve(res);
+            } else {
+              reject(new Error(res.error || `فشل رفع الفيديو (رمز: ${xhr.status})`));
+            }
+          } catch (e) {
+            reject(new Error(`استجابة غير صالحة من الخادم (رمز: ${xhr.status})`));
           }
         };
+
         xhr.onerror = () => reject(new Error("حدث انقطاع في الاتصال أثناء الرفع"));
+        xhr.ontimeout = () => reject(new Error("انتهت مهلة الرفع، يرجى المحاولة مجدداً"));
+        xhr.timeout = 600000; // 10 minutes timeout for large files
+
         xhr.send(formData);
       });
 
-      const newVideoId = ticketData.providerVideoId || ticketData.videoId;
+      const newVideoId = uploadResult.providerVideoId;
       setVdoAssetId(newVideoId);
       setVdoUploadSuccess(`تم رفع الفيديو بنجاح! معرّف الفيديو: ${newVideoId}`);
-      setVdoUploadStatus("تم الرفع بنجاح! جاري تشفير وتوليد رمز البث (OTP)...");
+      setVdoUploadStatus("تم الرفع بنجاح! جاري توليد رمز البث (OTP)...");
 
       // 3. Immediately generate OTP and load player
       await generateVdoCipherOtp(newVideoId);
