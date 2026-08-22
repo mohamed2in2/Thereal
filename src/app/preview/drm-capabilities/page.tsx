@@ -43,12 +43,20 @@ const PROBES: Probe[] = [
     note: "Desktop Chrome default. Screen recording succeeds.",
   },
   {
-    label: "PlayReady SL3000 (hardware)",
+    label: "PlayReady SL3000 (hardware, .3000 key system)",
     keySystem: "com.microsoft.playready.recommendation.3000",
     videoRobustness: "3000",
     audioRobustness: "3000",
     hardware: true,
     note: "Windows Edge on capable hardware. This is the black-frame path.",
+  },
+  {
+    label: "PlayReady SL3000 (hardware, recommendation + robustness)",
+    keySystem: "com.microsoft.playready.recommendation",
+    videoRobustness: "3000",
+    audioRobustness: "3000",
+    hardware: true,
+    note: "The form Edge more commonly exposes. Either 'yes' means hardware is available.",
   },
   {
     label: "PlayReady SL2000 (software)",
@@ -212,6 +220,12 @@ export default function DrmCapabilitiesPage() {
           >
             Re-run probe
           </button>
+          <Link
+            href="/preview"
+            className="rounded-lg bg-purple-600 px-4 py-2 text-sm font-semibold hover:bg-purple-500 text-white flex items-center gap-1.5"
+          >
+            <span>🛡️ بوابة فحص CTO الشاملة</span>
+          </Link>
           <Link
             href="/preview/drm?assetId=axinom_demo&title=Axinom+Widevine+Test"
             className="rounded-lg border border-white/15 px-4 py-2 text-sm font-semibold hover:bg-white/5"

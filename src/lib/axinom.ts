@@ -1,4 +1,6 @@
 import crypto from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
 
 /**
  * Axinom Multi-DRM Configuration & License Token Generator.
@@ -205,7 +207,7 @@ export function createAxinomDrmToken(options: AxinomTokenOptions): AxinomDrmPayl
 
   // Determine content keys source (explicit inline key or Key-seed derivation)
   let usesTieredPolicies = false;
-  let contentKeysSource: Record<string, any> = {
+  let contentKeysSource: Record<string, unknown> = {
     key_seed: {
       key_seed_id: AXINOM_CONFIG.keySeedId,
     },
@@ -216,8 +218,6 @@ export function createAxinomDrmToken(options: AxinomTokenOptions): AxinomDrmPayl
     let keyId = options.keyId;
     let key = options.key;
     if (!tieredKeys?.length && (!keyId || !key)) {
-      const fs = require("node:fs");
-      const path = require("node:path");
       const safeId = String(options.videoId).replace(/[^a-zA-Z0-9_-]/g, "_");
       const keyFilePath = path.resolve(process.cwd(), "uploads", "drm-keys", `${safeId}.json`);
       if (fs.existsSync(keyFilePath)) {
@@ -249,7 +249,7 @@ export function createAxinomDrmToken(options: AxinomTokenOptions): AxinomDrmPayl
     // If not found, use Key-seed ID
   }
 
-  const entitlementMessage: Record<string, any> = {
+  const entitlementMessage: Record<string, unknown> = {
     type: "entitlement_message",
     version: 2,
     iat: nowUnix,
@@ -295,8 +295,6 @@ export function createAxinomDrmToken(options: AxinomTokenOptions): AxinomDrmPayl
   let manifestUrl = options.videoId;
   if (!manifestUrl.startsWith("http://") && !manifestUrl.startsWith("https://")) {
     try {
-      const fs = require("node:fs");
-      const path = require("node:path");
       const safeId = String(options.videoId).replace(/[^a-zA-Z0-9_-]/g, "_");
       const keyFilePath = path.resolve(process.cwd(), "uploads", "drm-keys", `${safeId}.json`);
       if (fs.existsSync(keyFilePath)) {
@@ -312,8 +310,6 @@ export function createAxinomDrmToken(options: AxinomTokenOptions): AxinomDrmPayl
     if (!manifestUrl.startsWith("http://") && !manifestUrl.startsWith("https://")) {
       if (options.videoId.startsWith("gdrive_") || options.videoId.startsWith("local_")) {
         try {
-          const fs = require("node:fs");
-          const path = require("node:path");
           const safeId = String(options.videoId).replace(/[^a-zA-Z0-9_-]/g, "_");
           const mpdPath = path.resolve(process.cwd(), "uploads", "drm", safeId, "manifest.mpd");
           if (fs.existsSync(mpdPath)) {

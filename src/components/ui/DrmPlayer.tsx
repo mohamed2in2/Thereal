@@ -2,10 +2,48 @@
 
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { Play, Pause, RotateCcw, RotateCw, Volume2, VolumeX, Maximize, Settings, AlertTriangle, ShieldCheck } from "lucide-react";
+import { VideoWatermark } from "./VideoWatermark";
+
+interface ShakaPlayerInstance {
+  destroy: () => Promise<void>;
+  addEventListener: (event: string, handler: (e?: { detail?: { category?: number; code?: number } }) => void) => void;
+  getKeyStatuses?: () => Record<string, string>;
+  configure: (config: unknown) => void;
+  getNetworkingEngine: () => {
+    registerRequestFilter: (
+      filter: (
+        type: unknown,
+        request: { uris?: string[]; allowCrossSiteCredentials?: boolean; headers: Record<string, string> }
+      ) => void
+    ) => void;
+  };
+  load: (manifestUri: string) => Promise<void>;
+}
 
 declare global {
   interface Window {
-    shaka: any;
+    shaka: {
+      polyfill: { installAll: () => void };
+      Player: {
+        new (videoElement: HTMLVideoElement): ShakaPlayerInstance;
+        isBrowserSupported: () => boolean;
+      };
+      net: {
+        NetworkingEngine: {
+          RequestType: {
+            LICENSE: unknown;
+          };
+        };
+      };
+      util: {
+        Error: {
+          Category: {
+            DRM: number;
+            NETWORK: number;
+          };
+        };
+      };
+    };
   }
 }
 
@@ -102,6 +140,8 @@ async function supportsRobustness(
 
 /** PlayReady hardware DRM (SL3000) is exposed under its own key system on Edge. */
 const PLAYREADY_HW = "com.microsoft.playready.recommendation.3000";
+/** Edge more commonly exposes hardware PlayReady here, with robustness "3000". */
+const PLAYREADY_HW_ALT = "com.microsoft.playready.recommendation";
 const PLAYREADY_SW = "com.microsoft.playready";
 
 export function DrmPlayer({
@@ -135,20 +175,6 @@ export function DrmPlayer({
   const [isLoading, setIsLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
-
-  // Moving watermark coordinates
-  const [watermarkPos, setWatermarkPos] = useState({ top: "20%", left: "20%" });
-
-  // ── Moving watermark timer ─────────────────────────────────────────────────
-  useEffect(() => {
-    if (!watermark) return;
-    const interval = setInterval(() => {
-      const top = Math.floor(Math.random() * 70 + 10) + "%";
-      const left = Math.floor(Math.random() * 70 + 10) + "%";
-      setWatermarkPos({ top, left });
-    }, 12000);
-    return () => clearInterval(interval);
-  }, [watermark]);
 
   // ── Controls Auto-hide Timer ───────────────────────────────────────────────
   const resetControlsTimer = useCallback(() => {
@@ -415,8 +441,19 @@ export function DrmPlayer({
           "HW_SECURE_ALL",
           "HW_SECURE_CRYPTO"
         );
-        const playreadyHardware = await supportsRobustness(PLAYREADY_HW, "3000", "3000");
-        const playreadyKeySystem = playreadyHardware ? PLAYREADY_HW : PLAYREADY_SW;
+        // Probe both hardware spellings before giving up on the protected path:
+        // testing only the ".3000" suffix form reports "software only" on Edge
+        // builds that expose hardware PlayReady under the plain recommendation
+        // key system, which silently throws away the black-frame path.
+        const playreadyHwExact = await supportsRobustness(PLAYREADY_HW, "3000", "3000");
+        const playreadyHwAlt =
+          !playreadyHwExact && (await supportsRobustness(PLAYREADY_HW_ALT, "3000", "3000"));
+        const playreadyHardware = playreadyHwExact || playreadyHwAlt;
+        const playreadyKeySystem = playreadyHwExact
+          ? PLAYREADY_HW
+          : playreadyHwAlt
+            ? PLAYREADY_HW_ALT
+            : PLAYREADY_SW;
         setProtectionLabel(
           widevineHardware || playreadyHardware
             ? "حماية عتادية (Hardware DRM)"
@@ -639,7 +676,12 @@ export function DrmPlayer({
       ref={containerRef}
       onMouseMove={resetControlsTimer}
       onClick={resetControlsTimer}
-      className="relative w-full aspect-video bg-black rounded-2xl overflow-hidden shadow-2xl border border-slate-800 select-none group"
+      // Intentionally NOT rounded/overflow-hidden: clipping the video to a
+      // radius forces a masked composite, which defeats the hardware overlay
+      // plane exactly like opacity/filter does, and with it the black-frame
+      // protection. Cosmetic rounding belongs on an ancestor that does not
+      // contain the video surface.
+      className="relative w-full aspect-video bg-black shadow-2xl border border-slate-800 select-none group"
       style={{ WebkitUserSelect: "none" }}
     >
       {/* ── HTML5 Video Element with CDM Hook ── */}
@@ -663,11 +705,16 @@ export function DrmPlayer({
         onLoadedMetadata={handleLoadedMetadata}
         onEnded={onEnded}
         onClick={togglePlay}
-        className="w-full h-full object-contain cursor-pointer transition-all duration-75"
-        style={{
-          filter: isBlackoutActive || outputRestricted ? "brightness(0)" : "none",
-          opacity: isBlackoutActive || outputRestricted ? 0 : 1,
-        }}
+        // No filter/opacity/transition on the video element, deliberately.
+        //
+        // Hardware DRM only blanks a screen recorder while the frames travel the
+        // overlay/direct-composition path and never enter compositor texture
+        // memory. Any blending requirement here — opacity, filter, or a CSS
+        // transition covering them — forces the compositor to fall back to a
+        // normal texture, which a recorder can read. Hiding the video this way
+        // was cancelling the protection it was meant to add. The blackout and
+        // output-restricted states are drawn as sibling overlays below instead.
+        className="w-full h-full object-contain cursor-pointer"
       />
 
       {/* ── Active Anti-Screenshot / Blur Blackout Barrier ── */}
@@ -693,18 +740,8 @@ export function DrmPlayer({
         </div>
       )}
 
-      {/* ── Dynamic Floating Watermark (Hardware & Screen Protection) ── */}
-      {watermark && (
-        <div
-          className="absolute pointer-events-none text-white/25 text-xs font-mono font-bold tracking-wider z-20 transition-all duration-1000 select-none"
-          style={{ top: watermarkPos.top, left: watermarkPos.left }}
-        >
-          <div className="bg-black/30 backdrop-blur-[2px] px-2 py-0.5 rounded border border-white/10 flex items-center gap-1.5">
-            <ShieldCheck className="w-3 h-3 text-sky-400/50" />
-            <span>{watermark}</span>
-          </div>
-        </div>
-      )}
+      {/* ── Unified Forensic Watermark ── */}
+      <VideoWatermark label={watermark} />
 
       {/* ── Loading Spinner ── */}
       {isLoading && (

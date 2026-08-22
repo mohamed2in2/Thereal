@@ -253,6 +253,12 @@ function DrmPreviewContent() {
               <span>←</span>
               <span>لوحة المعلم</span>
             </Link>
+            <Link
+              href="/preview"
+              className="px-3 py-1.5 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 text-xs font-bold border border-purple-500/30 transition-all flex items-center gap-1.5"
+            >
+              <span>🛡️ بوابة فحص CTO</span>
+            </Link>
             <div className="h-4 w-px bg-white/10 hidden sm:block" />
             <div>
               <div className="flex items-center gap-2">

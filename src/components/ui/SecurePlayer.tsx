@@ -1,8 +1,6 @@
 "use client";
-import React from "react";
-import { useState, useCallback } from "react";
 
-
+import React, { useState, useRef, useEffect } from "react";
 import { VideoWatermark } from "./VideoWatermark";
 import { YouTubeSecurePlayer } from "./YouTubeSecurePlayer";
 import { DrmPlayer } from "./DrmPlayer";
@@ -19,118 +17,50 @@ function extractDriveFileId(url: string): string | null {
   return match?.[1] || null;
 }
 
+interface VdoPlayerInstance {
+  video?: HTMLVideoElement;
+  seek?: (seconds: number) => void;
+  pause?: () => void;
+  play?: () => void;
+}
+
+declare global {
+  interface Window {
+    VdoPlayer?: new (options: { iframe: HTMLIFrameElement }) => VdoPlayerInstance;
+  }
+}
+
+interface CommonEmbedProps {
+  embedUrl: string;
+  title: string;
+  watermark: string;
+  startSeconds?: number;
+  onEnded?: () => void;
+  onProgress?: (seconds: number) => void;
+  onPause?: () => void;
+  onPlay?: () => void;
+  paused?: boolean;
+}
+
 /**
- * Watermark-safe player with optional Google Drive direct fallback.
- * The iframe is a cross-origin embed (Bunny/VdoCipher/Drive) —
- * a DOM overlay can't be injected into the iframe's OWN native fullscreen, so a
- * sibling watermark vanishes when it goes fullscreen. Fix: the iframe carries no
- * fullscreen permission (its internal FS button is inert) and our own button
- * fullscreens THIS WRAPPER, which contains the watermark.
- *
- * For YouTube we delegate to YouTubeSecurePlayer — native controls off + a full
- * click-shield so the brand/title/link is never clickable.
+ * VdoCipher & Bunny Iframe Secure Embed.
+ * Handles SDK / postMessage synchronization and iframe lifecycle without hook order issues.
  */
-export function SecurePlayer({
+function IframeSecureEmbed({
   embedUrl,
   title,
-  watermark,
   provider,
-  drm,
-  onEnded,
   startSeconds = 0,
   onProgress,
   onPause,
   onPlay,
-  className = "",
   paused = false,
-  noNativeSecurity = false,
-  children,
-}: {
-  embedUrl: string;
-  title: string;
-  watermark: string;
-  provider?: string;
-  drm?: {
-    token?: string;
-    licenseServers?: {
-      widevine?: string;
-      playready?: string;
-      fairplay?: string;
-      fairplayCertUrl?: string;
-    };
-    clearKeys?: Record<string, string>;
-  } | null;
-  onEnded?: () => void;
-  /** Resume position in seconds. Currently honored on YouTube (the only provider
-   *  whose cross-origin embed exposes seek/currentTime safely; signed
-   *  Bunny/VdoCipher URLs must not be mutated with extra params). */
-  startSeconds?: number;
-  /** Reports current position (throttled) for saving. YouTube only — see above. */
-  onProgress?: (seconds: number) => void;
-  /** Fired when playback pauses. */
-  onPause?: () => void;
-  /** Fired when playback resumes. */
-  onPlay?: () => void;
-  className?: string;
-  paused?: boolean;
-  /** When enabled, disables native screen capture block and allows pure Google Drive embed */
-  noNativeSecurity?: boolean;
-  children?: React.ReactNode;
-}) {
-  const driveFileId = extractDriveFileId(embedUrl);
-  const [useDriveDirect, setUseDriveDirect] = useState(noNativeSecurity);
-  const [streamError, setStreamError] = useState(false);
-  const { ref: wrapRef, isFs, cssFs, toggle: toggleFs } = useFullscreen<HTMLDivElement>();
-
-  // Axinom Hardware Multi-DRM Player (only for DASH .mpd or HLS .m3u8 manifests)
-  const isDrmManifest = embedUrl.includes(".mpd") || embedUrl.includes(".m3u8") || embedUrl.includes("/api/videos/drm/");
-  if (provider === "axinom" && isDrmManifest) {
-    return (
-      <DrmPlayer
-        manifestUrl={embedUrl}
-        drmToken={drm?.token}
-        licenseServers={drm?.licenseServers}
-        clearKeys={drm?.clearKeys}
-        initialPosition={startSeconds}
-        watermark={watermark}
-        title={title}
-        onTimeUpdate={onProgress}
-        onEnded={onEnded}
-        onPause={onPause}
-        onPlay={onPlay}
-        paused={paused}
-      />
-    );
-  }
-
-
-  // YouTube → hardened API player (no clickable YouTube chrome).
-  if (provider === "youtube") {
-    const id = extractYouTubeVideoId(embedUrl) || embedUrl.match(/\/embed\/([^?/]+)/)?.[1] || "";
-    if (id) {
-      return (
-        <YouTubeSecurePlayer
-          videoId={id}
-          title={title}
-          watermark={watermark}
-          onEnded={onEnded}
-          startSeconds={startSeconds}
-          onProgress={onProgress}
-          onPause={onPause}
-          onPlay={onPlay}
-          paused={paused}
-        >
-          {children}
-        </YouTubeSecurePlayer>
-      );
-    }
-  }
-
-  const iframeRef = React.useRef<HTMLIFrameElement>(null);
-  const vdoPlayerRef = React.useRef<any>(null);
+}: CommonEmbedProps & { provider?: string }) {
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const vdoPlayerRef = useRef<VdoPlayerInstance | null>(null);
 
   // Resume playback for Bunny & VdoCipher
-  React.useEffect(() => {
+  useEffect(() => {
     if (provider === "bunny") {
       const handleMessage = (e: MessageEvent) => {
         try {
@@ -165,32 +95,31 @@ export function SecurePlayer({
       document.body.appendChild(script);
 
       script.onload = () => {
-        if (iframeRef.current && (window as any).VdoPlayer) {
-          const player = new (window as any).VdoPlayer({ iframe: iframeRef.current });
+        if (iframeRef.current && window.VdoPlayer) {
+          const player = new window.VdoPlayer({ iframe: iframeRef.current });
           vdoPlayerRef.current = player;
-          
-          player.video.addEventListener("loadedmetadata", () => {
+
+          player.video?.addEventListener("loadedmetadata", () => {
             if (startSeconds > 0) {
-               // The API wrapper or standard HTMLMediaElement behavior
-               if (typeof player.seek === "function") {
-                 player.seek(startSeconds);
-               } else {
-                 player.video.currentTime = startSeconds;
-               }
+              if (typeof player.seek === "function") {
+                player.seek(startSeconds);
+              } else if (player.video) {
+                player.video.currentTime = startSeconds;
+              }
             }
           });
 
-          player.video.addEventListener("timeupdate", () => {
-            if (player.video.currentTime) {
+          player.video?.addEventListener("timeupdate", () => {
+            if (player.video?.currentTime) {
               onProgress?.(player.video.currentTime);
             }
           });
 
-          player.video.addEventListener("pause", () => {
+          player.video?.addEventListener("pause", () => {
             onPause?.();
           });
 
-          player.video.addEventListener("play", () => {
+          player.video?.addEventListener("play", () => {
             onPlay?.();
           });
         }
@@ -205,14 +134,11 @@ export function SecurePlayer({
     }
   }, [provider, startSeconds, onProgress, onPause, onPlay]);
 
-  // Handle paused prop changes for Bunny & VdoCipher
-  React.useEffect(() => {
+  // Handle paused prop changes
+  useEffect(() => {
     if (provider === "bunny" && iframeRef.current) {
       const method = paused ? "pause" : "play";
-      iframeRef.current.contentWindow?.postMessage(
-        JSON.stringify({ method }),
-        "*"
-      );
+      iframeRef.current.contentWindow?.postMessage(JSON.stringify({ method }), "*");
     } else if (provider === "vdocipher" && vdoPlayerRef.current) {
       try {
         if (paused) {
@@ -234,48 +160,129 @@ export function SecurePlayer({
     }
   }, [paused, provider]);
 
-  const isDirectVideo = embedUrl.startsWith("/api/") || embedUrl.includes(".mp4") || embedUrl.includes(".webm") || embedUrl.includes(".mov");
-  const [isBlackoutActive, setIsBlackoutActive] = React.useState(false);
+  return (
+    <iframe
+      ref={iframeRef}
+      src={embedUrl}
+      title={title}
+      className="absolute inset-0 w-full h-full"
+      allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture"
+      referrerPolicy="strict-origin"
+      style={{ border: "none" }}
+      draggable={false}
+    />
+  );
+}
 
-  // PC Anti-Screenshot & Clipboard Security Guard
-  React.useEffect(() => {
-    if (noNativeSecurity || useDriveDirect) {
-      return;
-    }
+/**
+ * Direct Video Player (MP4 / WebM / local streaming endpoint).
+ */
+function DirectVideoEmbed({
+  embedUrl,
+  onPlay,
+  onPause,
+  onEnded,
+  onProgress,
+  onError,
+}: {
+  embedUrl: string;
+  onPlay?: () => void;
+  onPause?: () => void;
+  onEnded?: () => void;
+  onProgress?: (seconds: number) => void;
+  onError?: () => void;
+}) {
+  return (
+    <video
+      src={embedUrl}
+      controls
+      controlsList="nodownload noplaybackrate"
+      disablePictureInPicture
+      playsInline
+      className="absolute inset-0 w-full h-full object-contain"
+      onPlay={() => onPlay?.()}
+      onPause={() => onPause?.()}
+      onEnded={() => onEnded?.()}
+      onError={onError}
+      onTimeUpdate={(e) => onProgress?.((e.target as HTMLVideoElement).currentTime)}
+    />
+  );
+}
 
-    let blackoutTimer: NodeJS.Timeout | null = null;
+export interface SecurePlayerProps {
+  embedUrl: string;
+  title: string;
+  watermark: string;
+  provider?: string;
+  drm?: {
+    token?: string;
+    licenseServers?: {
+      widevine?: string;
+      playready?: string;
+      fairplay?: string;
+      fairplayCertUrl?: string;
+    };
+    clearKeys?: Record<string, string>;
+  } | null;
+  onEnded?: () => void;
+  startSeconds?: number;
+  onProgress?: (seconds: number) => void;
+  onPause?: () => void;
+  onPlay?: () => void;
+  className?: string;
+  paused?: boolean;
+  noNativeSecurity?: boolean;
+  children?: React.ReactNode;
+}
+
+/**
+ * SecurePlayer — Top-level dispatcher for all protected video streams.
+ * Handles fullscreen wrapper, anti-screenshot security events, and forensic watermarking.
+ */
+export function SecurePlayer({
+  embedUrl,
+  title,
+  watermark,
+  provider,
+  drm,
+  onEnded,
+  startSeconds = 0,
+  onProgress,
+  onPause,
+  onPlay,
+  className = "",
+  paused = false,
+  noNativeSecurity = false,
+  children,
+}: SecurePlayerProps) {
+  const driveFileId = extractDriveFileId(embedUrl);
+  const [useDriveDirect, setUseDriveDirect] = useState(noNativeSecurity);
+  const [isBlackoutActive, setIsBlackoutActive] = useState(false);
+  const { ref: wrapRef, isFs, cssFs, toggle: toggleFs } = useFullscreen<HTMLDivElement>();
+
+  // Visibility and security guards
+  useEffect(() => {
+    if (noNativeSecurity || useDriveDirect) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
       const k = e.key;
       const lowerK = k.toLowerCase();
-
-      // PrintScreen (PrtScn) / Alt+PrtScn / Win+PrtScn
       const isPrtScn = k === "PrintScreen" || e.code === "PrintScreen";
       const isMeta =
         e.metaKey ||
         (typeof e.getModifierState === "function" &&
           (e.getModifierState("Meta") || e.getModifierState("OS")));
 
-      // Windows Snipping Tool (Win + Shift + S) or Xbox Game Bar (Win + G)
       const isWinSnipping = isMeta && e.shiftKey && lowerK === "s";
       const isWinGameBar = isMeta && lowerK === "g";
-
-      // Mac Screenshot Shortcuts: Cmd + Shift + 3, Cmd + Shift + 4, Cmd + Shift + 5
       const isMacScreenshot = isMeta && e.shiftKey && ["3", "4", "5", "#", "$", "%"].includes(k);
-
-      // Browser Screenshot (Ctrl + Shift + S)
       const isBrowserScreenshot = e.ctrlKey && e.shiftKey && lowerK === "s";
-
-      // DevTools (F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+U)
       const isDevTools =
         k === "F12" ||
         (e.ctrlKey && e.shiftKey && (lowerK === "i" || lowerK === "j" || lowerK === "c")) ||
         (e.ctrlKey && lowerK === "u");
 
       if (isPrtScn || isWinSnipping || isWinGameBar || isMacScreenshot || isBrowserScreenshot || isDevTools) {
-        // No blackout: these shortcuts are swallowed by the OS shell, so the
-        // handler rarely fires, and when it does the frame is already captured.
-        // A single stuck trigger left the player black for the whole session.
         if (isPrtScn || isWinSnipping || isMacScreenshot) {
           e.preventDefault();
           e.stopPropagation();
@@ -294,36 +301,70 @@ export function SecurePlayer({
       }
     };
 
-    const handleBlur = () => {
-      // Focus loss is not capture. Clicking the address bar, an extension popup
-      // or a second monitor all fire blur, and on touch devices it fires
-      // constantly — which left the player permanently black. Backgrounding is
-      // covered by visibilitychange below.
-    };
-
-    const handleFocus = () => {
-      setIsBlackoutActive(false);
-    };
-
     const handleVisibilityChange = () => {
       setIsBlackoutActive(document.hidden);
     };
 
     window.addEventListener("keydown", handleKeyDown, true);
     window.addEventListener("keyup", handleKeyUp, true);
-    window.addEventListener("blur", handleBlur);
-    window.addEventListener("focus", handleFocus);
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
-      if (blackoutTimer) clearTimeout(blackoutTimer);
       window.removeEventListener("keydown", handleKeyDown, true);
       window.removeEventListener("keyup", handleKeyUp, true);
-      window.removeEventListener("blur", handleBlur);
-      window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [noNativeSecurity, useDriveDirect]);
+
+  // 1. Axinom Hardware Multi-DRM Player
+  const isDrmManifest =
+    embedUrl.includes(".mpd") || embedUrl.includes(".m3u8") || embedUrl.includes("/api/videos/drm/");
+  if (provider === "axinom" && isDrmManifest) {
+    return (
+      <DrmPlayer
+        manifestUrl={embedUrl}
+        drmToken={drm?.token}
+        licenseServers={drm?.licenseServers}
+        clearKeys={drm?.clearKeys}
+        initialPosition={startSeconds}
+        watermark={watermark}
+        title={title}
+        onTimeUpdate={onProgress}
+        onEnded={onEnded}
+        onPause={onPause}
+        onPlay={onPlay}
+        paused={paused}
+      />
+    );
+  }
+
+  // 2. YouTube Hardened Embed
+  if (provider === "youtube") {
+    const id = extractYouTubeVideoId(embedUrl) || embedUrl.match(/\/embed\/([^?/]+)/)?.[1] || "";
+    if (id) {
+      return (
+        <YouTubeSecurePlayer
+          videoId={id}
+          title={title}
+          watermark={watermark}
+          onEnded={onEnded}
+          startSeconds={startSeconds}
+          onProgress={onProgress}
+          onPause={onPause}
+          onPlay={onPlay}
+          paused={paused}
+        >
+          {children}
+        </YouTubeSecurePlayer>
+      );
+    }
+  }
+
+  const isDirectVideo =
+    embedUrl.startsWith("/api/") ||
+    embedUrl.includes(".mp4") ||
+    embedUrl.includes(".webm") ||
+    embedUrl.includes(".mov");
 
   return (
     <div
@@ -338,58 +379,43 @@ export function SecurePlayer({
       }
       onContextMenu={(e) => e.preventDefault()}
     >
-      {/* Player rendering: Direct Drive preview (staff only), direct video stream, or secure iframe */}
+      {/* ── Video / Iframe Surface ── */}
       {driveFileId && useDriveDirect ? (
         <iframe
           src={`https://drive.google.com/file/d/${driveFileId}/preview`}
           title={title}
           className="absolute inset-0 w-full h-full border-0"
-          style={{
-            filter: isBlackoutActive ? "brightness(0)" : "none",
-            opacity: isBlackoutActive ? 0 : 1,
-            transition: "opacity 0.05s ease",
-          }}
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
           referrerPolicy="no-referrer-when-downgrade"
         />
       ) : isDirectVideo ? (
-        <video
-          src={embedUrl}
-          controls
-          controlsList="nodownload noplaybackrate"
-          disablePictureInPicture
-          playsInline
-          className="absolute inset-0 w-full h-full object-contain"
-          style={{
-            filter: isBlackoutActive ? "brightness(0)" : "none",
-            opacity: isBlackoutActive ? 0 : 1,
-            transition: "opacity 0.05s ease",
-          }}
-          onPlay={() => onPlay?.()}
-          onPause={() => onPause?.()}
-          onEnded={() => onEnded?.()}
+        <DirectVideoEmbed
+          embedUrl={embedUrl}
+          onPlay={onPlay}
+          onPause={onPause}
+          onEnded={onEnded}
+          onProgress={onProgress}
           onError={() => {
-            setStreamError(true);
             if (driveFileId) {
               setUseDriveDirect(true);
             }
           }}
-          onTimeUpdate={(e) => onProgress?.((e.target as HTMLVideoElement).currentTime)}
         />
       ) : (
-        <iframe
-          ref={iframeRef}
-          src={embedUrl}
+        <IframeSecureEmbed
+          embedUrl={embedUrl}
           title={title}
-          className="absolute inset-0 w-full h-full"
-          allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture"
-          referrerPolicy="strict-origin"
-          style={{ border: "none" }}
-          draggable={false}
+          provider={provider}
+          startSeconds={startSeconds}
+          onProgress={onProgress}
+          onPause={onPause}
+          onPlay={onPlay}
+          paused={paused}
+          watermark={watermark}
         />
       )}
 
-      {/* ── Active Anti-Screenshot / Blur Blackout Barrier ── */}
+      {/* ── Active Anti-Screenshot / Blur Blackout Barrier (Sibling overlay) ── */}
       {isBlackoutActive && (
         <div className="absolute inset-0 z-50 bg-black flex flex-col items-center justify-center gap-3 select-none pointer-events-auto">
           <div className="w-12 h-12 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-400 animate-pulse text-xl">
@@ -400,21 +426,18 @@ export function SecurePlayer({
         </div>
       )}
 
+      {/* ── Unified Forensic Watermark ── */}
       <VideoWatermark label={watermark} />
 
       {/* Interactive overlays & modals */}
       {children}
 
-      {/* Our fullscreen control sits at the bottom-RIGHT, directly over the
-          VdoCipher/Bunny iframe's own (inert — no allowfullscreen) fullscreen
-          button. Being a higher-stacked sibling (z-20) it captures the click
-          there, so the spot users instinctively tap triggers OUR wrapper
-          fullscreen — which keeps the watermark on screen. */}
+      {/* ── Fullscreen Toggle Button ── */}
       <button
         type="button"
         onClick={toggleFs}
         aria-label={isFs ? "إنهاء ملء الشاشة" : "ملء الشاشة"}
-        className="absolute bottom-2.5 right-2.5 z-20 w-10 h-10 rounded-lg bg-black/55 hover:bg-black/80 text-white flex items-center justify-center backdrop-blur-sm transition-colors"
+        className="absolute bottom-2.5 right-2.5 z-20 w-10 h-10 rounded-lg bg-black/55 hover:bg-black/80 text-white flex items-center justify-center backdrop-blur-sm transition-colors cursor-pointer"
       >
         {isFs ? (
           <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -429,3 +452,5 @@ export function SecurePlayer({
     </div>
   );
 }
+
+export default SecurePlayer;

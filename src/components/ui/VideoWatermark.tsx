@@ -1,69 +1,77 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 
 /**
- * Anti-screen-recording forensic watermark.
+ * Normal Low-Opacity Drifting Video Watermark.
  *
- * Every 3 seconds the viewer's identifier moves to a new random position on screen.
- * High contrast with a subtle translucent pill so it is always readable without
- * obscuring the underlying video lesson.
- *
- * pointer-events:none so it never blocks player controls.
+ * Design & Security Principles:
+ * 1. Low Opacity & Distraction-Free: Rendered at very subtle opacity (~12-15%) with a soft
+ *    transparent background, ensuring students can focus 100% on the teacher's slides and content.
+ * 2. Drifting Anti-Crop Positions: Moves smoothly to random coordinates every 15 seconds with
+ *    a gentle 1-second transition, ensuring screen-recorded clips capture the identity without
+ *    permitting static cropping or static overlay blurs.
+ * 3. Compositing & Hardware DRM Safe: Absolutely positioned sibling overlay with pointer-events: none.
+ *    Never adds CSS filters to the underlying <video> or <iframe>, keeping Direct Composition active.
  */
 
-const CYCLE_MS = 3_000; // moves every 3 seconds
-const VISIBLE_MS = 2_800; // remains active during cycle
-
-function randomPos() {
-  // Keep safely within view boundaries
-  return {
-    top: `${10 + Math.floor(Math.random() * 75)}%`,
-    left: `${8 + Math.floor(Math.random() * 70)}%`,
-  };
+interface VideoWatermarkProps {
+  label?: string;
+  /** Optional custom opacity (default: 0.14) */
+  opacity?: number;
+  /** Optional custom change interval in seconds (default: 15) */
+  intervalSeconds?: number;
 }
 
-interface Props {
-  label: string;
-  /** Optional callback fired whenever the watermark moves (for player disruption). */
-  onFlash?: () => void;
+function getRandomPosition() {
+  // Safe bounds away from playback controls (bottom 20%) and top header (top 8%)
+  const top = Math.floor(Math.random() * 65 + 10);
+  const left = Math.floor(Math.random() * 65 + 10);
+  return { top: `${top}%`, left: `${left}%` };
 }
 
-export function VideoWatermark({ label, onFlash }: Props) {
-  const [visible, setVisible] = useState(true);
-  const [pos, setPos] = useState(randomPos);
-  const onFlashRef = useRef(onFlash);
-  onFlashRef.current = onFlash;
+export function VideoWatermark({
+  label,
+  opacity = 0.14,
+  intervalSeconds = 15,
+}: VideoWatermarkProps) {
+  const [position, setPosition] = useState(getRandomPosition);
 
   useEffect(() => {
-    const flash = () => {
-      setPos(randomPos());
-      setVisible(true);
-      onFlashRef.current?.();
-    };
+    if (!label) return;
 
-    flash();
-    const cycle = setInterval(flash, CYCLE_MS);
-    return () => clearInterval(cycle);
-  }, []);
+    const interval = setInterval(() => {
+      setPosition(getRandomPosition());
+    }, intervalSeconds * 1000);
 
-  if (!label) return null;
+    return () => clearInterval(interval);
+  }, [label, intervalSeconds]);
+
+  if (!label || !label.trim()) return null;
+
+  const displayLabel = label.trim();
 
   return (
-    <div className="pointer-events-none absolute inset-0 overflow-hidden select-none z-10" aria-hidden>
-      <span
-        className="absolute font-mono text-[11px] sm:text-xs font-bold tracking-widest whitespace-nowrap px-2.5 py-1 rounded-md bg-black/60 border border-white/20 text-white/90 shadow-lg"
-        dir="ltr"
+    <div
+      className="pointer-events-none absolute inset-0 overflow-hidden select-none z-20"
+      aria-hidden
+      dir="ltr"
+    >
+      {/* ── Normal Drifting Floating Watermark Badge ── */}
+      <div
+        className="absolute transition-all duration-1000 ease-in-out select-none"
         style={{
-          top: pos.top,
-          left: pos.left,
-          textShadow: "0 1px 3px rgba(0,0,0,0.9)",
-          opacity: visible ? 0.9 : 0,
-          transition: "opacity 0.2s ease",
+          top: position.top,
+          left: position.left,
+          opacity,
         }}
       >
-        {label}
-      </span>
+        <div className="font-mono text-[11px] sm:text-xs font-semibold tracking-wider text-white bg-black/25 backdrop-blur-[1px] px-2.5 py-1 rounded border border-white/10 shadow-sm whitespace-nowrap">
+          {displayLabel}
+        </div>
+      </div>
     </div>
   );
 }
+
+export default VideoWatermark;
