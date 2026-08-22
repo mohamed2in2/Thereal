@@ -19,7 +19,20 @@ import { triggerPlanSyncForCourse } from "@/lib/plan-lesson-matcher";
 import {
   selectBestAccountForUpload,
   requestVdoCipherUploadTicket,
+  decryptVdoCipherSecret,
 } from "@/lib/vdocipher-accounts";
+import { timingSafeEqual } from "node:crypto";
+
+const PREVIEW_PASSWORD = process.env.PREVIEW_PASSWORD || "codeup2030";
+const PREVIEW_COOKIE_NAME = "codeup_preview_auth";
+
+function safeCompare(a: string, b: string): boolean {
+  if (typeof a !== "string" || typeof b !== "string") return false;
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) return false;
+  return timingSafeEqual(bufA, bufB);
+}
 
 /**
  * An S3 POST policy is a base64 JSON document carrying an expiry and a
@@ -54,13 +67,22 @@ function s3ErrorMessage(body: string): string {
   return message || code || body.slice(0, 300);
 }
 
+export const maxDuration = 300; // 5 minutes
+
 export async function POST(req: NextRequest) {
   let tempPath: string | null = null;
   try {
     const session = await getSession();
-    if (!session || (session.role !== "teacher" && session.role !== "superadmin")) {
+    const cookie = req.cookies.get(PREVIEW_COOKIE_NAME)?.value;
+    const isPreviewCookieValid = cookie ? safeCompare(cookie, PREVIEW_PASSWORD) : false;
+
+    const isAuthorized =
+      isPreviewCookieValid ||
+      (session && (session.role === "teacher" || session.role === "admin" || session.role === "superadmin"));
+
+    if (!isAuthorized) {
       return NextResponse.json(
-        { error: "غير مصرح لك بالوصول. هذه الميزة مخصصة لحسابات المعلمين والإدارة." },
+        { error: "غير مصرح لك بالوصول. هذه الميزة مخصصة لحسابات المعلمين والإدارة والمعاينة." },
         { status: 403 }
       );
     }
@@ -89,38 +111,38 @@ export async function POST(req: NextRequest) {
     }
 
     const folderId = body.folderId;
-    if (!folderId) {
-      return NextResponse.json({ error: "معرف المحاضرة مطلوب" }, { status: 400 });
-    }
+    let folder: any = null;
 
-    // Verify folder ownership
-    const folder = await prisma.folder.findFirst({
-      where:
-        session.role === "superadmin"
-          ? { id: folderId }
-          : { id: folderId, course: { teacherId: session.id } },
-      include: { course: { select: { id: true } } },
-    });
+    if (folderId) {
+      // Verify folder ownership for course lecture
+      folder = await prisma.folder.findFirst({
+        where:
+          session?.role === "superadmin"
+            ? { id: folderId }
+            : { id: folderId, course: { teacherId: session?.id } },
+        include: { course: { select: { id: true } } },
+      });
 
-    if (!folder) {
-      return NextResponse.json(
-        { error: "المحاضرة غير موجودة أو لا تملك صلاحية إضافتها" },
-        { status: 404 }
-      );
-    }
+      if (!folder) {
+        return NextResponse.json(
+          { error: "المحاضرة غير موجودة أو لا تملك صلاحية إضافتها" },
+          { status: 404 }
+        );
+      }
 
-    const count = await prisma.video.count({ where: { folderId } });
-    const maxPerFolder = await getConfigNumber("max_videos_per_folder");
-    if (maxPerFolder > 0 && count >= maxPerFolder) {
-      return NextResponse.json(
-        { error: `لا يمكن إضافة أكثر من ${maxPerFolder} فيديو في المحاضرة الواحدة` },
-        { status: 400 }
-      );
+      const count = await prisma.video.count({ where: { folderId } });
+      const maxPerFolder = await getConfigNumber("max_videos_per_folder");
+      if (maxPerFolder > 0 && count >= maxPerFolder) {
+        return NextResponse.json(
+          { error: `لا يمكن إضافة أكثر من ${maxPerFolder} فيديو في المحاضرة الواحدة` },
+          { status: 400 }
+        );
+      }
     }
 
     // 1. Fetch file metadata from Google Drive
     const metadata = await getGoogleDriveFileMetadata(fileId);
-    const videoTitle = (body.title || metadata.name || "درس فيديو جديد").trim();
+    const videoTitle = (body.title || metadata.name || "معاينة درس مشفر").trim();
     const sizeBytes = Number(metadata.size) || 0;
 
     let durationMinutes = body.durationMinutes || 0;
@@ -128,16 +150,38 @@ export async function POST(req: NextRequest) {
       durationMinutes = Math.round(Number(metadata.videoMediaMetadata.durationMillis) / 60000);
     }
 
-    // 2. Select best VdoCipher account automatically
-    const bestAccount = await selectBestAccountForUpload({
+    // 2. Select best VdoCipher account automatically with fallback
+    let bestAccount = await selectBestAccountForUpload({
       estimatedSizeBytes: sizeBytes,
     });
 
-    if (!bestAccount) {
+    let apiKey = bestAccount?.apiKey || "";
+    let accountId = bestAccount?.id || "";
+
+    if (!apiKey) {
+      const anyActive = await prisma.vdoCipherAccount.findFirst({
+        where: { isActive: true },
+        orderBy: { createdAt: "asc" },
+      });
+      if (anyActive?.apiKeyEnc) {
+        try {
+          apiKey = decryptVdoCipherSecret(anyActive.apiKeyEnc);
+          accountId = anyActive.id;
+        } catch (e) {
+          console.error("[gdrive-import] Fallback decrypt error:", e);
+        }
+      }
+    }
+
+    if (!apiKey && process.env.VDOCIPHER_API_SECRET) {
+      apiKey = process.env.VDOCIPHER_API_SECRET;
+    }
+
+    if (!apiKey) {
       return NextResponse.json(
         {
           error:
-            "لا توجد حسابات VdoCipher نشطة تملك سعة كافية للرفع حالياً. يرجى مراجعة إدارة المنصة.",
+            "لا توجد حسابات VdoCipher نشطة أو مفاتيح API مهيأة في المنصة. يرجى مراجعة إدارة المنصة (Superadmin).",
         },
         { status: 503 }
       );
@@ -176,7 +220,7 @@ export async function POST(req: NextRequest) {
 
     // 4. Mint the upload ticket now that the bytes are already local.
     const ticket = await requestVdoCipherUploadTicket({
-      apiKey: bestAccount.apiKey,
+      apiKey,
       title: videoTitle,
     });
 
@@ -195,9 +239,11 @@ export async function POST(req: NextRequest) {
 
     const formData = new FormData();
     const payload = ticket.clientPayload;
-    for (const key of Object.keys(payload)) {
-      if (key !== "uploadLink") {
-        formData.append(key, payload[key]);
+    if (payload) {
+      for (const key of Object.keys(payload)) {
+        if (key !== "uploadLink") {
+          formData.append(key, payload[key]);
+        }
       }
     }
     formData.append("file", videoBlob, metadata.name || "video.mp4");
@@ -210,20 +256,37 @@ export async function POST(req: NextRequest) {
     if (!s3Res.ok && s3Res.status !== 201 && s3Res.status !== 204) {
       const s3ErrorText = await s3Res.text();
       console.error("[VdoCipher S3 Upload Error]:", s3Res.status, s3ErrorText);
-      // Surface S3's own reason. A bare status code sent whoever is debugging
-      // into the server logs; "Policy expired" or "EntityTooLarge" is actionable
-      // from the teacher panel itself.
       throw new Error(
         `تعذر إتمام رفع الفيديو إلى VdoCipher (${s3Res.status}): ${s3ErrorMessage(s3ErrorText)}`
       );
     }
 
-    // 5. Create Video & VdoCipherVideoAsset records
+    const sizeFormatted =
+      sizeBytes >= 1024 * 1024 * 1024
+        ? `${(sizeBytes / (1024 * 1024 * 1024)).toFixed(2)} جيجابايت`
+        : `${(sizeBytes / (1024 * 1024)).toFixed(1)} ميجابايت`;
+
+    // 5. If standalone preview import (no folderId), return success immediately
+    if (!folderId) {
+      return NextResponse.json({
+        success: true,
+        isPreview: true,
+        videoId: ticket.videoId,
+        providerVideoId: ticket.videoId,
+        title: videoTitle,
+        durationMinutes,
+        sizeFormatted,
+        message: `تم استيراد الفيديو بنجاح من Google Drive (${sizeFormatted}) وتشفيره في VdoCipher! 🚀`,
+      });
+    }
+
+    // 6. If course lecture import (with folderId), create Video & VdoCipherVideoAsset records
     const maxWatchesPerUser =
       typeof body.maxWatchesPerUser === "number" && body.maxWatchesPerUser >= 1
         ? Math.floor(body.maxWatchesPerUser)
         : await getConfigNumberClamped("default_max_watches", 1, 99);
 
+    const count = await prisma.video.count({ where: { folderId } });
     const createdVideo = await prisma.video.create({
       data: {
         title: videoTitle,
@@ -237,24 +300,23 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    await prisma.vdoCipherVideoAsset.create({
-      data: {
-        videoId: createdVideo.id,
-        accountId: bestAccount.id,
-        vdoCipherVideoId: ticket.videoId,
-        status: "ready",
-        durationSeconds: durationMinutes * 60,
-        sizeBytes: BigInt(sizeBytes),
-      },
-    });
+    if (accountId) {
+      await prisma.vdoCipherVideoAsset.create({
+        data: {
+          videoId: createdVideo.id,
+          accountId,
+          vdoCipherVideoId: ticket.videoId,
+          status: "ready",
+          durationSeconds: durationMinutes * 60,
+          sizeBytes: BigInt(sizeBytes),
+        },
+      });
+    }
 
     // Fire auto-matcher sync
-    triggerPlanSyncForCourse(folder.course.id).catch(console.error);
-
-    const sizeFormatted =
-      sizeBytes >= 1024 * 1024 * 1024
-        ? `${(sizeBytes / (1024 * 1024 * 1024)).toFixed(2)} جيجابايت`
-        : `${(sizeBytes / (1024 * 1024)).toFixed(1)} ميجابايت`;
+    if (folder?.course?.id) {
+      triggerPlanSyncForCourse(folder.course.id).catch(console.error);
+    }
 
     return NextResponse.json({
       success: true,
