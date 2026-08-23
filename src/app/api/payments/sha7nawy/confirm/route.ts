@@ -9,6 +9,7 @@ import {
 } from "@/lib/sha7nawy";
 import { prisma } from "@/lib/prisma";
 import { fulfillPendingItemPurchase } from "@/lib/fulfillment";
+import { checkVerifiedPaymentAmount } from "@/lib/payment-amount";
 
 export async function POST(req: NextRequest) {
   const session = await getSession();
@@ -79,6 +80,18 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    const amountCheck = checkVerifiedPaymentAmount({
+      providerAmount: verifiedData.amount,
+      pendingBaseAmount: pendingTx.amount,
+      note: pendingTx.note,
+    });
+    if (!amountCheck.valid) {
+      console.warn(
+        `[Sha7nawy Confirm] Amount mismatch: verified=${amountCheck.verifiedAmount} expected=${amountCheck.expectedAmount} tx=${pendingTx.id}`
+      );
+      return NextResponse.json({ error: "قيمة المعاملة لا تطابق المبلغ المطلوب" }, { status: 400 });
+    }
+
     // Atomic claim: only one confirm or webhook delivery wins
     let fulfillmentRes: any = null;
     const processed = await prisma.$transaction(async (tx: any) => {
@@ -127,4 +140,3 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "حدث خطأ أثناء التأكيد والاستعلام" }, { status: 500 });
   }
 }
-

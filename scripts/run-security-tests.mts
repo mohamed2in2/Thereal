@@ -290,19 +290,63 @@ async function testConcurrentSpendCannotOverdraw() {
 // ── Test 11 ──────────────────────────────────────────────────────────────────
 // A prepaid money code must credit exactly once under concurrency.
 async function testMoneyCodeCannotBeRedeemedTwice() {
+  const { PurchaseService } = await import("../src/services/purchase/PurchaseService.ts");
+  const students = await Promise.all(
+    Array.from({ length: 10 }, (_, index) =>
+      prisma.user.create({
+        data: {
+          name: `sec-money-${index}`,
+          email: `sec-money-${Date.now()}-${index}@example.invalid`,
+          role: "student",
+        },
+      })
+    )
+  );
   const code = await prisma.moneyCode.create({
     data: { code: `SECTEST-${Date.now()}`, amount: 50 },
   });
 
   try {
-    const [a, b] = await Promise.all([
-      prisma.moneyCode.updateMany({ where: { id: code.id, isUsed: false }, data: { isUsed: true } }),
-      prisma.moneyCode.updateMany({ where: { id: code.id, isUsed: false }, data: { isUsed: true } }),
-    ]);
+    const attempts = await Promise.allSettled(
+      students.map((student) =>
+        PurchaseService.processCombinedMoneyCodePurchase({
+          studentId: student.id,
+          moneyCode: code.code,
+        })
+      )
+    );
+    assert.equal(
+      attempts.filter((attempt) => attempt.status === "fulfilled").length,
+      1,
+      "exactly one of ten concurrent money-code redemptions may succeed"
+    );
 
-    assert.equal(a.count + b.count, 1, "a money code may only be claimed once");
+    const balances = await prisma.user.findMany({
+      where: { id: { in: students.map((student) => student.id) } },
+      select: { id: true, balance: true },
+    });
+    assert.equal(
+      balances.reduce((sum, student) => sum + student.balance, 0),
+      50,
+      "one code must credit exactly one wallet once"
+    );
+    assert.equal(
+      await prisma.balanceTransaction.count({
+        where: { userId: { in: students.map((student) => student.id) }, type: "credit_code" },
+      }),
+      1,
+      "the atomic redemption must create exactly one credit ledger entry"
+    );
+
+    const claimed = await prisma.moneyCode.findUnique({ where: { id: code.id } });
+    assert.ok(
+      claimed?.usedById && students.some((student) => student.id === claimed.usedById),
+      "the code must be bound to the single credited student"
+    );
   } finally {
+    await prisma.balanceTransaction.deleteMany({ where: { userId: { in: students.map((student) => student.id) } } });
     await prisma.moneyCode.delete({ where: { id: code.id } });
+    await prisma.user.deleteMany({ where: { id: { in: students.map((student) => student.id) } } });
   }
 }
 
@@ -508,10 +552,17 @@ async function testConcurrentAccessCodeRedemptionBindsOnce() {
       teacherId: teacher.id,
     },
   });
-  const [s1, s2] = await Promise.all([
-    prisma.user.create({ data: { name: "sec-ac-1", email: `sec-ac1-${Date.now()}@example.invalid`, role: "student" } }),
-    prisma.user.create({ data: { name: "sec-ac-2", email: `sec-ac2-${Date.now()}@example.invalid`, role: "student" } }),
-  ]);
+  const students = await Promise.all(
+    Array.from({ length: 10 }, (_, index) =>
+      prisma.user.create({
+        data: {
+          name: `sec-ac-${index}`,
+          email: `sec-ac-${Date.now()}-${index}@example.invalid`,
+          role: "student",
+        },
+      })
+    )
+  );
   const code = await prisma.accessCode.create({
     data: { code: `SECAC-${Date.now()}`, courseId: course.id, isActive: true },
   });
@@ -523,18 +574,22 @@ async function testConcurrentAccessCodeRedemptionBindsOnce() {
         data: { studentId, usedAt: new Date() },
       });
 
-    const [a, b] = await Promise.all([claim(s1.id), claim(s2.id)]);
-    assert.equal(a.count + b.count, 1, "only one student may claim a code");
+    const claims = await Promise.all(students.map((student) => claim(student.id)));
+    assert.equal(
+      claims.reduce((sum, claimResult) => sum + claimResult.count, 0),
+      1,
+      "only one of ten students may claim an access code"
+    );
 
     const finalCode = await prisma.accessCode.findUnique({ where: { id: code.id } });
     assert.ok(
-      finalCode!.studentId === s1.id || finalCode!.studentId === s2.id,
-      "the code must be bound to exactly one of the two claimants"
+      finalCode?.studentId && students.some((student) => student.id === finalCode.studentId),
+      "the code must be bound to exactly one of the ten claimants"
     );
   } finally {
     await prisma.accessCode.delete({ where: { id: code.id } });
     await prisma.course.delete({ where: { id: course.id } });
-    await prisma.user.deleteMany({ where: { id: { in: [s1.id, s2.id, teacher.id] } } });
+    await prisma.user.deleteMany({ where: { id: { in: [...students.map((student) => student.id), teacher.id] } } });
   }
 }
 

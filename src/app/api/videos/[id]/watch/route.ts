@@ -3,9 +3,8 @@ import { getSession, getStudentSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { resolveEmbedUrl } from "@/lib/video-provider";
 import { isScheduledLocked, unlockAtISO } from "@/lib/publish";
-import { getConfigNumberClamped } from "@/lib/config";
 import { getWatchAllowance } from "@/lib/watch-allowance";
-import { checkSequentialAccess } from "@/lib/sequential-access";
+import { canAccessContent, ContentType } from "@/lib/content-access-engine";
 import { checkVideoAccess } from "@/lib/authorization";
 import { isVpnOrProxy, logVpnViolation } from "@/lib/vpn-guard";
 
@@ -221,9 +220,24 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   // Watch-session length is superadmin-configurable (was 4h); ≥0.25h so a bad
   // value can't create instantly-expired sessions.
-  const WATCH_DURATION_HOURS = await getConfigNumberClamped("watch_session_hours", 0.25, 720);
+  const WATCH_DURATION_HOURS = 90 / 3600;
 
   const { id: videoId } = await params;
+  const heartbeatBody = (await req.json().catch(() => ({}))) as { token?: string; heartbeat?: boolean };
+  if (heartbeatBody.heartbeat && heartbeatBody.token) {
+    if (!session) return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
+    const now = new Date();
+    const renewedUntil = new Date(now.getTime() + 90_000);
+    const renewed = await prisma.$transaction(async (tx: any) => {
+      const claim = await tx.videoWatchSession.updateMany({
+        where: { sessionToken: heartbeatBody.token, studentId: session.id, videoId, endedAt: null, expiresAt: { gt: now } },
+        data: { expiresAt: renewedUntil },
+      });
+      return claim.count;
+    });
+    if (!renewed) return NextResponse.json({ error: "جلسة المشاهدة منتهية" }, { status: 401 });
+    return NextResponse.json({ ok: true, expiresAt: renewedUntil.toISOString() });
+  }
   const ipAddress = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
 
   const video = await prisma.video.findUnique({
@@ -258,19 +272,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     );
   }
 
-  // ── Sequential lesson gating ──────────────────────────────────────────────
-  // Runs after the schedule check and before the free/demo bypass, so a course
-  // that requires lessons in order gates its free lessons too. Staff preview is
-  // unaffected: only students reach this branch with a student role.
+  // The generic dependency graph is authoritative for student content access.
+  // Staff previews remain governed by the ownership checks below.
   if (session && session.role === "student") {
-    const lock = await checkSequentialAccess(session.id, videoId);
-    if (lock) {
+    const access = await canAccessContent(session.id, {
+      type: ContentType.VIDEO,
+      sourceId: videoId,
+      title: video.title,
+    });
+    if ("requiredItem" in access) {
       return NextResponse.json(
         {
-          error: `يجب إكمال الدرس السابق أولًا: ${lock.requiredVideoTitle}`,
-          code: "SEQUENTIAL_LOCKED",
-          requiredVideoId: lock.requiredVideoId,
-          requiredVideoTitle: lock.requiredVideoTitle,
+          error: `يجب إكمال «${access.requiredItem.title}» أولًا.`,
+          code: access.code,
+          requiredItem: access.requiredItem,
         },
         { status: 403 }
       );
@@ -282,7 +297,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const domain = req.headers.get("x-forwarded-host") || req.headers.get("host") || undefined;
     const studentIdentifier = session ? (session.phone || session.name || session.id) : undefined;
     const embedResult = await resolveEmbedUrl(video, { userId: studentIdentifier, domain });
-    const expiresAt = new Date(now.getTime() + WATCH_DURATION_HOURS * 60 * 60 * 1000);
+    const expiresAt = new Date(now.getTime() + 90_000);
     return NextResponse.json({
       sessionToken: "free",
       expiresAt: expiresAt.toISOString(),
@@ -317,7 +332,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const domain = req.headers.get("x-forwarded-host") || req.headers.get("host") || undefined;
     const studentIdentifier = session.phone || session.name || session.id;
     const embedResult = await resolveEmbedUrl(video, { userId: studentIdentifier, domain });
-    const expiresAt = new Date(now.getTime() + WATCH_DURATION_HOURS * 60 * 60 * 1000);
+    const expiresAt = new Date(now.getTime() + 90_000);
     return NextResponse.json({
       sessionToken: "preview",
       expiresAt: expiresAt.toISOString(),

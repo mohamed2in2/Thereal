@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { confirmParentToken, rejectParentToken } from "@/lib/whatsapp/parentToken";
-import { parentRateLimiter } from "@/lib/whatsapp/parentRateLimiter";
+import { parentVerificationRateLimiter } from "@/lib/whatsapp/parentRateLimiter";
 
 export async function POST(req: NextRequest) {
   try {
     const ip = req.headers.get("x-forwarded-for")?.split(",")[0] || req.headers.get("x-real-ip") || "127.0.0.1";
 
     // Strict Rate Limiting: 5 attempts per IP per minute for verification responses
-    const rateCheck = parentRateLimiter.checkRateLimit(`verify_${ip}`);
+    const rateCheck = parentVerificationRateLimiter.checkRateLimit(ip);
     if (!rateCheck.allowed) {
       return NextResponse.json(
         { error: `تم تجاوز عدد المحاولات. يرجى الانتظار ${rateCheck.resetInSeconds} ثانية.` },

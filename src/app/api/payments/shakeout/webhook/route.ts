@@ -13,18 +13,19 @@ import { secretsMatch } from "@/lib/secret-compare";
 export async function POST(req: NextRequest) {
   try {
     const webhookSecret = process.env.SHAKEOUT_WEBHOOK_SECRET;
+    if (!webhookSecret) {
+      console.error("[Shake-Out Webhook] SHAKEOUT_WEBHOOK_SECRET is not configured");
+      return NextResponse.json({ error: "Webhook configuration missing" }, { status: 500 });
+    }
     const incomingSecret =
       req.headers.get("x-webhook-secret") ||
       req.headers.get("x-shakeout-secret") ||
       req.headers.get("authorization")?.replace(/^bearer\s+/i, "");
 
-    // If a webhook secret is configured and supplied, verify it matches
-    if (webhookSecret && incomingSecret) {
-      if (!secretsMatch(incomingSecret, webhookSecret)) {
-        const ip = req.headers.get("x-forwarded-for")?.split(",")[0] || req.headers.get("x-real-ip") || "127.0.0.1";
-        console.warn(`[Shake-Out Webhook] Unauthorized secret attempt from IP: ${ip}`);
-        return NextResponse.json({ error: "Unauthorized webhook caller" }, { status: 401 });
-      }
+    if (!secretsMatch(incomingSecret, webhookSecret)) {
+      const ip = req.headers.get("x-forwarded-for")?.split(",")[0] || req.headers.get("x-real-ip") || "127.0.0.1";
+      console.warn(`[Shake-Out Webhook] Unauthorized secret attempt from IP: ${ip}`);
+      return NextResponse.json({ error: "Unauthorized webhook caller" }, { status: 401 });
     }
 
     const payload = await req.json().catch(() => ({}));

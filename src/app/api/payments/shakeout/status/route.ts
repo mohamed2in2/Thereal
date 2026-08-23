@@ -10,6 +10,7 @@ import {
 } from "@/lib/shakeout";
 import { getPaymentMethod } from "@/lib/payment-methods";
 import { fulfillPendingItemPurchase } from "@/lib/fulfillment";
+import { checkVerifiedPaymentAmount } from "@/lib/payment-amount";
 
 /**
  * GET /api/payments/shakeout/status?transactionId=123
@@ -58,7 +59,8 @@ export async function GET(req: NextRequest) {
     new Set([rawId, idOnly, refOnly, dataRef, dataRefIdOnly, dataRefRefOnly, invoiceId, invoiceRef].filter(Boolean))
   );
 
-  const userWhere = session.role === "superadmin" ? {} : { userId: session.id };
+  // Customer reconciliation must never claim or expose another user's payment.
+  const userWhere = { userId: session.id };
 
   // Find candidate transaction for this user
   let existingTx: { id: string; type: string; amount: number; note: string; userId: string } | null = null;
@@ -100,6 +102,26 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "المعاملة غير صالحة للمستخدم الحالي" }, { status: 403 });
   }
 
+  if (data.client && data.client !== existingTx.userId) {
+    return NextResponse.json({ error: "المعاملة غير صالحة للمستخدم الحالي" }, { status: 403 });
+  }
+
+  if (isPaid) {
+    const amountCheck = checkVerifiedPaymentAmount({
+      providerAmount: data.amount,
+      pendingBaseAmount: existingTx.amount,
+      note: existingTx.note,
+      tolerance: 0.05,
+      acceptBaseAmount: true,
+    });
+    if (!amountCheck.valid) {
+      console.warn(
+        `[Shake-Out Status] Amount mismatch: verified=${amountCheck.verifiedAmount} expected=${amountCheck.expectedAmount} tx=${existingTx.id}`
+      );
+      return NextResponse.json({ error: "قيمة المعاملة لا تطابق المبلغ المطلوب" }, { status: 400 });
+    }
+  }
+
   let fulfillmentRes: any = null;
   let didFulfill = false;
 
@@ -120,12 +142,12 @@ export async function GET(req: NextRequest) {
       }
 
       await tx.user.update({
-        where: { id: session.id },
+        where: { id: targetTx.userId },
         data: { balance: { increment: targetTx.amount } },
       });
 
       fulfillmentRes = await fulfillPendingItemPurchase({
-        userId: session.id,
+        userId: targetTx.userId,
         note: targetTx.note,
         tx,
       });
@@ -134,7 +156,7 @@ export async function GET(req: NextRequest) {
     });
 
     if (didFulfill) {
-      console.log(`[Shake-Out Status] Auto-reconciled & credited ${targetTx.amount} EGP for user ${session.id} (ref ${data.reference}).`);
+      console.log(`[Shake-Out Status] Auto-reconciled & credited ${targetTx.amount} EGP for user ${targetTx.userId} (ref ${data.reference}).`);
     }
   }
 
@@ -154,5 +176,4 @@ export async function GET(req: NextRequest) {
     fulfillment: fulfillmentRes,
   });
 }
-
 

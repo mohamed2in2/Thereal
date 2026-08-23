@@ -14,6 +14,7 @@ import {
   type Difficulty, type IQData, type GameResult,
 } from "@/lib/iq-system";
 import { GameFeedback } from "@/components/ai/GameFeedback";
+import { CurriculumPractice } from "@/components/environments/CurriculumPractice";
 
 /* ─── Sandbox Languages ────────────────────────────────────────────────── */
 const LANGUAGES = [
@@ -683,12 +684,16 @@ function CognitiveArenaGame({ onFinish, isAdaptive }: { onFinish: () => void; is
 /* ─── Main Programming Environment Page ────────────────────────────────── */
 export default function ProgrammingPage() {
   const [user, setUser] = useState<MeUser | null>(null);
-  const [tab, setTab] = useState<"sandboxes" | "arena">("sandboxes");
+  const [tab, setTab] = useState<"sandboxes" | "arena" | "curriculum">("sandboxes");
   const [iqData, setIqData] = useState<IQData>(() => getIQData());
   const [isAdaptive, setIsAdaptive] = useState(false);
 
   useEffect(() => {
     fetchMeWithRetry(2, 100).then(me => setUser(me)).catch(() => {});
+
+    if (new URLSearchParams(window.location.search).get("tab") === "curriculum") {
+      setTab("curriculum");
+    }
     
     // Fetch adaptive difficulty setting from server
     fetch("/api/student/iq")
@@ -750,10 +755,10 @@ export default function ProgrammingPage() {
           </motion.div>
 
           {/* Navigation Tabs */}
-          <div className="flex gap-2 mb-8 p-1 rounded-2xl bg-gray-200/50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 max-w-md mx-auto sm:mx-0">
-            {([["sandboxes", "💻 المحررات البرمجية"], ["arena", "🏆 حلبة التحدي المعرفي"]] as const).map(([id, label]) => (
+          <div className="flex w-full max-w-2xl gap-2 overflow-x-auto mb-8 p-1 rounded-2xl bg-gray-200/50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 mx-auto sm:mx-0">
+            {([["sandboxes", "💻 المحررات البرمجية"], ["arena", "🏆 حلبة التحدي المعرفي"], ["curriculum", "📚 أسئلة برمجة المنهج"]] as const).map(([id, label]) => (
               <button key={id} onClick={() => setTab(id)}
-                className="flex-1 py-3 text-sm font-black rounded-xl transition-all"
+                className="min-h-11 flex-1 shrink-0 px-3 py-3 text-sm font-black rounded-xl transition-all focus:outline-none focus:ring-4 focus:ring-sky-400/30"
                 style={{ background: tab === id ? "#fff" : "transparent", color: tab === id ? "#1E293B" : "#64748B", boxShadow: tab === id ? "0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)" : "none" }}>
                 {label}
               </button>
@@ -835,6 +840,28 @@ export default function ProgrammingPage() {
                 transition={{ duration: 0.3 }}
               >
                 <CognitiveArenaGame onFinish={refreshIQ} isAdaptive={isAdaptive} />
+              </motion.div>
+            )}
+
+            {tab === "curriculum" && (
+              <motion.div
+                key="curriculum"
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -15 }}
+                transition={{ duration: 0.2 }}
+              >
+                <div className="mb-5 rounded-3xl border border-sky-400/20 bg-slate-950/80 p-5 text-right shadow-[0_4px_24px_rgba(0,0,0,0.18)] sm:p-7" dir="rtl">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                      <span className="inline-flex min-h-8 items-center rounded-full border border-sky-300/30 bg-sky-400/10 px-3 py-1 text-xs font-black text-sky-200">منهج 2026 الرسمي</span>
+                      <h2 className="mt-3 text-2xl font-black text-white">أسئلة برمجة المنهج</h2>
+                      <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-300">بنك أسئلة وتحديات تفاعلية تغطي دروس البرمجة والأمن السيبراني والذكاء الاصطناعي مع توثيق المصادر من كتاب الوزارة.</p>
+                    </div>
+                    <span className="rounded-2xl bg-slate-900 px-4 py-3 text-xs font-bold text-slate-300">اختيار من متعدد · شرح فوري</span>
+                  </div>
+                </div>
+                <CurriculumPractice />
               </motion.div>
             )}
           </AnimatePresence>

@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getStudentSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import {
+  canAccessContent,
+  ContentType,
+  recordContentCompleted,
+} from "@/lib/content-access-engine";
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getStudentSession();
@@ -10,9 +15,25 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
   const video = await prisma.video.findUnique({
     where: { id: videoId },
-    select: { durationMinutes: true, isFree: true }
+    select: { title: true, durationMinutes: true, isFree: true }
   });
   if (!video) return NextResponse.json({ error: "الفيديو غير موجود" }, { status: 404 });
+
+  const access = await canAccessContent(session.id, {
+    type: ContentType.VIDEO,
+    sourceId: videoId,
+    title: video.title,
+  });
+  if ("requiredItem" in access) {
+    return NextResponse.json(
+      {
+        error: `يجب إكمال «${access.requiredItem.title}» أولًا.`,
+        code: access.code,
+        requiredItem: access.requiredItem,
+      },
+      { status: 403 }
+    );
+  }
 
   if (!video.isFree) {
     const watchSession = await prisma.videoWatchSession.findFirst({
@@ -41,10 +62,19 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     }
   }
 
-  await prisma.progress.upsert({
-    where: { studentId_videoId: { studentId: session.id, videoId } },
-    create: { studentId: session.id, videoId, watched: true, watchedAt: new Date() },
-    update: { watched: true, watchedAt: new Date() },
+  const completedAt = new Date();
+  await prisma.$transaction(async (tx) => {
+    await tx.progress.upsert({
+      where: { studentId_videoId: { studentId: session.id, videoId } },
+      create: { studentId: session.id, videoId, watched: true, watchedAt: completedAt },
+      update: { watched: true, watchedAt: completedAt },
+    });
+    await recordContentCompleted(
+      session.id,
+      { type: ContentType.VIDEO, sourceId: videoId, title: video.title },
+      { completedAt },
+      tx
+    );
   });
 
   // Track plan lesson progress

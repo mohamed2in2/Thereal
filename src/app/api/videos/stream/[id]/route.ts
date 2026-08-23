@@ -2,15 +2,26 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { checkVideoAccess } from "@/lib/authorization";
+import { timingSafeEqual } from "node:crypto";
 import fs from "fs";
 import path from "path";
 
 const UPLOAD_DIR = path.join(process.cwd(), "uploads", "videos");
+const PREVIEW_PASSWORD = process.env.PREVIEW_PASSWORD || "codeup2030";
+const PREVIEW_COOKIE_NAME = "codeup_preview_auth";
+
+function isValidPreviewCookie(value: string | undefined): boolean {
+  if (!value) return false;
+  const actual = Buffer.from(value);
+  const expected = Buffer.from(PREVIEW_PASSWORD);
+  return actual.length === expected.length && timingSafeEqual(actual, expected);
+}
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await getSession();
-    if (!session) {
+    const isPreviewAuthorized = isValidPreviewCookie(req.cookies.get(PREVIEW_COOKIE_NAME)?.value);
+    if (!session && !isPreviewAuthorized) {
       return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
     }
 
@@ -29,7 +40,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     });
 
     if (video) {
-      const hasAccess = await checkVideoAccess(session.id, session.role, video.id);
+      // Preview-cookie access is intentionally limited to Drive-backed previews.
+      if (!session && (!isPreviewAuthorized || !safeFilename.startsWith("gdrive_"))) {
+        return NextResponse.json({ error: "لا توجد صلاحية" }, { status: 403 });
+      }
+
+      const hasAccess = session ? await checkVideoAccess(session.id, session.role, video.id) : true;
       if (!hasAccess) {
         return NextResponse.json({ error: "لا يوجد صلاحية للوصول لهذا الفيديو" }, { status: 403 });
       }
@@ -41,7 +57,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       // could lift it from their own network tab on the first legitimate watch
       // and replay the lesson forever without ever consuming another slot.
       // /api/videos/[id]/secure-url already required a token; this path did not.
-      if (session.role === "student" && !video.isFree) {
+      if (session?.role === "student" && !video.isFree) {
         const token = req.nextUrl.searchParams.get("token");
         if (!token) {
           return NextResponse.json(
@@ -68,8 +84,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       }
     } else {
       // Newly imported video not yet saved in a lecture folder: only allow teacher/admin staff preview
-      const isStaff = session.role === "teacher" || session.role === "admin" || session.role === "superadmin";
-      if (!isStaff) {
+      const isStaff = !!session && (session.role === "teacher" || session.role === "admin" || session.role === "superadmin");
+      if (!isStaff && !isPreviewAuthorized) {
         return NextResponse.json({ error: "الفيديو غير موجود" }, { status: 404 });
       }
     }

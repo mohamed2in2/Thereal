@@ -33,7 +33,8 @@ export async function POST(req: NextRequest) {
 
       const ext = path.extname(originalName) || ".mp4";
       const randomId = crypto.randomBytes(8).toString("hex");
-      const filename = `local_${Date.now()}_${randomId}${ext}`;
+      const ownerId = session.id.replace(/[^a-zA-Z0-9_-]/g, "_");
+      const filename = `local_${ownerId}_${Date.now()}_${randomId}${ext}`;
       const filePath = path.join(UPLOAD_DIR, filename);
 
       if (contentType.includes("multipart/form-data")) {

@@ -318,7 +318,62 @@ function PreviewDashboardContent() {
   }, [testWatermarkLabel]);
 
   // ── Direct File Upload to VdoCipher (S3 Direct Upload with Live Progress) ───
+  // Upload through our same-origin proxy so the browser never talks directly
+  // to VdoCipher's S3 endpoint (which is blocked by CORS on many deployments).
   const handleVdoDirectUpload = async (file: File) => {
+    if (!file) return;
+    setIsUploadingVdo(true);
+    setVdoUploadProgress(0);
+    setVdoError(null);
+    setVdoUploadSuccess(null);
+    setVdoUploadStatus("جارٍ رفع الفيديو إلى الخادم الآمن...");
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file, file.name);
+      formData.append("title", file.name.replace(/\.[^/.]+$/, "") || "معاينة درس مشفر");
+
+      const result = await new Promise<{ providerVideoId?: string; videoId?: string }>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", "/api/teacher/vdocipher/server-upload", true);
+        xhr.withCredentials = true;
+        xhr.timeout = 30 * 60 * 1000;
+        xhr.upload.onprogress = (event) => {
+          if (!event.lengthComputable) return;
+          const percent = Math.round((event.loaded / event.total) * 100);
+          setVdoUploadProgress(percent);
+          setVdoUploadStatus(`جارٍ رفع الفيديو (${percent}%)...`);
+        };
+        xhr.onload = () => {
+          let data: { providerVideoId?: string; videoId?: string; error?: string } = {};
+          try { data = JSON.parse(xhr.responseText || "{}"); } catch { /* handled below */ }
+          if (xhr.status >= 200 && xhr.status < 300 && (data.providerVideoId || data.videoId)) {
+            resolve(data);
+          } else {
+            reject(new Error(data.error || `فشل رفع الفيديو (رمز: ${xhr.status})`));
+          }
+        };
+        xhr.onerror = () => reject(new Error("انقطع الاتصال أثناء الرفع"));
+        xhr.ontimeout = () => reject(new Error("انتهت مهلة الرفع"));
+        xhr.send(formData);
+      });
+
+      const finalVideoId = result.providerVideoId || result.videoId;
+      if (!finalVideoId) throw new Error("لم يُعد الخادم معرّف الفيديو");
+      setVdoUploadProgress(100);
+      setVdoAssetId(finalVideoId);
+      setVdoUploadSuccess(`تم رفع الفيديو بنجاح! معرّف الفيديو: ${finalVideoId}`);
+      setVdoUploadStatus("تم الرفع! جارٍ تفعيل المشغل...");
+      await generateVdoCipherOtp(finalVideoId);
+    } catch (err: any) {
+      setVdoError(err.message || "حدث خطأ أثناء رفع الفيديو");
+    } finally {
+      setIsUploadingVdo(false);
+    }
+  };
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const handleVdoDirectUploadLegacy = async (file: File) => {
     if (!file) return;
     setIsUploadingVdo(true);
     setVdoUploadProgress(0);

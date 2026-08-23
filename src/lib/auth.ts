@@ -7,11 +7,17 @@ import { normalizeEgyptPhone } from "@/lib/phone";
 import { getConfigNumberClamped } from "./config";
 import { getCachedUserSession, invalidateUserSessionCache } from "./cache";
 
-if (!process.env.JWT_SECRET) {
-  throw new Error("JWT_SECRET environment variable is not set. Please configure it in your .env file.");
+function getJwtSecret(): Uint8Array {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    if (process.env.NODE_ENV === "production" && !process.env.NEXT_PHASE) {
+      throw new Error("JWT_SECRET environment variable is not set. Please configure it in your .env file.");
+    }
+    return new TextEncoder().encode("build-time-fallback-jwt-secret-do-not-use-in-production");
+  }
+  return new TextEncoder().encode(secret);
 }
 
-const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET);
 const AUTH_COOKIE_NAME = "auth_token";
 const PHONE_VERIFY_COOKIE_NAME = "student_phone_verify";
 
@@ -88,12 +94,12 @@ export async function signToken(payload: Omit<JWTPayload, "iat" | "exp">) {
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime(`${days}d`)
-    .sign(JWT_SECRET);
+    .sign(getJwtSecret());
 }
 
 export async function verifyToken(token: string): Promise<JWTPayload | null> {
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
+    const { payload } = await jwtVerify(token, getJwtSecret());
     return payload as unknown as JWTPayload;
   } catch {
     return null;
@@ -126,7 +132,7 @@ export async function clearAuthCookie() {
  * candidates, which a plain SHA-256 exhausts in milliseconds.
  */
 function hashVerificationCode(phone: string, code: string) {
-  return createHmac("sha256", JWT_SECRET).update(`${phone}:${code}`).digest("hex");
+  return createHmac("sha256", getJwtSecret()).update(`${phone}:${code}`).digest("hex");
 }
 
 function hashesEqual(a: string, b: string) {
@@ -165,7 +171,7 @@ export async function createPhoneVerificationChallenge(phone: string, code?: str
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("3m")
-    .sign(JWT_SECRET);
+    .sign(getJwtSecret());
 }
 
 export async function setPhoneVerificationCookie(token: string) {
@@ -201,7 +207,7 @@ export async function verifyPhoneVerificationCookie(phone: string, code: string)
   }
 
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
+    const { payload } = await jwtVerify(token, getJwtSecret());
     const challenge = payload as unknown as PhoneChallengePayload;
     if (!challenge?.phone) return false;
     const normalizedPhone = normalizeEgyptPhone(String(phone));

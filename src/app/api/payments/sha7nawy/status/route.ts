@@ -10,6 +10,7 @@ import {
 } from "@/lib/sha7nawy";
 import { getPaymentMethod } from "@/lib/payment-methods";
 import { fulfillPendingItemPurchase } from "@/lib/fulfillment";
+import { checkVerifiedPaymentAmount } from "@/lib/payment-amount";
 
 /**
  * GET /api/payments/sha7nawy/status?transactionId=123
@@ -79,6 +80,24 @@ export async function GET(req: NextRequest) {
 
   const normalizedStatus = (data.status || "unknown").toString().toLowerCase();
   const isPaid = SHA7NAWY_PAID_STATUSES.includes(normalizedStatus);
+
+  if (data.client && data.client !== session.id) {
+    return NextResponse.json({ error: "المعاملة غير صالحة للمستخدم الحالي" }, { status: 403 });
+  }
+
+  if (isPaid) {
+    const amountCheck = checkVerifiedPaymentAmount({
+      providerAmount: data.amount,
+      pendingBaseAmount: existingTx.amount,
+      note: existingTx.note,
+    });
+    if (!amountCheck.valid) {
+      console.warn(
+        `[Sha7nawy Status] Amount mismatch: verified=${amountCheck.verifiedAmount} expected=${amountCheck.expectedAmount} tx=${existingTx.id}`
+      );
+      return NextResponse.json({ error: "قيمة المعاملة لا تطابق المبلغ المطلوب" }, { status: 400 });
+    }
+  }
 
   let fulfillmentRes: any = null;
   let didFulfill = false;

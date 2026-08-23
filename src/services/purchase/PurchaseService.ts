@@ -4,7 +4,7 @@ import { acquireAdvisoryLock } from "@/lib/distributed-lock";
 import { processTeacherAttribution } from "@/lib/referral";
 import { ReferralService } from "@/services/referral/ReferralService";
 import { DiscountService, PurchaseType } from "@/services/discount/DiscountService";
-import { verifyAuthoritativePrice } from "@/lib/price-verifier";
+import { isValidCurrencyAmount, verifyAuthoritativePrice } from "@/lib/price-verifier";
 import { isTester, canBypassPayment, logTesterActivity } from "@/lib/tester";
 
 export interface BasePurchaseParams {
@@ -140,7 +140,7 @@ export class PurchaseService {
       }
     }
 
-    if (basePrice === 0) {
+    if (!isValidCurrencyAmount(basePrice)) {
       return { success: false, error: "هذا الكورس مجاني — استخدم زر التسجيل المباشر" };
     }
 
@@ -171,6 +171,25 @@ export class PurchaseService {
     const runInTx = async (tx: any) => {
       // 1. Acquire advisory lock
       await acquireAdvisoryLock(`spend:${studentId}`, tx);
+
+      if (validatedDiscount) {
+        await acquireAdvisoryLock(`discount:${validatedDiscount.id}`, tx);
+        const discountValidation = await DiscountService.validateDiscountCode({
+          code: discountCode!,
+          studentId,
+          purchaseType: "COURSE",
+          targetId: courseId,
+          basePrice,
+          paymentMethod,
+          tx,
+        });
+        if (!discountValidation.valid) {
+          return { success: false, error: discountValidation.error };
+        }
+        validatedDiscount = discountValidation.discountCode;
+        discountAmount = discountValidation.pricing?.discountAmount ?? 0;
+        finalPrice = discountValidation.pricing?.finalPrice ?? basePrice;
+      }
 
       // Check tester account mode bypass
       const studentUser = await tx.user.findUnique({
@@ -343,7 +362,7 @@ export class PurchaseService {
     }
 
     const basePrice = folder.price ?? 0;
-    if (basePrice <= 0) {
+    if (!isValidCurrencyAmount(basePrice)) {
       return { success: false, error: "هذه المحاضرة مجانية" };
     }
 
@@ -372,6 +391,25 @@ export class PurchaseService {
 
     const runInTx = async (tx: any) => {
       await acquireAdvisoryLock(`spend:${studentId}`, tx);
+
+      if (validatedDiscount) {
+        await acquireAdvisoryLock(`discount:${validatedDiscount.id}`, tx);
+        const discountValidation = await DiscountService.validateDiscountCode({
+          code: discountCode!,
+          studentId,
+          purchaseType: "FOLDER",
+          targetId: folderId,
+          basePrice,
+          paymentMethod,
+          tx,
+        });
+        if (!discountValidation.valid) {
+          return { success: false, error: discountValidation.error };
+        }
+        validatedDiscount = discountValidation.discountCode;
+        discountAmount = discountValidation.pricing?.discountAmount ?? 0;
+        finalPrice = discountValidation.pricing?.finalPrice ?? basePrice;
+      }
 
       // Check tester account mode bypass
       const studentUser = await tx.user.findUnique({
@@ -517,7 +555,7 @@ export class PurchaseService {
     if (!video) return { success: false, error: "الدرس غير موجود" };
 
     const basePrice = video.price ?? 0;
-    if (basePrice <= 0) {
+    if (!isValidCurrencyAmount(basePrice)) {
       return { success: false, error: "هذا الدرس مجاني" };
     }
 
@@ -546,6 +584,25 @@ export class PurchaseService {
 
     const runInTx = async (tx: any) => {
       await acquireAdvisoryLock(`spend:${studentId}`, tx);
+
+      if (validatedDiscount) {
+        await acquireAdvisoryLock(`discount:${validatedDiscount.id}`, tx);
+        const discountValidation = await DiscountService.validateDiscountCode({
+          code: discountCode!,
+          studentId,
+          purchaseType: "VIDEO",
+          targetId: videoId,
+          basePrice,
+          paymentMethod,
+          tx,
+        });
+        if (!discountValidation.valid) {
+          return { success: false, error: discountValidation.error };
+        }
+        validatedDiscount = discountValidation.discountCode;
+        discountAmount = discountValidation.pricing?.discountAmount ?? 0;
+        finalPrice = discountValidation.pricing?.finalPrice ?? basePrice;
+      }
 
       // Check tester account mode bypass
       const studentUser = await tx.user.findUnique({
@@ -693,6 +750,9 @@ export class PurchaseService {
     }
 
     const planPrice = plan.price ?? 0;
+    if (!isValidCurrencyAmount(planPrice, true)) {
+      return { success: false, error: "Invalid plan price" };
+    }
     let basePrice = planPrice;
     if (
       plan.discountPrice !== null &&
@@ -700,9 +760,11 @@ export class PurchaseService {
       plan.discountExpiresAt &&
       new Date(plan.discountExpiresAt) > new Date()
     ) {
+      if (!isValidCurrencyAmount(plan.discountPrice, true)) {
+        return { success: false, error: "Invalid plan discount price" };
+      }
       basePrice = plan.discountPrice;
     }
-    basePrice = Math.max(0, basePrice);
 
     const student = await prisma.user.findUnique({
       where: { id: studentId },
@@ -738,6 +800,25 @@ export class PurchaseService {
 
     const runInTx = async (tx: any) => {
       await acquireAdvisoryLock(`spend:${studentId}`, tx);
+
+      if (validatedDiscount) {
+        await acquireAdvisoryLock(`discount:${validatedDiscount.id}`, tx);
+        const discountValidation = await DiscountService.validateDiscountCode({
+          code: discountCode!,
+          studentId,
+          purchaseType: "PLAN",
+          targetId: planId,
+          basePrice,
+          paymentMethod,
+          tx,
+        });
+        if (!discountValidation.valid) {
+          return { success: false, error: discountValidation.error };
+        }
+        validatedDiscount = discountValidation.discountCode;
+        discountAmount = discountValidation.pricing?.discountAmount ?? 0;
+        finalPrice = discountValidation.pricing?.finalPrice ?? basePrice;
+      }
 
       // Check tester account mode bypass
       const studentUser = await tx.user.findUnique({
@@ -955,6 +1036,25 @@ export class PurchaseService {
 
     const runInTx = async (tx: any) => {
       await acquireAdvisoryLock(`spend:${studentId}`, tx);
+
+      if (validatedDiscount) {
+        await acquireAdvisoryLock(`discount:${validatedDiscount.id}`, tx);
+        const discountValidation = await DiscountService.validateDiscountCode({
+          code: discountCode!,
+          studentId,
+          purchaseType: "TEACHER_SUB",
+          targetId: teacherId,
+          basePrice,
+          paymentMethod,
+          tx,
+        });
+        if (!discountValidation.valid) {
+          return { success: false, error: discountValidation.error };
+        }
+        validatedDiscount = discountValidation.discountCode;
+        discountAmount = discountValidation.pricing?.discountAmount ?? 0;
+        finalPrice = discountValidation.pricing?.finalPrice ?? basePrice;
+      }
 
       // Check tester account mode bypass
       const studentUser = await tx.user.findUnique({

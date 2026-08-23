@@ -141,7 +141,7 @@ export default function LibraryPage() {
 
   return (
     <ProfileGuard>
-    <div className="flex flex-col min-h-screen" style={{ background: "var(--bg)", color: "var(--ink)" }}>
+    <div className="flex flex-col min-h-screen" style={{ background: "var(--bg)", color: "var(--ink)" }} dir="rtl">
       <Navbar user={user} />
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8">
         

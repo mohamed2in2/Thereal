@@ -218,38 +218,50 @@ export async function confirmParentToken(rawToken: string, ip: string = "127.0.0
     return null;
   }
 
+  if (new Date() > parentToken.expiresAt) {
+    return null;
+  }
+
   const now = new Date();
 
-  await prisma.parentToken.update({
-    where: { id: parentToken.id },
-    data: {
-      status: "CONFIRMED",
-      confirmedAt: now,
-      confirmedByIp: ip,
-      updatedAt: now,
-    },
-  });
+  return prisma.$transaction(async (tx) => {
+    const claim = await tx.parentToken.updateMany({
+      where: {
+        id: parentToken.id,
+        status: { notIn: ["REJECTED", "REVOKED"] },
+        expiresAt: { gte: now },
+      },
+      data: {
+        status: "CONFIRMED",
+        confirmedAt: now,
+        confirmedByIp: ip,
+        updatedAt: now,
+      },
+    });
 
-  await prisma.user.update({
-    where: { id: parentToken.studentId },
-    data: {
-      parentVerified: true,
-      parentVerifiedAt: now,
-      parentVerificationStatus: "CONFIRMED",
-    },
-  });
+    if (claim.count === 0) return null;
 
-  await prisma.parentVerificationEvent.create({
-    data: {
-      studentId: parentToken.studentId,
-      action: "CONFIRMED",
-      phone: parentToken.parentPhoneSnapshot || parentToken.student.parentPhone || null,
-      ip,
-      userAgent: userAgent || null,
-    },
-  });
+    await tx.user.update({
+      where: { id: parentToken.studentId },
+      data: {
+        parentVerified: true,
+        parentVerifiedAt: now,
+        parentVerificationStatus: "CONFIRMED",
+      },
+    });
 
-  return { ok: true, studentId: parentToken.studentId };
+    await tx.parentVerificationEvent.create({
+      data: {
+        studentId: parentToken.studentId,
+        action: "CONFIRMED",
+        phone: parentToken.parentPhoneSnapshot || parentToken.student.parentPhone || null,
+        ip,
+        userAgent: userAgent || null,
+      },
+    });
+
+    return { ok: true, studentId: parentToken.studentId };
+  });
 }
 
 /**

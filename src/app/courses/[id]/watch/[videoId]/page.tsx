@@ -311,6 +311,24 @@ export default function VideoWatchPage() {
     return () => clearInterval(id);
   }, [session]);
 
+  // Renew the short-lived watch bearer only while this tab still owns it.
+  useEffect(() => {
+    if (!session || session.sessionToken === "free" || session.sessionToken === "preview") return;
+    const id = window.setInterval(() => {
+      fetch(`/api/videos/${videoId}/watch`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ heartbeat: true, token: session.sessionToken }),
+      }).then(async (res) => {
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.expiresAt) setSession((current) => current ? { ...current, expiresAt: data.expiresAt } : current);
+      }).catch(() => {});
+    }, 30_000);
+    return () => window.clearInterval(id);
+  }, [session, videoId]);
+
   // Client-side deterrents: block DevTools keyboard shortcuts and right-click.
   // These are UX-level barriers (not cryptographic), but they stop casual extraction.
   useEffect(() => {

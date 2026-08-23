@@ -1,6 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import { DiscountService, PurchaseType } from "@/services/discount/DiscountService";
 
+export function isValidCurrencyAmount(value: unknown, allowZero = false): value is number {
+  return typeof value === "number" && Number.isFinite(value) && (allowZero ? value >= 0 : value > 0);
+}
+
 export interface ItemPriceVerificationResult {
   valid: boolean;
   expectedPrice: number;
@@ -304,6 +308,16 @@ export async function verifyAuthoritativePrice(params: {
   }
   // 6. General Wallet Top-Up
   else {
+    if (!isValidCurrencyAmount(amount)) {
+      return {
+        valid: false,
+        expectedPrice: 0,
+        originalPrice: 0,
+        finalPrice: 0,
+        itemName: "Ø´Ø­Ù† Ø±ØµÙŠØ¯ Ø§Ù„Ù…Ø­ÙØ¸Ø©",
+        error: "Ù…Ø¨Ù„Øº Ø´Ø­Ù† Ø§Ù„Ù…Ø­ÙØ¸Ø© ÙŠØ¬Ø¨ Ø£Ù† ÙŠÙƒÙˆÙ† Ø±Ù‚Ù…Ø§Ù‹ Ù…ÙˆØ¬Ø¨Ø§Ù‹",
+      };
+    }
     return {
       valid: true,
       expectedPrice: amount,

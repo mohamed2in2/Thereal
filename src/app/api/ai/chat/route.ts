@@ -4,7 +4,12 @@ import { prisma } from "@/lib/prisma";
 import { buildStudentContext } from "@/lib/ai-context";
 import { chatWithAI, type ChatMessage, type AIAction } from "@/lib/ai-assistant";
 
+const activeAiRequests = new Map<string, number>();
+const MAX_ACTIVE_AI_REQUESTS = 3;
+
 export async function POST(req: NextRequest) {
+  let requestSessionId: string | null = null;
+  let requestCounted = false;
   try {
     // Accept students AND admins/owners (they need to test the chat too)
     const session = await getStudentSession() ?? await getSession();
@@ -17,7 +22,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "الرسالة مطلوبة" }, { status: 400 });
     }
 
-    const trimmedMsg = message.trim();
+    const trimmedMsg = message.trim().replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "").slice(0, 4000);
+    if (!trimmedMsg) {
+      return NextResponse.json({ error: "الرسالة مطلوبة" }, { status: 400 });
+    }
+    requestSessionId = session.id;
+    const active = activeAiRequests.get(session.id) ?? 0;
+    if (active >= MAX_ACTIVE_AI_REQUESTS) {
+      return NextResponse.json({ error: "هناك محادثات ذكاء اصطناعي نشطة كثيرة. حاول بعد لحظات." }, { status: 429 });
+    }
+    activeAiRequests.set(session.id, active + 1);
+    requestCounted = true;
+    req.signal.addEventListener("abort", () => {
+      // The provider receives this signal below; this listener also makes the
+      // request lifecycle explicit for runtimes that keep route promises alive.
+    }, { once: true });
     const cleanMsg = trimmedMsg.toLowerCase();
     const isSuperAdmin = session.role === "superadmin" || session.isOwner === true;
     const isAdmin = session.role === "admin" || isSuperAdmin;
@@ -404,7 +423,7 @@ export async function POST(req: NextRequest) {
     // Get AI response — try chatWithAI first (runs Gemini -> Anthropic/DeepSeek -> smart fallbackResponse)
     let result;
     try {
-      result = await chatWithAI(message, chatHistory, context, notifications);
+      result = await chatWithAI(trimmedMsg, chatHistory, context, notifications, req.signal);
     } catch (chatErr) {
       console.error("[chat/route] chatWithAI threw, falling back to AIEngine:", chatErr);
       try {
@@ -524,6 +543,12 @@ export async function POST(req: NextRequest) {
       actions: [],
       source: "fallback",
     });
+  } finally {
+    if (requestCounted && requestSessionId) {
+      const remaining = (activeAiRequests.get(requestSessionId) ?? 1) - 1;
+      if (remaining > 0) activeAiRequests.set(requestSessionId, remaining);
+      else activeAiRequests.delete(requestSessionId);
+    }
   }
 }
 

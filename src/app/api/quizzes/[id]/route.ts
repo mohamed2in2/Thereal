@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { checkQuizAccess } from "@/lib/authorization";
+import { canAccessContent, ContentType } from "@/lib/content-access-engine";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
 
@@ -35,6 +36,24 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       }
 
       const isStudent = session.role === "student";
+
+      if (isStudent) {
+        const access = await canAccessContent(session.id, {
+          type: ContentType.QUIZ,
+          sourceId: quizId,
+          title: quiz.title,
+        });
+        if ("requiredItem" in access) {
+          return NextResponse.json(
+            {
+              error: `يجب إكمال «${access.requiredItem.title}» أولًا.`,
+              code: access.code,
+              requiredItem: access.requiredItem,
+            },
+            { status: 403 }
+          );
+        }
+      }
 
       // Check if student already completed this quiz
       if (isStudent) {

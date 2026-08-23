@@ -3,6 +3,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { checkQuizAccess } from "@/lib/authorization";
+import { acquireAdvisoryLock } from "@/lib/distributed-lock";
+import {
+  canAccessContent,
+  ContentType,
+  recordContentCompleted,
+} from "@/lib/content-access-engine";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
@@ -26,6 +32,24 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const hasAccess = await checkQuizAccess(session.id, session.role, quizId);
   if (!hasAccess) {
     return NextResponse.json({ error: "لا يوجد صلاحية للوصول" }, { status: 403 });
+  }
+
+  if (session.role === "student") {
+    const access = await canAccessContent(session.id, {
+      type: ContentType.QUIZ,
+      sourceId: quizId,
+      title: quiz.title,
+    });
+    if ("requiredItem" in access) {
+      return NextResponse.json(
+        {
+          error: `يجب إكمال «${access.requiredItem.title}» أولًا.`,
+          code: access.code,
+          requiredItem: access.requiredItem,
+        },
+        { status: 403 }
+      );
+    }
   }
 
   let planEnrollmentId: string | null = null;
@@ -99,11 +123,36 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const score = Number(((correct / totalQ) * 100).toFixed(2));
   const passed = score >= 50;
 
-  const result = await prisma.quizResult.upsert({
-    where: { studentId_quizId: { studentId: session.id, quizId } },
-    update: { score, totalQ, completedAt: new Date(), allowRetake: false, startedAt: dbStartedAt },
-    create: { studentId: session.id, quizId, score, totalQ, startedAt: dbStartedAt },
-  });
+  let result;
+  try {
+    result = await prisma.$transaction(async (tx: any) => {
+      await acquireAdvisoryLock(`quiz-submit:${session.id}:${quizId}`, tx);
+      const locked = await tx.quizResult.findUnique({ where: { studentId_quizId: { studentId: session.id, quizId } } });
+      if (locked?.completedAt && (locked.score > 0 || locked.totalQ > 0) && !locked.allowRetake) {
+        throw new Error("QUIZ_ALREADY_SUBMITTED");
+      }
+      const completedAt = new Date();
+      const savedResult = await tx.quizResult.upsert({
+        where: { studentId_quizId: { studentId: session.id, quizId } },
+        update: { score, totalQ, completedAt, allowRetake: false, startedAt: dbStartedAt },
+        create: { studentId: session.id, quizId, score, totalQ, startedAt: dbStartedAt },
+      });
+      if (session.role === "student") {
+        await recordContentCompleted(
+          session.id,
+          { type: ContentType.QUIZ, sourceId: quizId, title: quiz.title },
+          { score, completedAt },
+          tx
+        );
+      }
+      return savedResult;
+    });
+  } catch (error: any) {
+    if (error?.message === "QUIZ_ALREADY_SUBMITTED") {
+      return NextResponse.json({ error: "لقد أجبت على هذا الاختبار بالفعل" }, { status: 409 });
+    }
+    throw error;
+  }
 
   // Save per-question answers (enables "view answers" + "wrong questions exam")
   // Delete old answers for this result first (retake scenario)

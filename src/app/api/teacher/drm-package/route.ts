@@ -4,6 +4,7 @@ import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 import { spawnSync } from "child_process";
+import { prisma } from "@/lib/prisma";
 
 const UPLOADS_DIR = path.resolve(process.cwd(), "uploads", "videos");
 const DRM_OUTPUT_DIR = path.resolve(process.cwd(), "uploads", "drm");
@@ -48,17 +49,32 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "معرّف الفيديو (videoId) مطلوب للتشفير" }, { status: 400 });
     }
 
-    const safeFilename = path.basename(rawVideoId);
-    let sourcePath = path.join(UPLOADS_DIR, safeFilename);
+    if (session.role === "teacher") {
+      // Never authorize packaging from a client-supplied filename/provider ID.
+      const ownerId = session.id.replace(/[^a-zA-Z0-9_-]/g, "_");
+      const ownsPendingUpload =
+        path.basename(rawVideoId) === rawVideoId && rawVideoId.startsWith(`local_${ownerId}_`);
+      const ownedVideo = ownsPendingUpload
+        ? { id: rawVideoId }
+        : await prisma.video.findFirst({
+            where: {
+              OR: [
+                { id: rawVideoId },
+                { providerVideoId: rawVideoId },
+                { vdoCipherId: rawVideoId },
+              ],
+              folder: { course: { teacherId: session.id } },
+            },
+            select: { id: true },
+          });
 
-    // If file does not exist directly, check without prefix
-    if (!fs.existsSync(sourcePath)) {
-      const possibleFiles = fs.existsSync(UPLOADS_DIR) ? fs.readdirSync(UPLOADS_DIR) : [];
-      const matched = possibleFiles.find((f) => f.includes(safeFilename) || safeFilename.includes(f));
-      if (matched) {
-        sourcePath = path.join(UPLOADS_DIR, matched);
+      if (!ownedVideo) {
+        return NextResponse.json({ error: "You can only package videos that belong to your account" }, { status: 403 });
       }
     }
+
+    const safeFilename = path.basename(rawVideoId);
+    const sourcePath = path.join(UPLOADS_DIR, safeFilename);
 
     if (!fs.existsSync(sourcePath)) {
       return NextResponse.json(

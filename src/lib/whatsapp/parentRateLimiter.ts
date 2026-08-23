@@ -6,7 +6,8 @@ interface RateRecord {
 class ParentRateLimiter {
   private ipMap = new Map<string, RateRecord>();
   private readonly windowMs = 60 * 1000; // 1 minute
-  private readonly maxRequests = 30;     // 30 requests / minute
+
+  constructor(private readonly maxRequests: number) {}
 
   public checkRateLimit(ip: string): { allowed: boolean; remaining: number; resetInSeconds: number } {
     const now = Date.now();
@@ -45,9 +46,11 @@ class ParentRateLimiter {
   }
 }
 
-export const parentRateLimiter = new ParentRateLimiter();
+export const parentRateLimiter = new ParentRateLimiter(30);
+export const parentVerificationRateLimiter = new ParentRateLimiter(5);
 
 // Run periodic cleanup every 5 minutes
 if (typeof setInterval !== "undefined") {
   setInterval(() => parentRateLimiter.cleanup(), 5 * 60 * 1000);
+  setInterval(() => parentVerificationRateLimiter.cleanup(), 5 * 60 * 1000);
 }

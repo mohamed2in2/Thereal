@@ -25,6 +25,13 @@ const GEMINI_KEYS = [
 const BACKUP_BASE_RAW = process.env.AI_BACKUP_BASE_URL || "https://generativelanguage.googleapis.com/v1beta";
 const BACKUP_BASE_URL = BACKUP_BASE_RAW.replace(/\/+$/, "");
 const BACKUP_MODEL = process.env.AI_BACKUP_MODEL || "gemini-2.0-flash";
+const PROVIDER_TIMEOUT_MS = 12_000;
+
+function providerSignal(requestSignal?: AbortSignal): AbortSignal {
+  const timeout = AbortSignal.timeout(PROVIDER_TIMEOUT_MS);
+  if (!requestSignal) return timeout;
+  return typeof AbortSignal.any === "function" ? AbortSignal.any([requestSignal, timeout]) : requestSignal;
+}
 
 export function stripFallbackMarkers(content: string): string {
   return content.replace(/\[م:[^\]]+\]/g, "").trim();
@@ -157,7 +164,7 @@ ${courseLines || "لم يسجل بعد"}
 ${weakAreasText}`;
 }
 
-async function callXKiro(messages: ChatMessage[]): Promise<AIChatResult | null> {
+async function callXKiro(messages: ChatMessage[], requestSignal?: AbortSignal): Promise<AIChatResult | null> {
   if (!XKIRO_API_KEY) return null;
   try {
     const sys = messages.find((m) => m.role === "system")?.content || "";
@@ -177,7 +184,7 @@ async function callXKiro(messages: ChatMessage[]): Promise<AIChatResult | null> 
         max_tokens: 1200,
         temperature: 0.5,
       }),
-      signal: AbortSignal.timeout(3500),
+      signal: providerSignal(requestSignal),
     });
     if (!res.ok) {
       const errData = await res.json().catch(() => ({}));
@@ -189,12 +196,12 @@ async function callXKiro(messages: ChatMessage[]): Promise<AIChatResult | null> 
     if (!raw) return null;
     return parseAIResponse(raw, "primary");
   } catch (err) {
-    console.error("[XKiro AI] Error:", err);
+    console.warn("[AI Provider XKiro] Error:", err);
     return null;
   }
 }
 
-async function callGroq(messages: ChatMessage[]): Promise<AIChatResult | null> {
+async function callGroq(messages: ChatMessage[], requestSignal?: AbortSignal): Promise<AIChatResult | null> {
   if (!GROQ_API_KEY) return null;
   try {
     const sys = messages.find((m) => m.role === "system")?.content || "";
@@ -214,7 +221,7 @@ async function callGroq(messages: ChatMessage[]): Promise<AIChatResult | null> {
         max_tokens: 600,
         temperature: 0.3,
       }),
-      signal: AbortSignal.timeout(3000),
+      signal: providerSignal(requestSignal),
     });
     if (!res.ok) {
       const errData = await res.json().catch(() => ({}));
@@ -225,12 +232,12 @@ async function callGroq(messages: ChatMessage[]): Promise<AIChatResult | null> {
     if (!raw) return null;
     return parseAIResponse(raw, "primary");
   } catch (err) {
-    console.error("Groq AI error:", err);
+    console.warn("[AI Provider Groq] Error:", err);
     return null;
   }
 }
 
-async function callPrimary(messages: ChatMessage[]): Promise<AIChatResult | null> {
+async function callPrimary(messages: ChatMessage[], requestSignal?: AbortSignal): Promise<AIChatResult | null> {
   if (!PRIMARY_API_KEY) return null;
   try {
     const sys = messages.find((m) => m.role === "system")?.content || "";
@@ -252,7 +259,7 @@ async function callPrimary(messages: ChatMessage[]): Promise<AIChatResult | null
         max_tokens: 600,
         temperature: 0.5,
       }),
-      signal: AbortSignal.timeout(3500),
+      signal: providerSignal(requestSignal),
     });
     if (!res.ok) throw new Error(`Primary API: ${res.status}`);
     const data = (await res.json()) as { choices: Array<{ message: { content: string } }> };
@@ -260,12 +267,12 @@ async function callPrimary(messages: ChatMessage[]): Promise<AIChatResult | null
     if (!raw) return null;
     return parseAIResponse(raw, "primary");
   } catch (err) {
-    console.error("Primary AI error:", err);
+    console.warn("[AI Provider Primary] Error:", err);
     return null;
   }
 }
 
-async function callBackup(messages: ChatMessage[]): Promise<AIChatResult | null> {
+async function callBackup(messages: ChatMessage[], requestSignal?: AbortSignal): Promise<AIChatResult | null> {
   if (GEMINI_KEYS.length === 0) return null;
   const sys = messages.find((m) => m.role === "system")?.content || "";
   const userMsgs = messages.filter((m) => m.role !== "system");
@@ -274,10 +281,12 @@ async function callBackup(messages: ChatMessage[]): Promise<AIChatResult | null>
     : userMsgs.map((m) => `${m.role === "user" ? "المتعلم" : "المرشد"}: ${m.content}`).join("\n");
 
   const geminiBase = BACKUP_BASE_URL.endsWith("/models") ? BACKUP_BASE_URL : `${BACKUP_BASE_URL}/models`;
-  // Try each Gemini key in rotation
+  const models = Array.from(new Set([BACKUP_MODEL, "gemini-2.0-flash", "gemini-1.5-flash"]));
+  // Try each Gemini key/model in rotation
   for (const key of GEMINI_KEYS) {
-    try {
-      const url = `${geminiBase}/${BACKUP_MODEL}:generateContent?key=${key}`;
+    for (const model of models) {
+      try {
+      const url = `${geminiBase}/${model}:generateContent?key=${key}`;
       const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -285,19 +294,21 @@ async function callBackup(messages: ChatMessage[]): Promise<AIChatResult | null>
           contents: [{ parts: [{ text: promptText }] }],
           generationConfig: { maxOutputTokens: 600, temperature: 0.6 },
         }),
-        signal: AbortSignal.timeout(3500),
+        signal: providerSignal(requestSignal),
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        console.warn(`Gemini key failed (${res.status}):`, (errData as any)?.error?.message?.slice(0, 80));
+        console.warn(`[AI Provider Gemini] Error: ${res.status}`, (errData as any)?.error?.message?.slice(0, 80));
         continue;
       }
       const data = (await res.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
       const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
       if (!raw) continue;
       return parseAIResponse(raw, "backup");
-    } catch (err) {
-      console.warn("Gemini key error:", err);
+      } catch (err) {
+        if (requestSignal?.aborted) throw err;
+        console.warn("[AI Provider Gemini] Error:", err);
+      }
     }
   }
   return null;
@@ -811,6 +822,7 @@ export async function chatWithAI(
   history: ChatMessage[],
   studentContext: StudentContext,
   notifications?: string,
+  requestSignal?: AbortSignal,
 ): Promise<AIChatResult> {
   const contextSummary = summarizeContext(studentContext);
   const cleanHistory = history.slice(-8).map((m) => ({
@@ -844,20 +856,20 @@ export async function chatWithAI(
   if (primaryProvider === "deepseek" || primaryProvider === "deepseek_v4_flash") {
     // DeepSeek prioritized with Gemini hedge
     fastResult = await raceWithHedge(
-      callXKiro(messages).then((r) => r || callPrimary(messages)),
-      () => callBackup(messages)
+      callXKiro(messages, requestSignal).then((r) => r || callPrimary(messages, requestSignal)),
+      () => callBackup(messages, requestSignal)
     );
   } else if (primaryProvider === "digitalocean" || primaryProvider === "groq") {
     // Groq / DigitalOcean prioritized with Gemini hedge
     fastResult = await raceWithHedge(
-      callGroq(messages),
-      () => callBackup(messages)
+      callGroq(messages, requestSignal),
+      () => callBackup(messages, requestSignal)
     );
   } else {
     // Default: Gemini Pool prioritized with DeepSeek/Groq hedge
     fastResult = await raceWithHedge(
-      callBackup(messages),
-      () => callGroq(messages).then((r) => r || callXKiro(messages))
+      callBackup(messages, requestSignal),
+      () => callGroq(messages, requestSignal).then((r) => r || callXKiro(messages, requestSignal))
     );
   }
 
@@ -867,7 +879,7 @@ export async function chatWithAI(
   }
 
   // 3. Fast backup sweep if race didn't resolve
-  const backupSweep = (await callBackup(messages)) || (await callGroq(messages)) || (await callPrimary(messages));
+  const backupSweep = (await callBackup(messages, requestSignal)) || (await callGroq(messages, requestSignal)) || (await callPrimary(messages, requestSignal));
   if (backupSweep?.message) {
     backupSweep.message = stripFallbackMarkers(backupSweep.message);
     return backupSweep;

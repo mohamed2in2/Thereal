@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { checkHomeworkAccess } from "@/lib/authorization";
+import { canAccessContent, ContentType } from "@/lib/content-access-engine";
 
 /** GET /api/homework/[id] — student fetches homework details (answers hidden) */
 export async function GET(
@@ -44,6 +45,24 @@ export async function GET(
   // Student: only published
   if (session.role === "student" && !homework.isPublished)
     return NextResponse.json({ error: "الواجب غير منشور" }, { status: 403 });
+
+  if (session.role === "student") {
+    const access = await canAccessContent(session.id, {
+      type: ContentType.HOMEWORK,
+      sourceId: homeworkId,
+      title: homework.title,
+    });
+    if ("requiredItem" in access) {
+      return NextResponse.json(
+        {
+          error: `يجب إكمال «${access.requiredItem.title}» أولًا.`,
+          code: access.code,
+          requiredItem: access.requiredItem,
+        },
+        { status: 403 }
+      );
+    }
+  }
 
   // Strip sensitive fields for students
   const safe = {

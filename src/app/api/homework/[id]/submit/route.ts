@@ -5,6 +5,11 @@ import { evaluateTerminalWithAI } from "@/lib/ai-service";
 import { checkHomeworkAccess } from "@/lib/authorization";
 import path from "path";
 import fs from "fs/promises";
+import {
+  canAccessContent,
+  ContentType,
+  recordContentCompleted,
+} from "@/lib/content-access-engine";
 
 /** Normalize output: collapse whitespace, trim lines, lowercase */
 function normalizeOutput(s: string): string {
@@ -35,10 +40,30 @@ export async function POST(
   if (!hw || !hw.isPublished)
     return NextResponse.json({ error: "الواجب غير موجود" }, { status: 404 });
 
+  if (hw.dueAt && new Date() > hw.dueAt) {
+    return NextResponse.json({ error: "انتهى موعد تسليم الواجب" }, { status: 400 });
+  }
+
   // Enforce enrollment validation
   const hasAccess = await checkHomeworkAccess(session.id, session.role, homeworkId);
   if (!hasAccess) {
     return NextResponse.json({ error: "غير مصرح لك بالوصول لهذا الواجب" }, { status: 403 });
+  }
+
+  const access = await canAccessContent(session.id, {
+    type: ContentType.HOMEWORK,
+    sourceId: homeworkId,
+    title: hw.title,
+  });
+  if ("requiredItem" in access) {
+    return NextResponse.json(
+      {
+        error: `يجب إكمال «${access.requiredItem.title}» أولًا.`,
+        code: access.code,
+        requiredItem: access.requiredItem,
+      },
+      { status: 403 }
+    );
   }
 
   // Prevent re-submission
@@ -116,19 +141,36 @@ export async function POST(
     return NextResponse.json({ error: "هذا الواجب لا يحتاج إرسال" }, { status: 400 });
   }
 
-  const submission = await prisma.homeworkSubmission.create({
-    data: {
-      homeworkId,
-      studentId:       session.id,
-      answers:         body.answers ? JSON.stringify(body.answers) : null,
-      score,
-      totalQ,
-      submittedOutput: body.submittedOutput ?? null,
-      fileUrl:         body.fileUrl ?? null,
-      fileName:        body.fileName ?? null,
-      status,
-    },
-  });
+  let submission;
+  try {
+    submission = await prisma.$transaction(async (tx) => {
+      const savedSubmission = await tx.homeworkSubmission.create({
+        data: {
+          homeworkId,
+          studentId:       session.id,
+          answers:         body.answers ? JSON.stringify(body.answers) : null,
+          score,
+          totalQ,
+          submittedOutput: body.submittedOutput ?? null,
+          fileUrl:         body.fileUrl ?? null,
+          fileName:        body.fileName ?? null,
+          status,
+        },
+      });
+      await recordContentCompleted(
+        session.id,
+        { type: ContentType.HOMEWORK, sourceId: homeworkId, title: hw.title },
+        { score, completedAt: savedSubmission.completedAt },
+        tx
+      );
+      return savedSubmission;
+    });
+  } catch (error: any) {
+    if (error?.code === "P2002") {
+      return NextResponse.json({ error: "لقد أرسلت هذا الواجب بالفعل", alreadySubmitted: true }, { status: 409 });
+    }
+    throw error;
+  }
 
   return NextResponse.json({ submission, status });
 }

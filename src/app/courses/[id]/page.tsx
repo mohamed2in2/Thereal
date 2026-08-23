@@ -8,6 +8,8 @@ import { Footer } from "@/components/ui/Footer";
 import { useToast } from "@/components/ui/Toast";
 import { CourseFeedbackForm } from "@/components/ai/CourseFeedbackForm";
 import { SecurePlayer } from "@/components/ui/SecurePlayer";
+import { SkeletonCard } from "@/components/ui/Skeleton";
+import { clientErrorMessage } from "@/lib/client-error-message";
 
 type CoursePreview = {
   id: string;
@@ -109,7 +111,7 @@ export default function CourseProductPage() {
       if (res.ok && data.embedUrl) {
         setDemo({ title: video.title, embedUrl: data.embedUrl, provider: data.provider });
       } else {
-        toastError(data.error || "تعذر تشغيل المحاضرة التجريبية");
+        toastError(clientErrorMessage(res.status, data));
       }
     } catch {
       toastError("تعذر تشغيل المحاضرة التجريبية");
@@ -181,7 +183,7 @@ export default function CourseProductPage() {
       } else if (res.status === 401) {
         router.push(`/login?redirect_url=/courses/${courseId}`);
       } else {
-        toastError(data.error || "تعذر التسجيل");
+        toastError(clientErrorMessage(res.status, data));
       }
     } catch {
       toastError("حدث خطأ أثناء التسجيل، حاول مرة أخرى");
@@ -206,7 +208,7 @@ export default function CourseProductPage() {
         `/payment?amount=${price}&courseId=${courseId}&courseTitle=${encodeURIComponent(course?.title || "")}&return=${encodeURIComponent(`/courses/${courseId}`)}&context=${ctx}`
       );
     } else {
-      toastError(data.error || "تعذر إتمام الشراء");
+      toastError(clientErrorMessage(res.status, data));
     }
   };
 
@@ -227,16 +229,20 @@ export default function CourseProductPage() {
     } else if (res.status === 401) {
       router.push("/login");
     } else {
-      toastError(data.error || "كود غير صحيح أو منتهي الصلاحية");
+      toastError(clientErrorMessage(res.status, data));
     }
   };
 
   if (loading) {
     return (
-      <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-gray-950">
+      <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-gray-950" dir="rtl">
         <Navbar user={user} />
-        <main className="flex-1 flex items-center justify-center">
-          <div className="text-gray-400 text-lg">جارٍ التحميل...</div>
+        <main className="flex-1 px-4 py-8 sm:px-6 lg:px-8">
+          <div className="mx-auto grid max-w-6xl grid-cols-1 gap-6 lg:grid-cols-3">
+            <div className="skeleton h-64 rounded-3xl lg:col-span-2" />
+            <SkeletonCard />
+            <div className="skeleton h-40 rounded-3xl lg:col-span-3" />
+          </div>
         </main>
         <Footer />
       </div>
@@ -245,7 +251,7 @@ export default function CourseProductPage() {
 
   if (fetchError) {
     return (
-      <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-gray-950">
+      <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-gray-950" dir="rtl">
         <Navbar user={user} />
         <main className="flex-1 flex items-center justify-center">
           <div className="text-center space-y-4">
@@ -264,7 +270,7 @@ export default function CourseProductPage() {
 
   if (!course) {
     return (
-      <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-gray-950">
+      <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-gray-950" dir="rtl">
         <Navbar user={user} />
         <main className="flex-1 flex items-center justify-center">
           <div className="text-center">

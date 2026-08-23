@@ -290,6 +290,32 @@ export default function EnvironmentsPage() {
           })()}
 
           {/* ════════ SECTION 1: DEVELOPER PLAYGROUNDS ════════ */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.45 }}
+            className="mb-14"
+          >
+            <Link
+              href="/environments/programming?tab=curriculum"
+              className="group block rounded-3xl border border-cyan-300/30 bg-slate-950 p-6 text-white shadow-2xl shadow-cyan-950/30 transition-all duration-300 hover:-translate-y-1 hover:border-cyan-300/60 hover:shadow-cyan-900/40 sm:p-8"
+            >
+              <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex items-start gap-4" dir="rtl">
+                  <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-400 to-sky-600 text-2xl shadow-lg shadow-cyan-500/30" aria-hidden="true">◈</span>
+                  <div>
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
+                      <h2 className="text-2xl font-black tracking-tight text-white sm:text-3xl">أسئلة برمجة المنهج</h2>
+                      <span className="rounded-full border border-cyan-300/35 bg-cyan-300/10 px-3 py-1 text-xs font-bold text-cyan-200">منهج 2026 الرسمي</span>
+                    </div>
+                    <p className="max-w-3xl text-sm leading-7 text-slate-300 sm:text-base">بنك أسئلة وتحديات تفاعلية تغطي كافة دروس البرمجة والأمن السيبراني والذكاء الاصطناعي مع توثيق المصادر من كتاب الوزارة.</p>
+                  </div>
+                </div>
+                <span className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-cyan-400 to-sky-500 px-5 py-3 text-sm font-black text-slate-950 transition-transform duration-300 group-hover:scale-105" dir="rtl">ابدأ التدريب <span aria-hidden="true">←</span></span>
+              </div>
+            </Link>
+          </motion.div>
+
           <div className="mb-14">
             <div className="flex items-center justify-between mb-6 pb-3 border-b border-gray-200 dark:border-white/10">
               <div className="flex items-center gap-2.5">
