@@ -39,7 +39,7 @@ Code-UP is a premium Egyptian EdTech platform targeting secondary and primary st
 │  │ • Native Security     │   │   • Adaptive 1-Click Fallback (InstaPay/Fawry/Wallet) │  │
 │  │   (Google Drive Auto- │   │   • WhatsApp (Worker-0 Baileys + Meta Cloud API)      │  │
 │  │    Ingest & Stream)   │   │                                                       │  │
-│  │ • VdoCipher (DRM)     │   │                                                       │  │
+│  │ • VdoCipher (DRM)     │   │             │  │
 │  │ • Bunny (Signed URL)  │   │                                                       │  │
 │  │ • YouTube (Unlisted)  │   │                                                      │  │
 │  └───────────────────────┘   └───────────────────────────────────────────────────────┘  │
