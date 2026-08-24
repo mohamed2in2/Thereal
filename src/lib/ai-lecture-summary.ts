@@ -8,7 +8,7 @@ const XKIRO_MODEL = process.env.XKIRO_MODEL || "deepseek/deepseek-v4-flash";
 // Groq
 const GROQ_API_KEY = process.env.GROQ_API_KEY || "";
 const GROQ_BASE_URL = "https://api.groq.com/openai/v1";
-const GROQ_MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+const GROQ_MODEL = process.env.GROQ_MODEL || "allam-2-7b";
 
 // Gemini fallback
 const GEMINI_KEY = process.env.GEMINI_KEY_1 || process.env.GEMINI_API_KEY || "";
@@ -139,7 +139,7 @@ ${questionsContext}
   // 3. Try Gemini
   if (GEMINI_KEY) {
     try {
-      const endpoint = `${GEMINI_BASE}/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`;
+      const endpoint = `${GEMINI_BASE}/models/gemini-flash-lite-latest:generateContent?key=${GEMINI_KEY}`;
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

@@ -9,7 +9,7 @@ const XKIRO_MODEL = process.env.XKIRO_MODEL || "deepseek/deepseek-v4-flash";
 // Groq — secondary fallback
 const GROQ_API_KEY = process.env.GROQ_API_KEY || "";
 const GROQ_BASE_URL = "https://api.groq.com/openai/v1";
-const GROQ_MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+const GROQ_MODEL = process.env.GROQ_MODEL || "allam-2-7b";
 
 // DeepSeek official fallback
 const PRIMARY_API_KEY = process.env.AI_PRIMARY_API_KEY || process.env.DEEPSEEK_API_KEY || process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY || "";
@@ -24,7 +24,7 @@ const GEMINI_KEYS = [
 ].filter(Boolean);
 const BACKUP_BASE_RAW = process.env.AI_BACKUP_BASE_URL || "https://generativelanguage.googleapis.com/v1beta";
 const BACKUP_BASE_URL = BACKUP_BASE_RAW.replace(/\/+$/, "");
-const BACKUP_MODEL = process.env.AI_BACKUP_MODEL || "gemini-2.0-flash";
+const BACKUP_MODEL = process.env.AI_BACKUP_MODEL || "gemini-flash-lite-latest";
 const PROVIDER_TIMEOUT_MS = 12_000;
 
 function providerSignal(requestSignal?: AbortSignal): AbortSignal {
@@ -289,7 +289,7 @@ async function callBackup(messages: ChatMessage[], requestSignal?: AbortSignal):
     : userMsgs.map((m) => `${m.role === "user" ? "المتعلم" : "المرشد"}: ${m.content}`).join("\n");
 
   const geminiBase = BACKUP_BASE_URL.endsWith("/models") ? BACKUP_BASE_URL : `${BACKUP_BASE_URL}/models`;
-  const models = Array.from(new Set([BACKUP_MODEL, "gemini-flash-latest", "gemini-flash-lite-latest", "gemini-2.5-flash", "gemini-1.5-flash"]));
+  const models = Array.from(new Set([BACKUP_MODEL, "gemini-flash-lite-latest", "gemini-flash-latest", "gemini-2.5-pro"]));
   // Try each Gemini key/model in rotation
   for (const key of GEMINI_KEYS) {
     for (const model of models) {
@@ -307,6 +307,7 @@ async function callBackup(messages: ChatMessage[], requestSignal?: AbortSignal):
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}));
           console.warn(`[AI Provider Gemini (${model})] Error: ${res.status}`, (errData as any)?.error?.message?.slice(0, 80));
+          if (res.status === 401 || res.status === 403) break;
           continue;
         }
         const data = (await res.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };

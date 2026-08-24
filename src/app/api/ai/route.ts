@@ -7,7 +7,7 @@ const XKIRO_MODEL = process.env.XKIRO_MODEL || "deepseek/deepseek-v4-flash";
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY || "";
 const GROQ_BASE_URL = "https://api.groq.com/openai/v1";
-const GROQ_MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+const GROQ_MODEL = process.env.GROQ_MODEL || "allam-2-7b";
 
 // Gemini fallback keys (rotation)
 const GEMINI_KEYS = [
@@ -17,7 +17,7 @@ const GEMINI_KEYS = [
 ].filter(Boolean);
 const BACKUP_BASE_RAW = process.env.AI_BACKUP_BASE_URL || "https://generativelanguage.googleapis.com/v1beta";
 const BACKUP_BASE_URL = BACKUP_BASE_RAW.replace(/\/+$/, "");
-const BACKUP_MODEL = process.env.AI_BACKUP_MODEL || "gemini-2.0-flash";
+const BACKUP_MODEL = process.env.AI_BACKUP_MODEL || "gemini-flash-lite-latest";
 
 async function callXKiro(messages: { role: string; content: string }[]): Promise<string | null> {
   if (!XKIRO_API_KEY) return null;
