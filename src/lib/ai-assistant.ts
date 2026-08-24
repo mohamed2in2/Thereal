@@ -18,9 +18,9 @@ const PRIMARY_MODEL = process.env.AI_PRIMARY_MODEL || process.env.DEEPSEEK_MODEL
 
 // Gemini fallback (with multiple key rotation)
 const GEMINI_KEYS = [
-  process.env.GEMINI_KEY_1 || process.env.GEMINI_API_KEY || "",
-  process.env.GEMINI_KEY_2 || process.env.GEMINI_API_KEY_SECONDARY || "",
-  process.env.GEMINI_KEY_3 || "",
+  process.env.GEMINI_KEY_1 || process.env.GEMINI_API_KEY_1 || process.env.GEMINI_API_KEY || "",
+  process.env.GEMINI_KEY_2 || process.env.GEMINI_API_KEY_2 || process.env.GEMINI_API_KEY_SECONDARY || "",
+  process.env.GEMINI_KEY_3 || process.env.GEMINI_API_KEY_3 || "",
 ].filter(Boolean);
 const BACKUP_BASE_RAW = process.env.AI_BACKUP_BASE_URL || "https://generativelanguage.googleapis.com/v1beta";
 const BACKUP_BASE_URL = BACKUP_BASE_RAW.replace(/\/+$/, "");

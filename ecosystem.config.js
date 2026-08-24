@@ -2,8 +2,7 @@ module.exports = {
   apps: [
     {
       name: "Thefake",
-      script: "node_modules/next/dist/bin/next",
-      args: "start",
+      script: "server.js",
       instances: "max",
       exec_mode: "cluster",
       env: {

@@ -190,7 +190,7 @@ export async function resolvePlanProviders(): Promise<{
       id: "env-backup",
       name: "Backup AI (ENV)",
       baseUrl,
-      model: process.env.AI_BACKUP_MODEL || "gemini-2.0-flash-lite",
+      model: process.env.AI_BACKUP_MODEL || "gemini-2.0-flash",
       kind: providerKind(baseUrl),
       key,
     };
