@@ -124,7 +124,8 @@ class WhatsAppClientManager {
         }
         this.socket = null;
         this.state = "DISCONNECTED";
-        setTimeout(() => void this.initialize(), 1000);
+        this.isInitializing = false;
+        logger.info("QR code expired after max attempts; paused until manual reconnection from admin panel");
         return;
       }
     }

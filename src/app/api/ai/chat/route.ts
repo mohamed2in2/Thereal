@@ -420,42 +420,17 @@ export async function POST(req: NextRequest) {
 
     const notifications = notifItems.length > 0 ? `تحديثات طلباتك:\n${notifItems.map((n) => `• ${n}`).join("\n")}` : undefined;
 
-    // Get AI response — try chatWithAI first (runs Gemini -> Anthropic/DeepSeek -> smart fallbackResponse)
+    // Get AI response — runs Gemini directly
     let result;
     try {
       result = await chatWithAI(trimmedMsg, chatHistory, context, notifications, req.signal);
     } catch (chatErr) {
-      console.error("[chat/route] chatWithAI threw, falling back to AIEngine:", chatErr);
-      try {
-        const { AIEngine } = await import("@/ai/AIEngine");
-        const engine = new AIEngine();
-        const engineRes = await engine.processRequest({
-          userMessage: message,
-          studentId: session.id,
-          subject: context?.courses?.[0]?.subject || "عام",
-          grade: "3",
-        });
-        const resText = engineRes?.formattedResponse?.renderedContent || engineRes?.formattedResponse?.rawContent;
-        if (engineRes && engineRes.success && resText) {
-          result = {
-            message: resText,
-            actions: [] as AIAction[],
-            source: (engineRes.telemetry?.provider || "primary") as "primary" | "backup" | "fallback",
-          };
-        } else {
-          result = {
-            message: "أهلاً بيك! أنا مرشدك الذكي 🌟 قولي إيه اللي محتاجه وسيتم مساعدتك فوراً!",
-            actions: [] as AIAction[],
-            source: "fallback" as const,
-          };
-        }
-      } catch {
-        result = {
-          message: "أهلاً بيك! أنا مرشدك الذكي 🌟 قولي إيه اللي محتاجه وسيتم مساعدتك فوراً!",
-          actions: [] as AIAction[],
-          source: "fallback" as const,
-        };
-      }
+      console.error("[chat/route] chatWithAI threw:", chatErr);
+      result = {
+        message: "مساعد الذكاء الاصطناعي قيد التحديث والصيانة حالياً، يرجى المحاولة مرة أخرى لاحقاً ⏳",
+        actions: [] as AIAction[],
+        source: "fallback" as const,
+      };
     }
 
     // Execute AI actions if any

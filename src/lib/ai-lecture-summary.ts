@@ -68,75 +68,7 @@ ${questionsContext}
 
 اكتب الملخص الشامل بتنسيق Markdown بالأقسام الأربعة المطلوبة.`;
 
-  // 1. Try XKiro (DeepSeek v4 Flash)
-  if (XKIRO_API_KEY) {
-    try {
-      const res = await fetch(`${XKIRO_BASE_URL}/chat/completions`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${XKIRO_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: XKIRO_MODEL,
-          messages: [
-            { role: "system", content: SUMMARY_SYSTEM_PROMPT },
-            { role: "user", content: userPrompt },
-          ],
-          max_tokens: 2000,
-          temperature: 0.4,
-        }),
-        signal: AbortSignal.timeout(8000),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        const content = data.choices?.[0]?.message?.content?.trim();
-        if (content && content.length > 100) {
-          summaryCache.set(cacheKey, { summary: content, generatedAt: Date.now() });
-          return content;
-        }
-      }
-    } catch (e) {
-      console.warn("[AI Lecture Summary] XKiro failed, falling back to Groq...", e);
-    }
-  }
-
-  // 2. Try Groq (Llama-3.3-70b)
-  if (GROQ_API_KEY) {
-    try {
-      const res = await fetch(`${GROQ_BASE_URL}/chat/completions`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${GROQ_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: GROQ_MODEL,
-          messages: [
-            { role: "system", content: SUMMARY_SYSTEM_PROMPT },
-            { role: "user", content: userPrompt },
-          ],
-          max_tokens: 2000,
-          temperature: 0.4,
-        }),
-        signal: AbortSignal.timeout(8000),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        const content = data.choices?.[0]?.message?.content?.trim();
-        if (content && content.length > 100) {
-          summaryCache.set(cacheKey, { summary: content, generatedAt: Date.now() });
-          return content;
-        }
-      }
-    } catch (e) {
-      console.warn("[AI Lecture Summary] Groq failed, falling back to Gemini...", e);
-    }
-  }
-
-  // 3. Try Gemini
+  // Exclusively try Google Gemini
   if (GEMINI_KEY) {
     try {
       const endpoint = `${GEMINI_BASE}/models/gemini-flash-lite-latest:generateContent?key=${GEMINI_KEY}`;
@@ -160,7 +92,7 @@ ${questionsContext}
         }
       }
     } catch (e) {
-      console.warn("[AI Lecture Summary] Gemini failed...", e);
+      console.warn("[AI Lecture Summary] Gemini call failed:", e);
     }
   }
 

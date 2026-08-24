@@ -844,60 +844,23 @@ export async function chatWithAI(
     { role: "user", content: userMessage },
   ];
 
-  // 1. Dynamic fast-path routing based on active primary provider
-  let primaryProvider = "gemini";
+  // 1. Exclusively use Google Gemini Pool
   try {
-    const { ConfigManager } = await import("@/ai/config/AIConfig");
-    primaryProvider = ConfigManager.getInstance().getConfig().primaryProvider || "gemini";
-  } catch {
-    /* fallback to gemini */
+    const geminiResult = await callBackup(messages, requestSignal);
+    if (geminiResult?.message) {
+      geminiResult.message = stripFallbackMarkers(geminiResult.message);
+      return geminiResult;
+    }
+  } catch (err) {
+    console.warn("[chatWithAI] Gemini call failed:", err);
   }
 
-  if (primaryProvider === "mock") {
-    const fb = fallbackResponse(userMessage, studentContext, history, notifications);
-    fb.message = stripFallbackMarkers(fb.message);
-    return fb;
-  }
-
-  // 2. High-speed hedged execution based on configured provider
-  let fastResult: AIChatResult | null = null;
-
-  if (primaryProvider === "deepseek" || primaryProvider === "deepseek_v4_flash") {
-    // DeepSeek prioritized with Gemini hedge
-    fastResult = await raceWithHedge(
-      callXKiro(messages, requestSignal).then((r) => r || callPrimary(messages, requestSignal)),
-      () => callBackup(messages, requestSignal)
-    );
-  } else if (primaryProvider === "digitalocean" || primaryProvider === "groq") {
-    // Groq / DigitalOcean prioritized with Gemini hedge
-    fastResult = await raceWithHedge(
-      callGroq(messages, requestSignal),
-      () => callBackup(messages, requestSignal)
-    );
-  } else {
-    // Default: Gemini Pool prioritized with DeepSeek/Groq hedge
-    fastResult = await raceWithHedge(
-      callBackup(messages, requestSignal),
-      () => callGroq(messages, requestSignal).then((r) => r || callXKiro(messages, requestSignal))
-    );
-  }
-
-  if (fastResult?.message) {
-    fastResult.message = stripFallbackMarkers(fastResult.message);
-    return fastResult;
-  }
-
-  // 3. Fast backup sweep if race didn't resolve
-  const backupSweep = (await callBackup(messages, requestSignal)) || (await callGroq(messages, requestSignal)) || (await callPrimary(messages, requestSignal));
-  if (backupSweep?.message) {
-    backupSweep.message = stripFallbackMarkers(backupSweep.message);
-    return backupSweep;
-  }
-
-  // 4. Instant smart menu fallback (<1ms)
-  const fb = fallbackResponse(userMessage, studentContext, history, notifications);
-  fb.message = stripFallbackMarkers(fb.message);
-  return fb;
+  // 2. Friendly update fallback message if Gemini fails or is unreachable
+  return {
+    message: "مساعد الذكاء الاصطناعي قيد التحديث والصيانة حالياً، يرجى المحاولة مرة أخرى لاحقاً ⏳",
+    actions: [],
+    source: "fallback",
+  };
 }
 
 export async function analyzeQuizAnswer(
@@ -927,7 +890,7 @@ export async function analyzeQuizAnswer(
     { role: "user", content: prompt },
   ];
 
-  const result = (await callGroq(messages)) || (await callPrimary(messages));
+  const result = await callBackup(messages);
   if (result?.message) {
     try {
       const match = result.message.match(/\{[\s\S]*\}/);
@@ -946,7 +909,7 @@ export async function analyzeQuizAnswer(
 
   return {
     wasMisgraded: false,
-    reasoning: "لم نتمكن من تحليل السؤال تلقائياً، يرجى مراجعة المعلم",
+    reasoning: "الذكاء الاصطناعي قيد التحديث حالياً، يرجى مراجعة المعلم مباشرة",
     confidence: 0,
   };
 }
@@ -967,7 +930,7 @@ export async function generateInsights(
     },
   ];
 
-  const result = (await callGroq(messages)) || (await callPrimary(messages));
+  const result = await callBackup(messages);
   if (result?.message) {
     try {
       const match = result.message.match(/\{[\s\S]*\}/);
