@@ -68,8 +68,8 @@ export async function verifyAuthoritativePrice(params: {
     }
 
     // The grade selects which tier of TeacherProfile.stagePricing applies.
-    // If student has a recorded educationalStage, default to it, but if client requested
-    // a specific grade that is open for booking on the teacher profile, allow it.
+    // If student has a recorded educationalStage, the server's record is authoritative
+    // and cannot be downgraded by a client-supplied grade parameter.
     let studentProfileStage: string | undefined = undefined;
     if (studentId) {
       const gradeOwner = await prisma.user.findUnique({
@@ -81,7 +81,7 @@ export async function verifyAuthoritativePrice(params: {
       }
     }
 
-    if (!grade && studentProfileStage) {
+    if (studentProfileStage) {
       grade = studentProfileStage;
     }
 

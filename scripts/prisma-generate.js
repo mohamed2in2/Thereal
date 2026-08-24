@@ -51,7 +51,8 @@ if (dbUrl.startsWith('postgres')) {
 }
 
 try {
-  execSync('npx prisma@6.19.3 generate', { stdio: 'inherit' });
+  const prismaBin = require.resolve('prisma/build/index.js');
+  execSync(`node "${prismaBin}" generate`, { stdio: 'inherit' });
 } catch (e) {
   console.error('Failed to generate Prisma client:', e);
   process.exit(1);

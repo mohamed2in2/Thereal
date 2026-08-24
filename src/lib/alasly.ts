@@ -172,8 +172,11 @@ export async function getAlaslyPlaybackToken(
       title: play.title,
     };
   } catch (error: any) {
+    if (error?.message && error.message.includes("not configured")) {
+      throw error;
+    }
     console.error("[Alasly Video] Failed to obtain playback token for video %s:", videoId, error.message);
-    throw new Error("تعذر تشغيل الفيديو المحمي، يرجى المحاولة مرة أخرى لاحقاً.");
+    throw new Error(`Alasly video service temporarily unavailable: ${error.message || "تعذر تشغيل الفيديو المحمي"}`);
   }
 }
 
