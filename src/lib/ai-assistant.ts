@@ -139,6 +139,8 @@ function summarizeContext(ctx: StudentContext): string {
 
   const insightsText = ctx.aiInsights.length > 0
     ? ctx.aiInsights.map((i) => `- [${i.type}] ${i.title}: ${i.description}`).join("\n")
+
+
     : "لا يوجد رؤى سابقة";
 
   const feedbackText = ctx.recentFeedback.length > 0
@@ -196,6 +198,7 @@ async function callXKiro(messages: ChatMessage[], requestSignal?: AbortSignal): 
     if (!raw) return null;
     return parseAIResponse(raw, "primary");
   } catch (err) {
+    if (requestSignal?.aborted) throw err;
     console.warn("[AI Provider XKiro] Error:", err);
     return null;
   }
@@ -203,38 +206,44 @@ async function callXKiro(messages: ChatMessage[], requestSignal?: AbortSignal): 
 
 async function callGroq(messages: ChatMessage[], requestSignal?: AbortSignal): Promise<AIChatResult | null> {
   if (!GROQ_API_KEY) return null;
-  try {
-    const sys = messages.find((m) => m.role === "system")?.content || "";
-    const userMsgs = messages.filter((m) => m.role !== "system");
-    const res = await fetch(`${GROQ_BASE_URL}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${GROQ_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: GROQ_MODEL,
-        messages: [
-          { role: "system", content: sys },
-          ...userMsgs.map((m) => ({ role: m.role, content: m.content })),
-        ],
-        max_tokens: 600,
-        temperature: 0.3,
-      }),
-      signal: providerSignal(requestSignal),
-    });
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
-      throw new Error(`Groq API: ${res.status} — ${(errData as any)?.error?.message || ""}`);
+  const sys = messages.find((m) => m.role === "system")?.content || "";
+  const userMsgs = messages.filter((m) => m.role !== "system");
+  const models = Array.from(new Set([GROQ_MODEL, "allam-2-7b", "qwen/qwen3.6-27b"]));
+
+  for (const model of models) {
+    try {
+      const res = await fetch(`${GROQ_BASE_URL}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${GROQ_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: "system", content: sys },
+            ...userMsgs.map((m) => ({ role: m.role, content: m.content })),
+          ],
+          max_tokens: 600,
+          temperature: 0.3,
+        }),
+        signal: providerSignal(requestSignal),
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        console.warn(`[AI Provider Groq (${model})] Error: ${res.status}`, (errData as any)?.error?.message?.slice(0, 80));
+        continue;
+      }
+      const data = (await res.json()) as { choices: Array<{ message: { content: string } }> };
+      const raw = data.choices[0]?.message?.content || "";
+      if (!raw) continue;
+      return parseAIResponse(raw, "primary");
+    } catch (err) {
+      if (requestSignal?.aborted) throw err;
+      console.warn(`[AI Provider Groq (${model})] Error:`, err);
     }
-    const data = (await res.json()) as { choices: Array<{ message: { content: string } }> };
-    const raw = data.choices[0]?.message?.content || "";
-    if (!raw) return null;
-    return parseAIResponse(raw, "primary");
-  } catch (err) {
-    console.warn("[AI Provider Groq] Error:", err);
-    return null;
   }
+  return null;
 }
 
 async function callPrimary(messages: ChatMessage[], requestSignal?: AbortSignal): Promise<AIChatResult | null> {
@@ -242,7 +251,6 @@ async function callPrimary(messages: ChatMessage[], requestSignal?: AbortSignal)
   try {
     const sys = messages.find((m) => m.role === "system")?.content || "";
     const userMsgs = messages.filter((m) => m.role !== "system");
-    // OpenAI-compatible (DeepSeek / OpenAI)
     const baseUrl = PRIMARY_API_URL.replace(/\/chat\/completions$/, "").replace(/\/messages$/, "");
     const res = await fetch(`${baseUrl}/chat/completions`, {
       method: "POST",
@@ -281,30 +289,30 @@ async function callBackup(messages: ChatMessage[], requestSignal?: AbortSignal):
     : userMsgs.map((m) => `${m.role === "user" ? "المتعلم" : "المرشد"}: ${m.content}`).join("\n");
 
   const geminiBase = BACKUP_BASE_URL.endsWith("/models") ? BACKUP_BASE_URL : `${BACKUP_BASE_URL}/models`;
-  const models = Array.from(new Set([BACKUP_MODEL, "gemini-2.0-flash", "gemini-1.5-flash"]));
+  const models = Array.from(new Set([BACKUP_MODEL, "gemini-flash-latest", "gemini-flash-lite-latest", "gemini-2.5-flash", "gemini-1.5-flash"]));
   // Try each Gemini key/model in rotation
   for (const key of GEMINI_KEYS) {
     for (const model of models) {
       try {
-      const url = `${geminiBase}/${model}:generateContent?key=${key}`;
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: promptText }] }],
-          generationConfig: { maxOutputTokens: 600, temperature: 0.6 },
-        }),
-        signal: providerSignal(requestSignal),
-      });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        console.warn(`[AI Provider Gemini] Error: ${res.status}`, (errData as any)?.error?.message?.slice(0, 80));
-        continue;
-      }
-      const data = (await res.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
-      const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-      if (!raw) continue;
-      return parseAIResponse(raw, "backup");
+        const url = `${geminiBase}/${model}:generateContent?key=${key}`;
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: promptText }] }],
+            generationConfig: { maxOutputTokens: 600, temperature: 0.6 },
+          }),
+          signal: providerSignal(requestSignal),
+        });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          console.warn(`[AI Provider Gemini (${model})] Error: ${res.status}`, (errData as any)?.error?.message?.slice(0, 80));
+          continue;
+        }
+        const data = (await res.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
+        const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        if (!raw) continue;
+        return parseAIResponse(raw, "backup");
       } catch (err) {
         if (requestSignal?.aborted) throw err;
         console.warn("[AI Provider Gemini] Error:", err);

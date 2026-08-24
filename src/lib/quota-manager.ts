@@ -4,8 +4,8 @@
 // =========================================================
 
 export type ModelId =
-  | "gemini-2.5-flash"
-  | "gemini-2.0-flash"
+  | "gemini-flash-latest"
+  | "gemini-flash-lite-latest"
   | "gemini-2.5-flash-tts"
   | "gemini-2.0-flash-live-001"
   | "gemini-2.5-flash-preview-native-audio-dialog"
@@ -22,8 +22,8 @@ export type TaskType =
 
 // ── Quota limits (matches Google AI Studio free tier) ──────────────────────
 export const QUOTA_LIMITS: Record<ModelId, { rpm: number | null; tpm: number; rpd: number | null }> = {
-  "gemini-2.5-flash":                               { rpm: 5,    tpm: 250_000,   rpd: 20   },
-  "gemini-2.0-flash":                               { rpm: 15,   tpm: 250_000,   rpd: 500  },
+  "gemini-flash-latest":                            { rpm: 15,   tpm: 250_000,   rpd: 500  },
+  "gemini-flash-lite-latest":                       { rpm: 15,   tpm: 250_000,   rpd: 500  },
   "gemini-2.5-flash-tts":                           { rpm: 3,    tpm: 10_000,    rpd: 10   },
   "gemini-2.0-flash-live-001":                      { rpm: null, tpm: 65_000,    rpd: null }, // ∞
   "gemini-2.5-flash-preview-native-audio-dialog":   { rpm: null, tpm: 1_000_000, rpd: null }, // ∞
@@ -32,13 +32,13 @@ export const QUOTA_LIMITS: Record<ModelId, { rpm: number | null; tpm: number; rp
 
 // ── Task → model routing (Live-first for student-facing tasks) ─────────────
 export const TASK_ROUTING: Record<TaskType, ModelId[]> = {
-  "student-chat":        ["gemini-2.0-flash-live-001",     "gemini-2.0-flash"],
-  "student-hint":        ["gemini-2.0-flash-live-001",     "gemini-2.0-flash"],
+  "student-chat":        ["gemini-2.0-flash-live-001",     "gemini-flash-latest"],
+  "student-hint":        ["gemini-2.0-flash-live-001",     "gemini-flash-latest"],
   "voice-interaction":   ["gemini-2.5-flash-preview-native-audio-dialog", "gemini-2.0-flash-live-001"],
-  "translation":         ["gemini-2.0-flash-live-translate","gemini-2.0-flash-live-001","gemini-2.0-flash"],
+  "translation":         ["gemini-2.0-flash-live-translate","gemini-2.0-flash-live-001","gemini-flash-latest"],
   "tts-playback":        ["gemini-2.5-flash-tts",           "gemini-2.0-flash-live-001"],
-  "question-generation": ["gemini-2.0-flash",              "gemini-2.5-flash"],
-  "iq-report":           ["gemini-2.5-flash",               "gemini-2.0-flash"],
+  "question-generation": ["gemini-flash-latest",            "gemini-flash-lite-latest"],
+  "iq-report":           ["gemini-flash-latest",            "gemini-flash-lite-latest"],
 };
 
 const QUOTA_KEY = "codeup_quota_v1";
@@ -100,8 +100,8 @@ export function selectModel(task: TaskType): ModelId {
     console.warn(`[Quota] ${model} near limit (${usage.requests}/${limit.rpd}), trying fallback`);
   }
 
-  console.error("[Quota] All preferred models near limit, falling back to flash");
-  return "gemini-2.0-flash";
+  console.error("[Quota] All preferred models near limit, falling back to flash-latest");
+  return "gemini-flash-latest";
 }
 
 // ── Record usage after every API call ─────────────────────────────────────

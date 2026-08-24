@@ -21,7 +21,7 @@ async function main() {
   assert.match(source, /GEMINI_KEY_2/);
   assert.match(source, /GEMINI_KEY_3/);
   assert.match(source, /GEMINI_API_KEY/);
-  assert.match(source, /gemini-2\.0-flash/);
+  assert.match(source, /gemini-flash-latest/);
   assert.match(source, /gemini-1\.5-flash/);
   assert.match(source, /PROVIDER_TIMEOUT_MS\s*=\s*12_000/);
 

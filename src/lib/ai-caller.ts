@@ -31,9 +31,9 @@ function rotateKey() {
 
 // REST-compatible model IDs (Live/Audio models fall back to flash for REST)
 const REST_FALLBACK: Partial<Record<ModelId, ModelId>> = {
-  "gemini-2.0-flash-live-001":                    "gemini-2.0-flash",
-  "gemini-2.5-flash-preview-native-audio-dialog": "gemini-2.0-flash",
-  "gemini-2.0-flash-live-translate":               "gemini-2.0-flash",
+  "gemini-2.0-flash-live-001":                    "gemini-flash-latest",
+  "gemini-2.5-flash-preview-native-audio-dialog": "gemini-flash-latest",
+  "gemini-2.0-flash-live-translate":               "gemini-flash-latest",
 };
 
 function toRestModel(model: ModelId): string {
@@ -56,7 +56,7 @@ export interface AICallResult {
 }
 
 export async function callAI(prompt: string, options: AICallOptions = {}): Promise<AICallResult> {
-  const targetModel = options.forceModel ?? "gemini-2.0-flash";
+  const targetModel = options.forceModel ?? "gemini-flash-latest";
   const restModel   = toRestModel(targetModel);
 
   const body = {
@@ -92,7 +92,7 @@ export async function callAI(prompt: string, options: AICallOptions = {}): Promi
       }
       console.warn("[AI] Rate limited (429), retrying with flash after 12s...");
       await new Promise(r => setTimeout(r, 12_000));
-      return callAI(prompt, { ...options, forceModel: "gemini-2.0-flash" });
+      return callAI(prompt, { ...options, forceModel: "gemini-flash-latest" });
     }
     const errBody = await res.text();
     throw new Error(`Gemini API ${res.status}: ${errBody.slice(0, 200)}`);
@@ -137,7 +137,7 @@ export async function generateQuestionBatch(
 `.trim();
 
   const { text } = await callAI(prompt, {
-    forceModel: "gemini-2.0-flash",
+    forceModel: "gemini-flash-latest",
     maxTokens: 4_000,
     temperature: 0.85,
   });
@@ -186,8 +186,7 @@ export async function generateIQReport(input: IQReportInput): Promise<string> {
 لا تذكر أرقاماً كثيرة — ركّز على التشجيع والتوجيه. أجب باختصار.
 `.trim();
 
-  // Use 2.5 Flash for quality reports if quota allows; else flash
-  const model: ModelId = "gemini-2.0-flash"; // reliable, 500 RPD
+  const model: ModelId = "gemini-flash-latest"; // reliable, 500 RPD
   const { text } = await callAI(prompt, { forceModel: model, maxTokens: 250, temperature: 0.75 });
   return text.trim();
 }
@@ -222,7 +221,7 @@ IQ Scores: ${JSON.stringify(params.iqScores)}
 ]
 `.trim();
 
-  const { text } = await callAI(prompt, { forceModel: "gemini-2.0-flash", maxTokens: 600, temperature: 0.7 });
+  const { text } = await callAI(prompt, { forceModel: "gemini-flash-latest", maxTokens: 600, temperature: 0.7 });
 
   try {
     const clean = text.replace(/```json|```/g, "").trim();
