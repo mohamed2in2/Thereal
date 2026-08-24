@@ -261,7 +261,7 @@ async function testAiVideoAssessmentInvariants() {
   assert.match(aiRoute, /req\.signal/);
   assert.match(aiAssistant, /PROVIDER_TIMEOUT_MS\s*=\s*12_000/);
   assert.match(aiAssistant, /providerSignal\(requestSignal\)/);
-  assert.match(aiAssistant, /gemini-1\.5-flash/);
+  assert.match(aiAssistant, /gemini-flash/);
   assert.match(aiAssistant, /GEMINI_KEY_3/);
 
   assert.match(watchRoute, /renewedUntil = new Date\(now\.getTime\(\) \+ 90_000\)/);
