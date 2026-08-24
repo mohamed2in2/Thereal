@@ -183,9 +183,6 @@ export default async function TeacherPage({ params }: { params: Promise<{ teache
           priceMonthly={p.priceMonthly}
           priceTermly={p.priceTermly}
           priceYearly={p.priceYearly}
-          discountMonthly={p.discountMonthly}
-          discountTermly={p.discountTermly}
-          discountYearly={p.discountYearly}
           stagePricing={p.stagePricing}
           priceLanguagesMonthly={p.priceLanguagesMonthly}
           priceLanguagesTermly={p.priceLanguagesTermly}

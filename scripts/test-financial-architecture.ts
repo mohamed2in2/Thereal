@@ -378,34 +378,33 @@ async function runFinancialTests() {
     );
 
     // ──────────────────────────────────────────────────────────────────────────
-    // Test N: Teacher Subscription with Plan Discount (Monthly 200 with 20% discount -> Expected 160)
+    // Test N: Teacher Subscription Direct Price (Monthly 200 -> Expected 200)
     // ──────────────────────────────────────────────────────────────────────────
-    const teacherWithDisc = await prisma.user.create({
+    const teacherDirect = await prisma.user.create({
       data: {
-        email: `teacher_disc_${timestamp}@test.com`,
-        name: "Teacher Disc",
+        email: `teacher_direct_${timestamp}@test.com`,
+        name: "Teacher Direct",
         role: "teacher",
         teacherProfile: {
           create: {
-            slug: `teacher-disc-${timestamp}`,
-            displayName: "Teacher Disc",
+            slug: `teacher-direct-${timestamp}`,
+            displayName: "Teacher Direct",
             priceMonthly: 200,
-            discountMonthly: 20,
           },
         },
       },
       include: { teacherProfile: true },
     });
 
-    const verifyTeacherDisc = await verifyAuthoritativePrice({
-      amount: 160,
-      teacherId: teacherWithDisc.id,
+    const verifyTeacherDirect = await verifyAuthoritativePrice({
+      amount: 200,
+      teacherId: teacherDirect.id,
       planType: "monthly",
     });
 
     assert(
-      verifyTeacherDisc.valid && verifyTeacherDisc.expectedPrice === 160 && verifyTeacherDisc.finalPrice === 160,
-      "Test N: Teacher Subscription Monthly 200 with 20% discount -> verifyAuthoritativePrice approves 160 EGP without error"
+      verifyTeacherDirect.valid && verifyTeacherDirect.expectedPrice === 200 && verifyTeacherDirect.finalPrice === 200,
+      "Test N: Teacher Subscription Monthly 200 -> verifyAuthoritativePrice approves direct 200 EGP without error"
     );
 
   } catch (err) {

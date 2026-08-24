@@ -8,8 +8,6 @@ interface BookingPlan {
   label: string;
   sublabel: string;
   price: number;
-  originalPrice?: number;
-  discountPercent?: number;
   icon: string;
   accent: string;
   accentBg: string;
@@ -20,9 +18,6 @@ interface BookingModalProps {
   priceMonthly: number | null;
   priceTermly: number | null;
   priceYearly: number | null;
-  discountMonthly?: number | null;
-  discountTermly?: number | null;
-  discountYearly?: number | null;
   stagePricing?: string | null;
   priceLanguagesMonthly?: number | null;
   priceLanguagesTermly?: number | null;
@@ -84,12 +79,7 @@ function buildWhatsAppUrl(
   let msg = `السلام عليكم أستاذ ${teacherName} 👋\n`;
   if (studentName) msg += `👤 اسم الطالب: ${studentName}\n`;
   if (gradeLabel) msg += `📚 الصف الدراسي: ${gradeLabel}\n`;
-
-  if (plan.discountPercent && plan.originalPrice) {
-    msg += `💳 خطة الاشتراك المطلوبة: ${plan.label} (خصم ${plan.discountPercent}% 🔥 - بسعر ${plan.price} جنيه بدلاً من ${plan.originalPrice} جنيه)\n`;
-  } else {
-    msg += `💳 خطة الاشتراك المطلوبة: ${plan.label} (${plan.price} جنيه)\n`;
-  }
+  msg += `💳 خطة الاشتراك المطلوبة: ${plan.label} (${plan.price} جنيه)\n`;
 
   if (startDateFormatted) msg += `📅 تاريخ بدء الكورس: ${startDateFormatted}\n`;
   msg += `\nأود الاشتراك ومتابعة خطوات التسجيل والتفعيل. شكراً لك!`;
@@ -107,9 +97,6 @@ export function BookingButton({
   priceMonthly,
   priceTermly,
   priceYearly,
-  discountMonthly,
-  discountTermly,
-  discountYearly,
   stagePricing,
   priceLanguagesMonthly,
   priceLanguagesTermly,
@@ -146,26 +133,19 @@ export function BookingButton({
     type: "monthly" | "termly" | "yearly",
     label: string,
     sublabel: string,
-    rawPrice: number,
-    discountPct: number | null | undefined,
+    price: number,
     icon: string,
     accent: string,
     accentBg: string
-  ): BookingPlan => {
-    const hasDiscount = typeof discountPct === "number" && discountPct > 0 && discountPct <= 100;
-    const finalPrice = hasDiscount ? +(rawPrice * (1 - discountPct / 100)).toFixed(2) : rawPrice;
-    return {
-      type,
-      label,
-      sublabel,
-      price: finalPrice,
-      originalPrice: hasDiscount ? rawPrice : undefined,
-      discountPercent: hasDiscount ? discountPct : undefined,
-      icon,
-      accent,
-      accentBg,
-    };
-  };
+  ): BookingPlan => ({
+    type,
+    label,
+    sublabel,
+    price,
+    icon,
+    accent,
+    accentBg,
+  });
 
   // Extract per-grade pricing config from stagePricing JSON
   let parsedStageMap: Record<string, any> = {};
@@ -183,9 +163,6 @@ export function BookingButton({
     priceLanguagesMonthly: priceLanguagesMonthly ?? 0,
     priceLanguagesTermly: priceLanguagesTermly ?? 0,
     priceLanguagesYearly: priceLanguagesYearly ?? 0,
-    discountMonthly: discountMonthly ?? null,
-    discountTermly: discountTermly ?? null,
-    discountYearly: discountYearly ?? null,
   };
 
   if (parsedStageMap && parsedStageMap[studentGrade]) {
@@ -198,9 +175,6 @@ export function BookingButton({
       priceLanguagesMonthly: g.priceLanguagesMonthly ?? priceLanguagesMonthly ?? 0,
       priceLanguagesTermly: g.priceLanguagesTermly ?? priceLanguagesTermly ?? 0,
       priceLanguagesYearly: g.priceLanguagesYearly ?? priceLanguagesYearly ?? 0,
-      discountMonthly: g.discountMonthly ?? discountMonthly ?? null,
-      discountTermly: g.discountTermly ?? discountTermly ?? null,
-      discountYearly: g.discountYearly ?? discountYearly ?? null,
     };
   }
 
@@ -225,7 +199,6 @@ export function BookingButton({
       `اشتراك شهر واحد ${isLanguages ? "(لغات)" : "(عربي)"}`,
       "شهر واحد فقط",
       monthlyPrice,
-      stageConfig.discountMonthly,
       "📅",
       "#3B82F6",
       "rgba(59,130,246,0.1)"
@@ -235,7 +208,6 @@ export function BookingButton({
       `اشتراك الترم ${isLanguages ? "(لغات)" : "(عربي)"}`,
       "ترم دراسي كامل",
       termlyPrice,
-      stageConfig.discountTermly,
       "📚",
       "#F59E0B",
       "rgba(245,158,11,0.1)"
@@ -245,14 +217,11 @@ export function BookingButton({
       `اشتراك سنة كاملة ${isLanguages ? "(لغات)" : "(عربي)"}`,
       "سنة دراسية كاملة",
       yearlyPrice,
-      stageConfig.discountYearly,
       "🎓",
       "#10B981",
       "rgba(16,185,129,0.1)"
     ),
   ];
-
-  const maxDiscount = plans.reduce((max, p) => (p.discountPercent && p.discountPercent > max ? p.discountPercent : max), 0);
 
   useEffect(() => {
     if (plans.length > 0 && !selectedPlanType) {
@@ -278,7 +247,7 @@ export function BookingButton({
 
   return (
     <>
-      {/* "ادفع الآن (عرض لفترة محدودة)" Button + Start Date */}
+      {/* "احجز واشترك الآن" Button + Start Date */}
       <div className="flex flex-col items-center gap-2 mt-6">
         {plans.length > 0 && (
           <button
@@ -289,13 +258,10 @@ export function BookingButton({
               boxShadow: `0 8px 32px -8px ${accentColor}80`,
             }}
           >
-            <span className="absolute -top-3 -right-2 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-500 text-white shadow-md animate-bounce">
-              عرض لفترة محدودة 🔥
-            </span>
             <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
-            ادفع الآن (عرض لفترة محدودة)
+            احجز واشترك الآن
           </button>
         )}
 
@@ -351,14 +317,6 @@ export function BookingButton({
                   style={{ background: `${accentColor}15`, color: accentColor, border: `1px solid ${accentColor}30` }}>
                   حجز الاشتراك مع {teacherName}
                 </div>
-
-                {maxDiscount > 0 && (
-                  <div className="mb-2">
-                    <span className="inline-block px-3 py-1 rounded-full text-xs font-black bg-rose-500/20 text-rose-400 border border-rose-500/30">
-                      🔥 عروض خاصة: خصومات تصل لـ {maxDiscount}% على خطط الاشتراك!
-                    </span>
-                  </div>
-                )}
 
                 <h2 className="text-xl sm:text-2xl font-black" style={{ color: "var(--ink, #fff)" }}>
                   حدد تفاصيل الحجز والدفع
@@ -484,16 +442,9 @@ export function BookingButton({
                             {plan.icon}
                           </div>
                           <div>
-                            <div className="flex items-center gap-2">
-                              <h3 className="font-bold text-sm sm:text-base" style={{ color: "var(--ink, #fff)" }}>
-                                {plan.label}
-                              </h3>
-                              {plan.discountPercent && (
-                                <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-rose-500/20 text-rose-400 border border-rose-500/30">
-                                  -{plan.discountPercent}%
-                                </span>
-                              )}
-                            </div>
+                            <h3 className="font-bold text-sm sm:text-base" style={{ color: "var(--ink, #fff)" }}>
+                              {plan.label}
+                            </h3>
                             <p className="text-xs" style={{ color: "var(--ink-muted, #888)" }}>
                               {plan.sublabel}
                             </p>
@@ -502,11 +453,6 @@ export function BookingButton({
 
                         {/* Price */}
                         <div className="text-left shrink-0">
-                          {plan.originalPrice && (
-                            <span className="text-xs line-through text-slate-400 font-bold block">
-                              {plan.originalPrice} جنيه
-                            </span>
-                          )}
                           <span className="text-xl font-black" style={{ color: plan.accent }}>
                             {plan.price}
                           </span>
