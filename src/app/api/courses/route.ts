@@ -3,13 +3,22 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { canBypassPayment } from "@/lib/demo";
 
+// Prevent large free-text search strings from reaching the DB
+const SEARCH_MAX_LEN = 200;
+const PARAM_MAX_LEN = 100;
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
-    const stage = searchParams.get("stage");
-    const subject = searchParams.get("subject");
+    const stageRaw = searchParams.get("stage");
+    const subjectRaw = searchParams.get("subject");
     const teacherId = searchParams.get("teacher");
-    const search = searchParams.get("search");
+    const searchRaw = searchParams.get("search");
+
+    // Guard all free-text params before they reach Prisma
+    const stage = stageRaw && stageRaw.length <= PARAM_MAX_LEN ? stageRaw : null;
+    const subject = subjectRaw && subjectRaw.length <= PARAM_MAX_LEN ? subjectRaw : null;
+    const search = searchRaw && searchRaw.length <= SEARCH_MAX_LEN ? searchRaw.trim() : null;
 
     const session = await getSession();
     const isSuperadmin = session?.role === "superadmin";
@@ -30,7 +39,7 @@ export async function GET(req: NextRequest) {
       ];
     }
 
-    // Regular teachers list should NEVER include the demo teacher (it has its own dedicated pinned Showroom card)
+    // Regular teachers list should NEVER include the demo teacher
     const teacherWhere: Record<string, unknown> = {
       role: "teacher",
       isDeleted: false,
@@ -97,11 +106,7 @@ export async function GET(req: NextRequest) {
         const isAdminPreview = session.role === "admin";
         const isDemoBypass = await canBypassPayment(session.role, course.teacherId, session.accountMode);
         const hasAccess = accessMap.has(course.id) || isOwnerTeacher || isAdminPreview || isDemoBypass || isTesterUser;
-        return {
-          ...course,
-          hasAccess,
-          isOwnerTeacher,
-        };
+        return { ...course, hasAccess, isOwnerTeacher };
       })
     );
 
