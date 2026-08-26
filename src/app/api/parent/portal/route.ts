@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { validateParentToken, hashToken } from "@/lib/whatsapp/parentToken";
+import { validateParentToken } from "@/lib/whatsapp/parentToken";
 import { parentRateLimiter } from "@/lib/whatsapp/parentRateLimiter";
 import { whatsappOrchestrator } from "@/lib/whatsapp/orchestrator";
 import { averagePercent, examResultPercent, quizResultPercent } from "@/lib/scoring";
+
+const TOKEN_MAX_LEN = 500;
 
 function maskPhone(phone: string | null): string {
   if (!phone) return "••••";
@@ -14,10 +16,11 @@ function maskPhone(phone: string | null): string {
 
 export async function GET(req: NextRequest) {
   try {
-    // 1. IP Rate Limiting (30 requests/minute)
-    const ip = req.headers.get("x-forwarded-for")?.split(",")[0] || req.headers.get("x-real-ip") || "127.0.0.1";
+    const ip =
+      req.headers.get("x-forwarded-for")?.split(",")[0] ||
+      req.headers.get("x-real-ip") ||
+      "127.0.0.1";
     const rateCheck = parentRateLimiter.checkRateLimit(ip);
-
     if (!rateCheck.allowed) {
       return NextResponse.json(
         { error: `تم تجاوز حد الزيارات المسموح به. يرجى الانتظار لمدة ${rateCheck.resetInSeconds} ثانية.` },
@@ -25,14 +28,12 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const { searchParams } = req.nextUrl;
-    const token = searchParams.get("token");
+    const token = req.nextUrl.searchParams.get("token");
+    if (!token) return NextResponse.json({ success: true, stage: "DEAD" });
 
-    if (!token) {
-      return NextResponse.json({ success: true, stage: "DEAD" });
-    }
+    // Guard against huge token strings
+    if (token.length > TOKEN_MAX_LEN) return NextResponse.json({ success: true, stage: "DEAD" });
 
-    // 2. Validate Token
     const userAgent = req.headers.get("user-agent") || undefined;
     const parentToken = await validateParentToken(token, ip, userAgent);
     if (!parentToken || !parentToken.student) {
@@ -42,11 +43,9 @@ export async function GET(req: NextRequest) {
     const student = parentToken.student;
     const studentId = student.id;
 
-    // Check Feature Flag for Parent Verification Requirement
     const waConfig = await whatsappOrchestrator.getConfig();
     const requireVerification = waConfig.requireParentVerification;
 
-    // GATE state check: If feature flag active and status is PENDING
     if (requireVerification && parentToken.status === "PENDING") {
       return NextResponse.json({
         success: true,
@@ -59,48 +58,47 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // 3. Fetch Full Academic & Financial Report (only reached if verified or feature flag disabled)
-    const quizResults = await prisma.quizResult.findMany({
-      where: { studentId },
-      include: { quiz: { select: { title: true } } },
-      orderBy: { completedAt: "desc" },
-      take: 10,
-    });
+    // Fetch all academic data in parallel — these 5 queries are independent
+    const [quizResults, dailyExamResults, homeworkSubmissions, feedbacks, subscriptions] =
+      await Promise.all([
+        prisma.quizResult.findMany({
+          where: { studentId },
+          include: { quiz: { select: { title: true } } },
+          orderBy: { completedAt: "desc" },
+          take: 10,
+        }),
+        prisma.dailyExamResult.findMany({
+          where: { studentId },
+          include: { exam: { select: { title: true } } },
+          orderBy: { completedAt: "desc" },
+          take: 10,
+        }),
+        prisma.homeworkSubmission.findMany({
+          where: { studentId },
+          include: { homework: { select: { title: true } } },
+          orderBy: { completedAt: "desc" },
+          take: 10,
+        }),
+        prisma.studentFeedback.findMany({
+          where: { studentId },
+          include: { teacher: { select: { name: true } } },
+          orderBy: { createdAt: "desc" },
+          take: 5,
+        }),
+        prisma.teacherSubscription.findMany({
+          where: { studentId, status: "active" },
+          include: { teacher: { select: { id: true, name: true, phone: true } } },
+          orderBy: { createdAt: "desc" },
+        }),
+      ]);
 
-    const dailyExamResults = await prisma.dailyExamResult.findMany({
-      where: { studentId },
-      include: { exam: { select: { title: true } } },
-      orderBy: { completedAt: "desc" },
-      take: 10,
-    });
+    const validQuizResults = quizResults.filter(
+      (q) => typeof q.totalQ === "number" && q.totalQ > 0
+    );
+    const validExamResults = dailyExamResults.filter(
+      (e) => typeof e.totalQ === "number" && e.totalQ > 0
+    );
 
-    const homeworkSubmissions = await prisma.homeworkSubmission.findMany({
-      where: { studentId },
-      include: { homework: { select: { title: true } } },
-      orderBy: { completedAt: "desc" },
-      take: 10,
-    });
-
-    const feedbacks = await prisma.studentFeedback.findMany({
-      where: { studentId },
-      include: { teacher: { select: { name: true } } },
-      orderBy: { createdAt: "desc" },
-      take: 5,
-    });
-
-    const subscriptions = await prisma.teacherSubscription.findMany({
-      where: { studentId, status: "active" },
-      include: { teacher: { select: { id: true, name: true, phone: true } } },
-      orderBy: { createdAt: "desc" },
-    });
-
-    const validQuizResults = quizResults.filter((q) => typeof q.totalQ === "number" && q.totalQ > 0);
-    const validExamResults = dailyExamResults.filter((e) => typeof e.totalQ === "number" && e.totalQ > 0);
-
-    // QuizResult.score is already a percentage while DailyExamResult.score is a
-    // raw correct-count, so the previous "sum scores / sum totalQ" mixed units:
-    // a quiz scored 85 with 3 questions contributed 85/3 = 2833%, which made
-    // every student read as ممتاز regardless of how they were actually doing.
     const overallAveragePercent = averagePercent(validQuizResults, validExamResults);
 
     let overallStatusBadge: { label: string; color: string; text: string } | null = null;
@@ -114,7 +112,9 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    const completedHomeworkCount = homeworkSubmissions.filter((h) => h.status === "GRADED" || h.status === "SUBMITTED").length;
+    const completedHomeworkCount = homeworkSubmissions.filter(
+      (h) => h.status === "GRADED" || h.status === "SUBMITTED"
+    ).length;
     const pendingHomeworkCount = homeworkSubmissions.filter((h) => h.status === "PENDING").length;
 
     const recentExams = [
@@ -122,8 +122,6 @@ export async function GET(req: NextRequest) {
         const pct = Math.round(quizResultPercent(q));
         return {
           title: q.quiz?.title || "اختبار تفاعلي",
-          // Reported out of 100 because the stored score is a percentage;
-          // showing it out of totalQ (the question count) implied 85/3.
           score: pct,
           maxScore: 100,
           percent: pct,
@@ -132,14 +130,11 @@ export async function GET(req: NextRequest) {
         };
       }),
       ...validExamResults.map((e) => {
-        // Correct as written — DailyExamResult.score IS a raw correct-count, so
-        // dividing by totalQ is right here even though it was wrong for quizzes.
-        const max = e.totalQ;
         const pct = Math.round(examResultPercent(e));
         return {
           title: e.exam?.title || "امتحان لوحة الشرف",
           score: e.score,
-          maxScore: max,
+          maxScore: e.totalQ,
           percent: pct,
           status: pct >= 85 ? "🟢" : pct >= 65 ? "🟡" : "🔴",
           date: e.completedAt.toISOString().split("T")[0],
@@ -161,11 +156,7 @@ export async function GET(req: NextRequest) {
       overallAveragePercent,
       overallStatusBadge,
       attendancePercent: null,
-      homeworkStats: {
-        completed: completedHomeworkCount,
-        pending: pendingHomeworkCount,
-        late: null,
-      },
+      homeworkStats: { completed: completedHomeworkCount, pending: pendingHomeworkCount, late: null },
       recentExams,
       teacherNotes: feedbacks.map((f) => ({
         teacherName: f.teacher?.name || "المعلم",
@@ -182,7 +173,9 @@ export async function GET(req: NextRequest) {
         status: sub.status,
       })),
     });
-  } catch (error: any) {
-    return NextResponse.json({ error: error?.message || "حدث خطأ داخلي" }, { status: 500 });
+  } catch (err) {
+    // Do not leak internal error messages
+    console.error("[parent/portal] error:", err);
+    return NextResponse.json({ error: "حدث خطأ داخلي" }, { status: 500 });
   }
 }
