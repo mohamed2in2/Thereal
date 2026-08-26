@@ -24,12 +24,6 @@
 .DS_Store
 *.pem
 
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-
 # env files (secrets — never commit)
 .env
 .env.local
@@ -56,7 +50,6 @@ prisma/backups/
 whatsapp-auth/
 logs/
 
-
 # Python bytecode from the curriculum ingestion scripts
 __pycache__/
 *.pyc
@@ -65,3 +58,33 @@ __pycache__/
 uploads/
 bin/
 
+# Dev/debug scripts committed to root — exclude from future commits
+create_exam.js
+create_exam.ts
+fix.js
+fix-ast.js
+fix-broken.js
+fix-broken4.js
+fix-folders.js
+fix-logs.js
+seed-data.js
+test-db.js
+test-payload.js
+test-payload2.js
+test-prisma.js
+test_claude.py
+prisma.config.ts.backup
+
+# Log / output files
+dev-server.log
+test-out.txt
+build-out.txt
+
+# Runtime state
+state.json
+
+# Debug session archives and large binary blobs
+*.zip
+*.deb
+*.deb.1
+*.deb.2
