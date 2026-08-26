@@ -92,10 +92,17 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
             }
           }
 
-          // Reset QuizResult for retake
+          // Reset QuizResult for retake — clear previous completion data so the
+          // submit route does not treat this as an already-submitted attempt.
           await prisma.quizResult.update({
             where: { id: existingResult.id },
-            data: { startedAt: new Date(), allowRetake: false },
+            data: {
+              startedAt: new Date(),
+              allowRetake: false,
+              completedAt: null,
+              score: 0,
+              totalQ: 0,
+            },
           });
         } else {
           // Create initial QuizResult with startedAt
