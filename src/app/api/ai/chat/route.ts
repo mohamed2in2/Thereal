@@ -578,7 +578,7 @@ export async function DELETE() {
 async function executeAction(
   studentId: string,
   action: AIAction
-): Promise<{ type: string; status: string; id?: string; error?: string }> {
+): Promise<{ type: string; status: string; id?: string; error?: string; path?: string; reason?: string; payload?: unknown }> {
   try {
     switch (action.type) {
       case "create_grade_request": {
@@ -723,10 +723,20 @@ async function executeAction(
         return { type: action.type, status: "created", id: fb.id };
       }
 
-      case "navigate":
+      case "navigate": {
+        const p = action.payload as { path?: string; reason?: string } | undefined;
+        return {
+          type: "navigate",
+          status: "navigate",
+          path: p?.path || (action as any)?.path || "",
+          reason: p?.reason || (action as any)?.reason || "انتقال فوري",
+          payload: action.payload,
+        };
+      }
+
       case "show_insights":
       case "none":
-        return { type: action.type, status: "ok" };
+        return { type: action.type, status: "ok", payload: action.payload };
 
       default:
         return { type: "unknown", status: "ignored" };

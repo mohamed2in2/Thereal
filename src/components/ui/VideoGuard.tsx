@@ -96,66 +96,79 @@ export function VideoGuard({
     return () => clearInterval(checkInterval);
   }, [triggerViolationModal]);
 
-  // 2. Keyboard & PrintScreen Shortcuts Prevention
+  // Helper to pause all video playback immediately upon focus loss or capture attempt
+  const pauseAllVideos = useCallback(() => {
+    try {
+      const videos = document.querySelectorAll("video");
+      videos.forEach((v) => {
+        if (!v.paused) v.pause();
+      });
+    } catch {}
+  }, []);
+
+  // 2. Keyboard & PrintScreen / Screen-Recording Shortcuts Prevention
   useEffect(() => {
     if (disabled) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      // F12
-      if (e.key === "F12") {
+      const k = e.key;
+      const lowerK = k.toLowerCase();
+      const isPrtScn = k === "PrintScreen" || e.code === "PrintScreen" || e.keyCode === 44;
+      const isMeta =
+        e.metaKey ||
+        (typeof e.getModifierState === "function" &&
+          (e.getModifierState("Meta") || e.getModifierState("OS")));
+
+      const isWinSnipping = isMeta && e.shiftKey && lowerK === "s";
+      const isWinGameBar = isMeta && (lowerK === "g" || (e.altKey && lowerK === "r"));
+      const isMacScreenshot = isMeta && e.shiftKey && ["3", "4", "5", "#", "$", "%"].includes(k);
+      const isBrowserScreenshot = (e.ctrlKey || isMeta) && e.shiftKey && lowerK === "s";
+
+      // F12 / DevTools
+      if (k === "F12" || ((e.ctrlKey || isMeta) && e.shiftKey && ["i", "j", "c"].includes(lowerK))) {
         e.preventDefault();
         e.stopPropagation();
-        triggerViolationModal("DEVTOOLS", "Pressed F12");
+        pauseAllVideos();
+        triggerViolationModal("DEVTOOLS", "DevTools attempt detected");
         return;
       }
 
-      // Ctrl / Cmd + Shift + I / J / C (DevTools)
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && ["I", "J", "C", "i", "j", "c"].includes(e.key)) {
+      // View Source
+      if ((e.ctrlKey || isMeta) && lowerK === "u") {
         e.preventDefault();
         e.stopPropagation();
-        triggerViolationModal("DEVTOOLS", `Pressed Ctrl+Shift+${e.key.toUpperCase()}`);
+        triggerViolationModal("DEVTOOLS", "View Source attempt");
         return;
       }
 
-      // Ctrl / Cmd + U (View Source)
-      if ((e.ctrlKey || e.metaKey) && (e.key === "u" || e.key === "U")) {
-        e.preventDefault();
-        e.stopPropagation();
-        triggerViolationModal("DEVTOOLS", "Pressed Ctrl+U View Source");
-        return;
+      // Save / Print
+      if ((e.ctrlKey || isMeta) && (lowerK === "s" || lowerK === "p")) {
+        if (e.shiftKey) {
+          // Handled as screenshot below
+        } else {
+          e.preventDefault();
+          e.stopPropagation();
+          triggerViolationModal("SCREENSHOT", `Pressed Ctrl+${lowerK.toUpperCase()}`);
+          return;
+        }
       }
 
-      // Ctrl / Cmd + S (Save Page)
-      if ((e.ctrlKey || e.metaKey) && (e.key === "s" || e.key === "S")) {
+      // Screen Capture Attempts (PrintScreen, Snipping Tool, GameBar, Mac Screenshot)
+      if (isPrtScn || isWinSnipping || isWinGameBar || isMacScreenshot || isBrowserScreenshot) {
         e.preventDefault();
         e.stopPropagation();
-        triggerViolationModal("SCREENSHOT", "Pressed Ctrl+S Save Page");
-        return;
-      }
-
-      // Ctrl / Cmd + P (Print Page)
-      if ((e.ctrlKey || e.metaKey) && (e.key === "p" || e.key === "P")) {
-        e.preventDefault();
-        e.stopPropagation();
-        triggerViolationModal("SCREENSHOT", "Pressed Ctrl+P Print");
-        return;
-      }
-
-      // PrintScreen / SysReq
-      if (e.key === "PrintScreen" || e.key === "SysReq") {
-        e.preventDefault();
-        e.stopPropagation();
-        // Clear clipboard immediately
-        if (navigator.clipboard && navigator.clipboard.writeText) {
+        pauseAllVideos();
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
           navigator.clipboard.writeText("").catch(() => {});
         }
-        triggerViolationModal("SCREENSHOT", "Pressed PrintScreen");
+        triggerViolationModal("SCREENSHOT", "Screen capture / recording shortcut attempted");
       }
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.key === "PrintScreen" || e.key === "SysReq") {
-        if (navigator.clipboard && navigator.clipboard.writeText) {
+      const k = e.key;
+      if (k === "PrintScreen" || e.code === "PrintScreen" || e.keyCode === 44) {
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
           navigator.clipboard.writeText("").catch(() => {});
         }
       }
@@ -167,7 +180,7 @@ export function VideoGuard({
       window.removeEventListener("keydown", handleKeyDown, true);
       window.removeEventListener("keyup", handleKeyUp, true);
     };
-  }, [triggerViolationModal, disabled]);
+  }, [triggerViolationModal, pauseAllVideos, disabled]);
 
   // 3. Right Click Context Menu Blocker
   const handleContextMenu = (e: React.MouseEvent) => {
@@ -176,38 +189,26 @@ export function VideoGuard({
     void reportViolation("CONTEXT_MENU", "Right click attempted");
   };
 
-  // 4. Tab Visibility & Window Focus Loss Monitoring (Full Blur & Blackout Protection)
+  // 4. Tab Visibility Monitoring (Pause and protect when tab is genuinely backgrounded)
   useEffect(() => {
     if (disabled) return;
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === "hidden") {
         setIsTabHidden(true);
+        pauseAllVideos();
         void reportViolation("TAB_SWITCH", "User switched away from tab");
       } else {
         setIsTabHidden(false);
       }
     };
 
-    const handleWindowBlur = () => {
-      setIsTabHidden(true);
-      void reportViolation("TAB_SWITCH", "Window lost focus");
-    };
-
-    const handleWindowFocus = () => {
-      setIsTabHidden(false);
-    };
-
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("blur", handleWindowBlur);
-    window.addEventListener("focus", handleWindowFocus);
 
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("blur", handleWindowBlur);
-      window.removeEventListener("focus", handleWindowFocus);
     };
-  }, [reportViolation, disabled]);
+  }, [reportViolation, pauseAllVideos, disabled]);
 
   if (disabled) {
     return <div className="relative w-full">{children}</div>;

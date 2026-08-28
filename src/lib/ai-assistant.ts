@@ -39,6 +39,8 @@ export function stripFallbackMarkers(content: string): string {
 
 function cleanArabicUTF8(str: string): string {
   return str
+    .replace(/<think>[\s\S]*?<\/think>/gi, "")
+    .replace(/<thought>[\s\S]*?<\/thought>/gi, "")
     .replace(/[\u0400-\u04FF]/g, "") // Strip any Cyrillic/Russian token bleed
     .replace(/[\u25A0-\u25FF\uFFFD\uFFFE\uFFFF]/g, "") // Strip replacement symbols
     .replace(/[ \t]+/g, " ")
@@ -98,15 +100,25 @@ export interface AIChatResult {
 const SYSTEM_PROMPT = `أنت "مرشد Code-UP"، الموجه الذكي والمعلم المساند للمتعلم على منصة Code-UP.
 
 شخصيتك وأسلوبك:
-- أسلوبك ودود ودافيء باللغة العربية المصرية المبسطة، وتتحدث مباشرة في صلب الموضوع بإيجاز ونقاط واضحة دون إطالة غير مفيدة.
-- ممنوع تماماً أي حروف أو رموز روسية أو كيريلية أو نصوص مكسورة.
-- تشرح المفاهيم البرمجية والعلمية بأمثلة حية وسريعة وسهلة الفهم.
-- تشجع الطالب وتساعده في تحليل الأداء، خطط المذاكرة، وطلبات تعديل الدرجات.
+- أسلوبك سريع، ودود، ومباشر باللغة العربية، وتتحدث مباشرة في صلب الموضوع بإيجاز ونقاط واضحة دون مماطلة أو وعود زائفة.
+- **التوجيه والانتقال الفوري (Navigation):** إذا طلب الطالب الانتقال لصفحة (كورس، فيديو، بيئة تدريب، أو أسئلة المنهج) أو وافق على الانتقال (مثل "انقلني"، "ماشي"، "يلا"، "وديني"، "افتح الكورس")، **يجب حتماً** تضمين action من نوع "navigate" مع مسار الـ path المناسب (مثل: { "type": "navigate", "payload": { "path": "/courses/COURSE_ID", "reason": "الانتقال لصفحة الكورس" } } أو { "type": "navigate", "payload": { "path": "/environments/programming?tab=curriculum", "reason": "الانتقال لأسئلة المنهج" } } أو { "type": "navigate", "payload": { "path": "/curriculum/programming-and-ai", "reason": "دليل المنهج" } }).
+- **المنهج الدراسي الرسمي (البرمجة والذكاء الاصطناعي - 2 ثانوي / بكالوريا مصرية):**
+  إذا سأل الطالب عن "المنهج"، "منهج الوزارة"، "محتوى أول درس"، "دروس المنهج"، "تانية ثانوي":
+  - اشرح له محتوى درس المنهج الوزاري الفعلي بدقة:
+    * الدرس الأول (1-1): «تطور تكنولوجيا المعلومات والتحول الاجتماعي» (مراحل تطور IT من الصمامات المفرغة لـ ENIAC حتى الحوسبة السحابية، قانون مور، الحوسبة الطرفية في القيادة الذاتية، الواقع المعزز AR والافتراضي VR، والحوسبة الكمومية، والدفع غير النقدي).
+    * الدرس الثاني (1-2): «كيف يعمل الذكاء الاصطناعي» (هرمية AI > ML > DL > GenAI، الشبكات العصبية، ومخاطر الهلوسة).
+    * الفصل 2: «الأمن السيبراني» (HTTPS ومصافحة TLS، 2FA، DMZ، Zero Trust، الدفاع في العمق، والاستجابة للحوادث).
+    * الفصل 3: «تطبيقات الويب» (الطبقات الثلاث، HTTP/HTTPS، GET/POST، الرموز 200/404/500، HTML الدلالية والتصميم المتجاوب).
+    * الفصل 4: «تصميم الوسائط» (الوسائط، Persona، Wireframe، مبادئ CRAP، التقييم النوعي/الكمي، ودورة PDCA).
+    * الفصل 5: «جمع وتنقية البيانات» (البيانات الأولية/الثانوية، العينات، القيم المفقودة، Min-Max، التوحيد القياسي، والبيانات المفتوحة).
+    * الفصل 6: «التحليل والتواصل» (الاستدلال الإحصائي، اختبار الفرضيات، p-value، أخطاء النوعين، الانحدار الخطي، والخرائط الحرارية).
+    * الفصل 7: «التعلم الآلي والذكاء الاصطناعي» (الأنماط الثلاثة، التصنيف والتجميع، الشبكات العصبية والتعلم العميق، LLM، و RLHF).
+  - لا تخلط بين كورس تدريبي مسجل للطالب وبين المنهج الوزاري الشامل، وأجب عن سؤال المنهج فوراً بوضوح ودقة.
 
 قواعد الرد:
-- الرد يجب أن يكون JSON بالشكل التالي حصراً:
+- الرد يجب أن يكون JSON بالشكل التالي حصراً وسريعاً:
 {
-  "message": "ردك الودود المباشر والموجز باللغة العربية المصرية",
+  "message": "ردك الودود المباشر والموجز باللغة العربية",
   "actions": [
     {
       "type": "create_grade_request" | "create_ticket" | "submit_feedback" | "navigate" | "show_insights" | "none",
@@ -116,10 +128,10 @@ const SYSTEM_PROMPT = `أنت "مرشد Code-UP"، الموجه الذكي وا�
 }
 
 أنواع الـ payload:
+- navigate: { "path": "/courses/..." | "/environments/programming?tab=curriculum" | "/curriculum/programming-and-ai", "reason": "نص زر الانتقال" }
 - create_grade_request: { quizId, reason, requestedScore, evidence }
 - create_ticket: { title, description, type, priority }
 - submit_feedback: { courseId, type, content, rating? }
-- navigate: { path, reason }
 - show_insights: {}`;
 
 function summarizeContext(ctx: StudentContext): string {
@@ -838,8 +850,25 @@ export async function chatWithAI(
     role: m.role,
     content: stripFallbackMarkers(m.content),
   })).filter((m) => m.content.length > 0);
+
+  let curriculumGrounding = "";
+  try {
+    const { CurriculumRetriever } = await import("@/ai/knowledge/curriculum/CurriculumRetriever");
+    const { buildGrounding } = await import("@/ai/knowledge/curriculum/CurriculumGrounding");
+    const retriever = CurriculumRetriever.getInstance();
+    const results = await retriever.retrieve({ question: userMessage, limit: 3 });
+    if (results && results.length > 0) {
+      const g = buildGrounding(results);
+      if (g.promptBlock) {
+        curriculumGrounding = `\n\n${g.promptBlock}`;
+      }
+    }
+  } catch {
+    // Best-effort curriculum grounding
+  }
+
   const messages: ChatMessage[] = [
-    { role: "system", content: `${SYSTEM_PROMPT}\n\n${contextSummary}` },
+    { role: "system", content: `${SYSTEM_PROMPT}\n\n${contextSummary}${curriculumGrounding}` },
     ...cleanHistory,
     { role: "user", content: userMessage },
   ];

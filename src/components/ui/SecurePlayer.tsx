@@ -317,9 +317,7 @@ export function SecurePlayer({
   }, [noNativeSecurity, useDriveDirect]);
 
   // 1. Axinom Hardware Multi-DRM Player
-  const isDrmManifest =
-    embedUrl.includes(".mpd") || embedUrl.includes(".m3u8") || embedUrl.includes("/api/videos/drm/");
-  if (provider === "axinom" && isDrmManifest) {
+  if (provider === "axinom") {
     return (
       <DrmPlayer
         manifestUrl={embedUrl}

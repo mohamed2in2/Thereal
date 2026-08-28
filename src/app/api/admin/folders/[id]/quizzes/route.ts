@@ -177,6 +177,24 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       include: { questions: true },
     });
 
+    // Auto-create ContentItem graph node for the new quiz
+    await prisma.contentItem.upsert({
+      where: {
+        type_sourceId: {
+          type: "QUIZ",
+          sourceId: quiz.id,
+        },
+      },
+      create: {
+        type: "QUIZ",
+        sourceId: quiz.id,
+        title: quiz.title,
+      },
+      update: {
+        title: quiz.title,
+      },
+    }).catch(console.error);
+
     return NextResponse.json({ quiz }, { status: 201 });
   } catch (error) {
     console.error("Failed to create quiz:", error);

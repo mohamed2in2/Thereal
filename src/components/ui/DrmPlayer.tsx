@@ -210,8 +210,6 @@ export function DrmPlayer({
   // Distinct from the transient blackout: this one is driven by the CDM and
   // stays up for as long as the platform reports an unprotected output path.
   const [outputRestricted, setOutputRestricted] = useState(false);
-  // What the CDM actually granted, so the UI can stop claiming "hardware".
-  const [protectionLabel, setProtectionLabel] = useState("جارٍ التفاوض على الحماية…");
 
   // Remote playback and picture-in-picture both hand the decoded frames to a
   // surface this player no longer controls, so they are refused outright.
@@ -454,11 +452,6 @@ export function DrmPlayer({
           : playreadyHwAlt
             ? PLAYREADY_HW_ALT
             : PLAYREADY_SW;
-        setProtectionLabel(
-          widevineHardware || playreadyHardware
-            ? "حماية عتادية (Hardware DRM)"
-            : "حماية برمجية فقط — تصوير الشاشة ممكن"
-        );
 
         if (licenseServers?.widevine) servers["com.widevine.alpha"] = toAbsolute(licenseServers.widevine)!;
         if (licenseServers?.playready) servers[playreadyKeySystem] = toAbsolute(licenseServers.playready)!;
@@ -482,7 +475,7 @@ export function DrmPlayer({
         const useWidevineHardware = widevineHardware;
         const advanced: Record<string, Record<string, unknown>> = {
           "com.widevine.alpha": {
-            videoRobustness: useWidevineHardware ? "HW_SECURE_ALL" : "SW_SECURE_DECODE",
+            videoRobustness: useWidevineHardware ? "HW_SECURE_ALL" : "SW_SECURE_CRYPTO",
             audioRobustness: useWidevineHardware ? "HW_SECURE_CRYPTO" : "SW_SECURE_CRYPTO",
           },
           [playreadyKeySystem]: {
@@ -555,7 +548,7 @@ export function DrmPlayer({
           resolvedManifestUrl = window.location.origin + resolvedManifestUrl;
         }
 
-        await localPlayer.load(resolvedManifestUrl);
+        await localPlayer.load(resolvedManifestUrl, initialPosition > 0 ? initialPosition : undefined);
         if (isCancelled) {
           await localPlayer.destroy().catch(() => {});
           return;
@@ -563,8 +556,8 @@ export function DrmPlayer({
 
         setIsLoading(false);
 
-        // Seek to initial position
-        if (initialPosition > 0 && videoRef.current) {
+        // Fallback seek to initial position if player.load start time was not applied
+        if (initialPosition > 0 && videoRef.current && Math.abs(videoRef.current.currentTime - initialPosition) > 2) {
           videoRef.current.currentTime = initialPosition;
         }
       } catch (err: any) {
@@ -747,7 +740,6 @@ export function DrmPlayer({
       {isLoading && (
         <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm flex flex-col items-center justify-center z-30 space-y-3">
           <div className="w-12 h-12 rounded-full border-4 border-sky-500/20 border-t-sky-500 animate-spin" />
-          <p className="text-sm font-medium text-slate-300">جارٍ تهيئة فك التشفير الآمن (DRM)...</p>
         </div>
       )}
 
@@ -768,20 +760,18 @@ export function DrmPlayer({
         </div>
       )}
 
-      {/* ── Top Bar Overlay (Title + DRM Badge) ── */}
-      <div
-        className={`absolute top-0 left-0 right-0 p-4 bg-gradient-to-b from-black/80 via-black/40 to-transparent flex items-center justify-between z-20 transition-opacity duration-300 ${
-          showControls ? "opacity-100" : "opacity-0 pointer-events-none"
-        }`}
-      >
-        <div className="flex items-center gap-2">
-          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-500/20 text-sky-400 border border-sky-500/30 flex items-center gap-1">
-            <ShieldCheck className="w-3 h-3" />
-            {protectionLabel}
-          </span>
-          {title && <span className="text-xs font-semibold text-white/90 truncate max-w-md">{title}</span>}
+      {/* ── Top Bar Overlay (Title) ── */}
+      {title && (
+        <div
+          className={`absolute top-0 left-0 right-0 p-4 bg-gradient-to-b from-black/80 via-black/40 to-transparent flex items-center justify-between z-20 transition-opacity duration-300 ${
+            showControls ? "opacity-100" : "opacity-0 pointer-events-none"
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-white/90 truncate max-w-md">{title}</span>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ── Bottom Controls Bar ── */}
       <div

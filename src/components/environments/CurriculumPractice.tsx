@@ -5,6 +5,8 @@ import { motion, useReducedMotion } from "framer-motion";
 import {
   CURRICULUM_CHAPTERS,
   CURRICULUM_QUESTIONS,
+  getCurriculumQuestionsByChapter,
+  generate100CurriculumQuestions,
   type CurriculumChapter,
   type CurriculumQuestion,
 } from "@/lib/curriculum-programming-questions";
@@ -30,6 +32,7 @@ function CodeBlock({ code }: { code: string }) {
 export function CurriculumPractice() {
   const prefersReducedMotion = useReducedMotion();
   const [chapter, setChapter] = useState<CurriculumChapter | "all">("all");
+  const [is100Mode, setIs100Mode] = useState(false);
   const [questionIndex, setQuestionIndex] = useState(0);
   const [choices, setChoices] = useState<string[]>([]);
   const [answer, setAnswer] = useState<AnswerState>(null);
@@ -42,10 +45,10 @@ export function CurriculumPractice() {
   const [finished, setFinished] = useState(false);
 
   const questions = useMemo(
-    () => chapter === "all"
-      ? CURRICULUM_QUESTIONS
-      : CURRICULUM_QUESTIONS.filter((item) => item.chapter === chapter),
-    [chapter]
+    () => is100Mode
+      ? generate100CurriculumQuestions(chapter)
+      : getCurriculumQuestionsByChapter(chapter),
+    [chapter, is100Mode]
   );
   const question: CurriculumQuestion | undefined = questions[questionIndex];
 
@@ -68,7 +71,7 @@ export function CurriculumPractice() {
     setQuestionIndex(0);
     setAnswer(null);
     setFinished(false);
-  }, [chapter]);
+  }, [chapter, is100Mode]);
 
   useEffect(() => {
     if (question) setChoices(shuffle(question.choices));
@@ -81,6 +84,16 @@ export function CurriculumPractice() {
     setCompleted(0);
     setFinished(false);
   }, []);
+
+  const start100Marathon = () => {
+    setIs100Mode(true);
+    resetPractice();
+  };
+
+  const startStandardMode = () => {
+    setIs100Mode(false);
+    resetPractice();
+  };
 
   const openAiHelp = () => {
     if (!question) return;
@@ -158,8 +171,11 @@ export function CurriculumPractice() {
         <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-400/15 text-3xl text-emerald-300">✓</div>
         <h3 className="text-2xl font-black text-white">أحسنتِ! خلصتِ الجولة</h3>
         <p className="mt-2 text-slate-300">أجبتِ عن {questions.length} أسئلة، منها {score} صحيحة.</p>
-        <p className="mt-1 text-sm text-sky-200">تم حفظ عدد الأسئلة المكتملة وتحديث نقاط الذكاء.</p>
-        <button type="button" onClick={resetPractice} className="mt-6 min-h-11 rounded-xl bg-sky-500 px-6 py-3 font-bold text-white transition hover:bg-sky-400 focus:outline-none focus:ring-4 focus:ring-sky-400/30">جولة جديدة</button>
+        <p className="mt-1 text-sm text-sky-200">تم حفظ عدد الأسئلة المكتملة وتحديث نقاط الذكاء في بنك المنهج.</p>
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+          <button type="button" onClick={resetPractice} className="min-h-11 rounded-xl bg-slate-800 px-6 py-3 font-bold text-white transition hover:bg-slate-700 focus:outline-none focus:ring-4 focus:ring-slate-600/30">إعادة نفس الجولة</button>
+          <button type="button" onClick={is100Mode ? startStandardMode : start100Marathon} className="min-h-11 rounded-xl bg-sky-500 px-6 py-3 font-bold text-white transition hover:bg-sky-400 focus:outline-none focus:ring-4 focus:ring-sky-400/30">{is100Mode ? "الرجوع للأسئلة الأساسية (105)" : "🔥 توليد تحدي 100 سؤال من المنهج"}</button>
+        </div>
       </motion.section>
     );
   }
@@ -167,12 +183,18 @@ export function CurriculumPractice() {
   return (
     <section className="grid gap-5 lg:grid-cols-[240px_1fr]" dir="rtl" aria-label="أسئلة برمجة المنهج">
       <aside className="h-fit rounded-2xl border border-slate-700/80 bg-slate-900/80 p-3 lg:sticky lg:top-24">
-        <p className="px-3 pb-2 text-xs font-bold text-slate-400">اختاري الفصل</p>
+        <div className="flex items-center justify-between px-3 pb-2">
+          <p className="text-xs font-bold text-slate-400">اختاري الفصل</p>
+          <span className="rounded bg-sky-400/15 px-1.5 py-0.5 text-[10px] font-black text-sky-300">{is100Mode ? "تحدي 100 سؤال" : `${questions.length} سؤال`}</span>
+        </div>
         <div className="flex gap-2 overflow-x-auto pb-1 lg:block lg:space-y-1 lg:overflow-visible">
-          <button type="button" onClick={() => setChapter("all")} aria-pressed={chapter === "all"} className={`min-h-11 shrink-0 rounded-xl px-3 text-sm font-bold transition focus:outline-none focus:ring-4 focus:ring-sky-400/30 lg:block lg:w-full lg:text-right ${chapter === "all" ? "bg-sky-500 text-white" : "text-slate-300 hover:bg-slate-800"}`}>كل الفصول</button>
+          <button type="button" onClick={() => setChapter("all")} aria-pressed={chapter === "all"} className={`min-h-11 shrink-0 rounded-xl px-3 text-sm font-bold transition focus:outline-none focus:ring-4 focus:ring-sky-400/30 lg:block lg:w-full lg:text-right ${chapter === "all" ? "bg-sky-500 text-white" : "text-slate-300 hover:bg-slate-800"}`}>كل الفصول ({CURRICULUM_QUESTIONS.length})</button>
           {CURRICULUM_CHAPTERS.map((item) => (
             <button key={item.id} type="button" onClick={() => setChapter(item.id)} aria-pressed={chapter === item.id} className={`min-h-11 shrink-0 rounded-xl px-3 text-sm font-bold transition focus:outline-none focus:ring-4 focus:ring-sky-400/30 lg:block lg:w-full lg:text-right ${chapter === item.id ? "bg-sky-500 text-white" : "text-slate-300 hover:bg-slate-800"}`}>{item.shortLabel}</button>
           ))}
+        </div>
+        <div className="mt-3">
+          <button type="button" onClick={() => setIs100Mode(!is100Mode)} className={`min-h-10 w-full rounded-xl border px-3 py-2 text-xs font-black transition ${is100Mode ? "border-amber-400 bg-amber-400/20 text-amber-200" : "border-slate-700 bg-slate-800/80 text-slate-300 hover:border-sky-400/50 hover:bg-slate-800"}`}>{is100Mode ? "⚡ وضع تحدي 100 سؤال (نشط)" : "🎯 توليد 100 سؤال من المنهج"}</button>
         </div>
         <div className="mt-4 rounded-xl border border-slate-700 bg-slate-950/60 p-3 text-sm">
           <div className="flex items-center justify-between text-slate-400"><span>المكتمل</span><strong className="text-white">{completed}</strong></div>

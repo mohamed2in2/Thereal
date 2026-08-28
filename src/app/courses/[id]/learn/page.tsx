@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Navbar } from "@/components/ui/Navbar";
 import { useToast } from "@/components/ui/Toast";
 import { SecurePlayer } from "@/components/ui/SecurePlayer";
+import { VideoGuard } from "@/components/ui/VideoGuard";
 import { usePositionSaver } from "@/lib/use-position-saver";
 import { VideoQuestionModal } from "@/components/player/VideoQuestionModal";
 import { VideoQuestionOverlay } from "@/components/player/VideoQuestionOverlay";
@@ -67,6 +68,7 @@ type PlayerState = {
   durationMinutes: number;
   startSeconds?: number;
   watchSessionId?: string;
+  drm?: any;
 };
 
 type QuestionItem = {
@@ -582,6 +584,7 @@ export default function CourseLearningPage() {
         durationMinutes: vid?.durationMinutes ?? 0,
         startSeconds: startAt,
         watchSessionId: data.sessionId,
+        drm: data.drm || null,
       });
       setModalVideo(null);
       await loadCourse();
@@ -955,41 +958,48 @@ export default function CourseLearningPage() {
                   {isPlayerActive ? (
                     /* ─ Active player ─ */
                     <div className="flex flex-col flex-1" onContextMenu={(e) => e.preventDefault()}>
-                      {/* 16:9 watermark-safe player container */}
+                      {/* 16:9 watermark-safe player container with full VideoGuard security */}
                       <div className="relative w-full overflow-hidden">
-                        <SecurePlayer
-                          embedUrl={player!.embedUrl}
-                          title={activeVideo.title}
-                          watermark={user?.phone || user?.name || ""}
-                          provider={player!.provider}
-                          startSeconds={player!.startSeconds}
-                          onProgress={handleTimeUpdate}
-                          paused={playerPaused}
-                          onEnded={() => void markCompleteFor(player!.videoId)}
+                        <VideoGuard
+                          studentName={user?.name || ""}
+                          studentPhone={user?.phone || user?.name || ""}
+                          videoId={player!.videoId}
                         >
-                          {/* Programmatic blocking question modal (pause mode) */}
-                          {activeQuestion && (
-                            <VideoQuestionModal
-                              question={activeQuestion}
-                              videoId={player!.videoId}
-                              watchSessionId={player!.watchSessionId}
-                              currentSecond={playerTimeRef.current}
-                              onAnswered={handleQuestionAnswered}
-                            />
-                          )}
+                          <SecurePlayer
+                            embedUrl={player!.embedUrl}
+                            title={activeVideo.title}
+                            watermark={user?.phone || user?.name || ""}
+                            provider={player!.provider}
+                            drm={player!.drm}
+                            startSeconds={player!.startSeconds}
+                            onProgress={handleTimeUpdate}
+                            paused={playerPaused}
+                            onEnded={() => void markCompleteFor(player!.videoId)}
+                          >
+                            {/* Programmatic blocking question modal (pause mode) */}
+                            {activeQuestion && (
+                              <VideoQuestionModal
+                                question={activeQuestion}
+                                videoId={player!.videoId}
+                                watchSessionId={player!.watchSessionId}
+                                currentSecond={playerTimeRef.current}
+                                onAnswered={handleQuestionAnswered}
+                              />
+                            )}
 
-                          {/* Non-blocking overlay question (overlay mode) */}
-                          {activeOverlayQuestion && (
-                            <VideoQuestionOverlay
-                              question={activeOverlayQuestion}
-                              videoId={player!.videoId}
-                              watchSessionId={player!.watchSessionId}
-                              currentSecond={playerTimeRef.current}
-                              onAnswered={handleOverlayQuestionAnswered}
-                              onDismiss={handleOverlayQuestionDismissed}
-                            />
-                          )}
-                        </SecurePlayer>
+                            {/* Non-blocking overlay question (overlay mode) */}
+                            {activeOverlayQuestion && (
+                              <VideoQuestionOverlay
+                                question={activeOverlayQuestion}
+                                videoId={player!.videoId}
+                                watchSessionId={player!.watchSessionId}
+                                currentSecond={playerTimeRef.current}
+                                onAnswered={handleOverlayQuestionAnswered}
+                                onDismiss={handleOverlayQuestionDismissed}
+                              />
+                            )}
+                          </SecurePlayer>
+                        </VideoGuard>
                       </div>
 
                       {/* ── Video progress + mark-complete bar ── */}

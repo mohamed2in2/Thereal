@@ -137,6 +137,19 @@ export class SubjectRulesRegistry {
       ],
       formattingGuideline: "أكواد برمجية منظمة، قصيرة، ومعلقة بأسلوب Clean Code.",
     });
+
+    // 10. Official Egyptian Curriculum: Programming & Artificial Intelligence
+    this.registerRule({
+      subject: "البرمجة والذكاء الاصطناعي",
+      name: "Programming and Artificial Intelligence Curriculum Rules",
+      instructions: [
+        "الالتزام بالمفاهيم المعتمدة في منهج البكالوريا المصرية (الصف الثاني الثانوي - الترمين الأول والثاني).",
+        "تغطية فصول المنهج السبعة: تكنولوجيا المجتمع، الأمن السيبراني، تطبيقات الويب، تصميم الوسائط، جمع وتنقية البيانات، الاستدلال والانحدار، والتعلم الآلي والعميق ونماذج اللغة.",
+        "التركيز على الفهم المفاهيمي، والربط العملي بالواقع، وتوضيح المحاذير الأخلاقية والأمنية ومبدأ (مدخلات خاطئة = مخرجات خاطئة).",
+        "عند مناقشة أسئلة الامتحانات والتمارين: توجيه الطالب خطوة بخطوة وتقديم التفسيرات العلمية المستندة لكتاب الوزارة.",
+      ],
+      formattingGuideline: "استخدم النقاط الواضحة والجداول والمقارنات التوضيحية مع الإشارة لمفاهيم المنهج بدقة.",
+    });
   }
 
   public registerRule(rule: SubjectPedagogicalRule): void {
@@ -170,6 +183,7 @@ export class SubjectRulesRegistry {
 
   private findSubjectKey(subject: string): string {
     const s = subject.toLowerCase();
+    if (s.includes("ذكاء") || s.includes("اصطناعي") || s.includes("ai") || s.includes("curriculum") || s.includes("منهج") || s.includes("بكالوريا")) return "البرمجة والذكاء الاصطناعي";
     if (s.includes("رياضيات") || s.includes("math")) return "رياضيات";
     if (s.includes("فيزياء") || s.includes("physics")) return "فيزياء";
     if (s.includes("كيمياء") || s.includes("chemistry")) return "كيمياء";
@@ -179,6 +193,6 @@ export class SubjectRulesRegistry {
     if (s.includes("تاريخ") || s.includes("history")) return "تاريخ";
     if (s.includes("جغراف") || s.includes("geography")) return "جغرافيا";
     if (s.includes("برمجه") || s.includes("حاسب") || s.includes("code") || s.includes("cs")) return "برمجه عملي";
-    return "برمجه عملي";
+    return "البرمجة والذكاء الاصطناعي";
   }
 }

@@ -341,7 +341,6 @@ function DrmPreviewContent() {
           ) : tokenLoading && !isDirectStream ? (
             <div className="w-full h-full flex flex-col items-center justify-center space-y-3 bg-black">
               <div className="w-10 h-10 rounded-full border-4 border-sky-500/20 border-t-sky-500 animate-spin" />
-              <p className="text-xs font-bold text-gray-300">جارٍ تجهيز رخصة الأمان والتشفير (DRM)...</p>
             </div>
           ) : (
             <VideoGuard

@@ -19,6 +19,7 @@ import {
   IconKey, IconShield, IconClock, IconEye,
 } from "@/components/admin/AdminIcons";
 import { HomeworkManagerSection, LiveReviewPanel } from "@/components/admin/TeacherHomeworkComponents";
+import { ContentFlowManager } from "@/components/admin/ContentFlowManager";
 import { extractYouTubeVideoId } from "@/lib/youtube";
 
 function fileToResizedDataUrl(file: File, max = 600): Promise<string> {
@@ -146,7 +147,7 @@ export default function TeacherDashboardPage() {
   const { success: toastSuccess, error: toastError } = useToast();
   const [activeSection, setActiveSection] = useState("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [courseTab, setCourseTab] = useState<"content" | "settings" | "pricing">("content");
+  const [courseTab, setCourseTab] = useState<"content" | "flow" | "settings" | "pricing">("content");
   const [courses, setCourses] = useState<Course[]>([]);
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   const [plans, setPlans] = useState<Array<{ id: string; title: string; price: number; educationalStage: string; _count?: { accessCodes?: number } }>>([]);
@@ -1648,6 +1649,7 @@ export default function TeacherDashboardPage() {
                 <div className="flex items-center gap-1 p-1 rounded-xl bg-[var(--surface)] border border-[var(--border)] w-full sm:w-fit">
                   {([
                     { id: "content", label: "المحتوى", Icon: IconFolder },
+                    { id: "flow", label: "مسار وفتح المحتوى 🔒", Icon: IconShield },
                     { id: "settings", label: "الإعدادات", Icon: IconSettings },
                     { id: "pricing", label: "التسعير", Icon: IconTag },
                   ] as const).map((t) => (
@@ -2988,6 +2990,14 @@ export default function TeacherDashboardPage() {
                       </form>
                     </div>
                   </div>
+                )}
+
+                {/* ── CONTENT FLOW TAB ── */}
+                {courseTab === "flow" && (
+                  <ContentFlowManager
+                    courseId={selectedCourse.id}
+                    courseTitle={selectedCourse.title}
+                  />
                 )}
 
                 {/* ── SETTINGS TAB ── */}

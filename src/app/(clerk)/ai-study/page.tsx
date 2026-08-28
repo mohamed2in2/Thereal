@@ -4,14 +4,24 @@ import { ProfileGuard } from "@/components/auth/ProfileGuard";
 import { Navbar } from "@/components/ui/Navbar";
 import { Footer } from "@/components/ui/Footer";
 import { motion, AnimatePresence } from "framer-motion";
+import { useRouter } from "next/navigation";
 
 interface Message {
   id: string;
   role: "user" | "assistant" | "system";
   content: string;
+  actions?: Array<{
+    type: string;
+    status?: string;
+    path?: string;
+    reason?: string;
+    payload?: { path?: string; reason?: string };
+    error?: string;
+  }>;
 }
 
 export default function AIStudyPage() {
+  const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -43,12 +53,12 @@ export default function AIStudyPage() {
 
         if (chatRes.ok) {
           const chatData = await chatRes.json();
-          if (chatData.messages) {
+          if (chatData.messages && Array.isArray(chatData.messages) && chatData.messages.length > 0) {
             setMessages(chatData.messages);
           }
         }
-      } catch (error) {
-        console.error("Error fetching initial data:", error);
+      } catch (err) {
+        console.error("Failed to load initial data", err);
       } finally {
         setInitialLoad(false);
       }
@@ -64,7 +74,7 @@ export default function AIStudyPage() {
     const userMessage: Message = {
       id: Date.now().toString(),
       role: "user",
-      content: input,
+      content: input.trim(),
     };
 
     setMessages((prev) => [...prev, userMessage]);
@@ -84,8 +94,35 @@ export default function AIStudyPage() {
           id: (Date.now() + 1).toString(),
           role: "assistant",
           content: data.message,
+          actions: data.actions,
         };
         setMessages((prev) => [...prev, aiMessage]);
+
+        if (Array.isArray(data?.actions)) {
+          for (const act of data.actions) {
+            const navPath = act?.payload?.path || act?.path;
+            if (act.type === "navigate" && navPath) {
+              const lowerMsg = userMessage.content.toLowerCase();
+              const isDirectTransferIntent =
+                lowerMsg.includes("انقل") ||
+                lowerMsg.includes("وديني") ||
+                lowerMsg.includes("حولني") ||
+                lowerMsg.includes("افتح") ||
+                lowerMsg.includes("يلا") ||
+                lowerMsg.includes("ماشي") ||
+                lowerMsg.includes("تمام") ||
+                lowerMsg.includes("go") ||
+                lowerMsg.includes("transfer") ||
+                lowerMsg.includes("navigate");
+
+              if (isDirectTransferIntent) {
+                setTimeout(() => {
+                  router.push(navPath);
+                }, 1000);
+              }
+            }
+          }
+        }
       } else {
         throw new Error("Failed to send message");
       }
@@ -198,6 +235,27 @@ export default function AIStudyPage() {
                           : "bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-tl-sm border border-gray-100 dark:border-gray-700 shadow-sm"
                       }`}>
                         <div className="whitespace-pre-wrap text-sm leading-relaxed">{msg.content}</div>
+                        {Array.isArray(msg.actions) && msg.actions.length > 0 && (
+                          <div className="mt-3 flex flex-wrap gap-2 pt-2 border-t border-gray-200/60 dark:border-gray-700/60">
+                            {msg.actions.map((act, idx) => {
+                              const navPath = act?.payload?.path || act?.path;
+                              const navReason = act?.payload?.reason || act?.reason || "انتقال فوري";
+                              if (act.type === "navigate" && navPath) {
+                                return (
+                                  <button
+                                    key={idx}
+                                    type="button"
+                                    onClick={() => router.push(navPath)}
+                                    className="flex items-center gap-2 text-xs px-3.5 py-2 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 text-white font-bold shadow-md transition-all cursor-pointer"
+                                  >
+                                    <span>🚀 {navReason}</span>
+                                  </button>
+                                );
+                              }
+                              return null;
+                            })}
+                          </div>
+                        )}
                       </div>
                     </motion.div>
                   ))}

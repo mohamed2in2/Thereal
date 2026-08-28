@@ -2,11 +2,6 @@ const EGYPT_MOBILE_REGEX = /^01[0-9]{9}$/;
 
 export function normalizeEgyptPhone(input: string) {
   const raw = String(input || "").trim();
-  try {
-    console.log("normalizeEgyptPhone raw:", JSON.stringify(raw), "codes:", Array.from(raw).map((c) => c.charCodeAt(0)));
-  } catch (e) {
-    console.log("normalizeEgyptPhone raw (stringify failed)");
-  }
   // convert Arabic-Indic numerals to ASCII digits
   const arabicMap: Record<string, string> = {
     '\u0660': '0', '\u0661': '1', '\u0662': '2', '\u0663': '3', '\u0664': '4', '\u0665': '5', '\u0666': '6', '\u0667': '7', '\u0668': '8', '\u0669': '9',

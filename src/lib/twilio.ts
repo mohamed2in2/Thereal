@@ -4,20 +4,16 @@ import { randomInt } from "crypto";
 const TWILIO_API_BASE = "https://api.twilio.com/2010-04-01";
 const TWILIO_VERIFY_BASE = "https://verify.twilio.com/v2";
 
-const DEV_SKIP_SMS = process.env.DEV_SKIP_SMS === "true";
-const USE_VERIFY = process.env.TWILIO_USE_VERIFY === "true";
-const BYPASS_PHONE_VERIFICATION = process.env.TWILIO_BYPASS_VERIFICATION === "true";
-
 export function isDevSkipSmsEnabled() {
-  return DEV_SKIP_SMS;
+  return process.env.DEV_SKIP_SMS === "true";
 }
 
 export function isTwilioVerifyEnabled() {
-  return USE_VERIFY;
+  return process.env.TWILIO_USE_VERIFY === "true";
 }
 
 export function isPhoneVerificationBypassed() {
-  return BYPASS_PHONE_VERIFICATION;
+  return process.env.TWILIO_BYPASS_VERIFICATION === "true";
 }
 
 export type TwilioSendResult = {
@@ -78,13 +74,15 @@ export async function sendVerificationSms(phone: string, code: string): Promise<
     toNumber = normalizeEgyptPhone(phone);
   }
 
-  if (DEV_SKIP_SMS || BYPASS_PHONE_VERIFICATION) {
+  const devSkip = isDevSkipSmsEnabled();
+  const bypass = isPhoneVerificationBypassed();
+  if (devSkip || bypass) {
     // Local dev helper — do not use in production. Return the generated code for UI convenience.
-    console.log(`[${DEV_SKIP_SMS ? "DEV_SKIP_SMS" : "TWILIO_BYPASS_VERIFICATION"}] Skipping SMS to ${maskPhone(toNumber)} — code=${code}`);
+    console.log(`[${devSkip ? "DEV_SKIP_SMS" : "TWILIO_BYPASS_VERIFICATION"}] Skipping SMS to ${maskPhone(toNumber)} — code=${code}`);
     return { dev: true, code, method: "dev" };
   }
 
-  if (USE_VERIFY) {
+  if (isTwilioVerifyEnabled()) {
     const serviceSid = process.env.TWILIO_VERIFY_SERVICE_SID;
     if (!serviceSid) throw new Error("TWILIO_VERIFY_SERVICE_SID is required when TWILIO_USE_VERIFY=true");
 
@@ -140,11 +138,11 @@ export async function sendVerificationSms(phone: string, code: string): Promise<
 }
 
 export async function verifyCode(phone: string, code: string) {
-  if (BYPASS_PHONE_VERIFICATION) {
+  if (isPhoneVerificationBypassed()) {
     return true;
   }
 
-  if (!USE_VERIFY) {
+  if (!isTwilioVerifyEnabled()) {
     // Not using Verify API — caller should validate via stored challenge (cookie).
     return false;
   }

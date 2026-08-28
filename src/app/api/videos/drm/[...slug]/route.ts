@@ -11,11 +11,13 @@ const DRM_STORAGE_DIR = path.resolve(process.cwd(), "uploads", "drm");
 // Whitelist of allowed extensions for DRM media streaming
 const ALLOWED_EXTENSIONS = new Set([".mpd", ".m3u8", ".m4s", ".mp4", ".ts"]);
 
-export async function OPTIONS() {
+export async function OPTIONS(req: NextRequest) {
+  const origin = req.headers.get("origin");
   return new NextResponse(null, {
     status: 204,
     headers: {
-      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Origin": origin || "*",
+      "Access-Control-Allow-Credentials": "true",
       "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
       "Access-Control-Allow-Headers": "Range, Authorization, Content-Type, X-AxDRM-Message",
       "Access-Control-Expose-Headers": "Content-Length, Content-Range, Accept-Ranges",
@@ -133,10 +135,12 @@ export async function GET(
       contentType = "video/mp2t";
     }
 
+    const origin = req.headers.get("origin");
     const baseHeaders: Record<string, string> = {
       "Content-Type": contentType,
       "Accept-Ranges": "bytes",
-      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Origin": origin || "*",
+      "Access-Control-Allow-Credentials": "true",
       "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
       "Access-Control-Allow-Headers": "Range, Authorization, Content-Type, X-AxDRM-Message",
       "Access-Control-Expose-Headers": "Content-Length, Content-Range, Accept-Ranges",

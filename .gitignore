@@ -65,3 +65,7 @@ __pycache__/
 uploads/
 bin/
 
+.env.save
+.env.save.1
+.env.save.2
+.eslintcache

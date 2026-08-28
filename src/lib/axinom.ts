@@ -99,8 +99,8 @@ const USAGE_POLICIES = [
   },
   {
     name: SOFTWARE_POLICY,
-    playready: { min_device_security_level: 2000 },
-    widevine: { device_security_level: "SW_SECURE_DECODE" },
+    playready: { min_device_security_level: 150 },
+    widevine: { device_security_level: "SW_SECURE_CRYPTO" },
   },
 ];
 
@@ -268,21 +268,8 @@ export function createAxinomDrmToken(options: AxinomTokenOptions): AxinomDrmPayl
     }
 
     if (!manifestUrl.startsWith("http://") && !manifestUrl.startsWith("https://")) {
-      if (options.videoId.startsWith("gdrive_") || options.videoId.startsWith("local_")) {
-        try {
-          const safeId = String(options.videoId).replace(/[^a-zA-Z0-9_-]/g, "_");
-          const mpdPath = path.resolve(process.cwd(), "uploads", "drm", safeId, "manifest.mpd");
-          if (fs.existsSync(mpdPath)) {
-            manifestUrl = `/api/videos/drm/${encodeURIComponent(options.videoId)}/manifest.mpd`;
-          } else {
-            manifestUrl = `/api/videos/stream/${encodeURIComponent(options.videoId)}`;
-          }
-        } catch {
-          manifestUrl = `/api/videos/drm/${encodeURIComponent(options.videoId)}/manifest.mpd`;
-        }
-      } else {
-        manifestUrl = `/api/videos/drm/${encodeURIComponent(options.videoId)}/manifest.mpd`;
-      }
+      const safeId = String(options.videoId).replace(/[^a-zA-Z0-9_-]/g, "_");
+      manifestUrl = `/api/videos/drm/${encodeURIComponent(safeId)}/manifest.mpd`;
     }
   }
 

@@ -130,6 +130,33 @@ export function AIAssistant() {
       const replyMessage = data?.message || data?.error || "أهلاً بيك! أنا مرشدك الذكي 🌟 قولي إيه اللي محتاجه وسيتم مساعدتك فوراً!";
       const actionsStr = data?.actions ? JSON.stringify(data.actions) : null;
 
+      // Handle automatic or prompt navigation if requested
+      if (Array.isArray(data?.actions)) {
+        for (const act of data.actions) {
+          const navPath = act?.payload?.path || act?.path;
+          if (act.type === "navigate" && navPath) {
+            const lowerMsg = message.toLowerCase();
+            const isDirectTransferIntent =
+              lowerMsg.includes("انقل") ||
+              lowerMsg.includes("وديني") ||
+              lowerMsg.includes("حولني") ||
+              lowerMsg.includes("افتح") ||
+              lowerMsg.includes("يلا") ||
+              lowerMsg.includes("ماشي") ||
+              lowerMsg.includes("تمام") ||
+              lowerMsg.includes("go") ||
+              lowerMsg.includes("transfer") ||
+              lowerMsg.includes("navigate");
+
+            if (isDirectTransferIntent) {
+              setTimeout(() => {
+                router.push(navPath);
+              }, 1000);
+            }
+          }
+        }
+      }
+
       // Smooth fast stream rendering for instant perceived response
       if (replyMessage.length <= 80) {
         setMessages((prev) => [
@@ -387,31 +414,31 @@ export function AIAssistant() {
 }
 
 function ActionBadge({ action, router }: { action: ChatAction; router: ReturnType<typeof useRouter> }) {
-  if (!action || action.type === "none" || action.status === "ok") return null;
+  if (!action || action.type === "none") return null;
 
   const isNav = action.type === "navigate";
-  const path = (action as any)?.payload?.path || action.id;
-  const reason = (action as any)?.payload?.reason;
+  const path = (action as any)?.payload?.path || (action as any)?.path || action.id;
+  const reason = (action as any)?.payload?.reason || (action as any)?.reason;
 
   if (isNav && path) {
     return (
       <button
         onClick={() => router.push(path)}
-        className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-purple-50 hover:bg-purple-100 dark:bg-purple-900/30 dark:hover:bg-purple-900/50 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 transition-colors font-medium cursor-pointer"
+        className="flex items-center gap-2 text-xs px-3.5 py-2 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 text-white shadow-md transition-all font-bold cursor-pointer my-1.5 active:scale-95"
       >
-        <span>🔗 {reason || "انتقل للصفحة"}</span>
+        <span>🚀 {reason || "اضغط هنا للانتقال فوراً"}</span>
       </button>
     );
   }
 
-  if (action.status === "success" || action.status === "error") {
-    const isErr = action.status === "error";
+  if (action.status === "success" || action.status === "created" || action.status === "error" || action.status === "failed") {
+    const isErr = action.status === "error" || action.status === "failed";
     return (
       <div className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border ${
         isErr ? "bg-red-50 text-red-700 border-red-200" : "bg-emerald-50 text-emerald-700 border-emerald-200"
       }`}>
         <span>{isErr ? "❌" : "✅"}</span>
-        <span>{action.error || action.status}</span>
+        <span>{action.error || (action.status === "created" ? "تم التنفيذ بنجاح" : action.status)}</span>
       </div>
     );
   }

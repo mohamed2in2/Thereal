@@ -132,6 +132,24 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       },
     });
 
+    // Auto-create ContentItem graph node for the new video
+    await prisma.contentItem.upsert({
+      where: {
+        type_sourceId: {
+          type: "VIDEO",
+          sourceId: video.id,
+        },
+      },
+      create: {
+        type: "VIDEO",
+        sourceId: video.id,
+        title: video.title,
+      },
+      update: {
+        title: video.title,
+      },
+    }).catch(console.error);
+
     // Fire and forget auto-matcher sync
     triggerPlanSyncForCourse(folder.course.id).catch(console.error);
 
