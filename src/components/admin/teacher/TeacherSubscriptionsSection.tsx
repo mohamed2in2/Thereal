@@ -16,6 +16,8 @@ interface SubscriptionItem {
   studentName: string | null;
   studentPhone: string | null;
   parentPhone: string | null;
+  paymentSource?: string | null;
+  paymentRef?: string | null;
   status: string;
   createdAt: string;
   student: {
@@ -247,8 +249,9 @@ export function TeacherSubscriptionsSection() {
                   <th className="p-4">المرحلة الدراسية</th>
                   <th className="p-4">مسار الدراسة</th>
                   <th className="p-4">الباقة المشتراة</th>
+                  <th className="p-4 text-center">طريقة وتوثيق الحجز</th>
                   <th className="p-4">رقم التواصل</th>
-                  <th className="p-4">تاريخ الحجز</th>
+                  <th className="p-4 text-center">تاريخ ووقت الحجز</th>
                   <th className="p-4 text-center">الحالة</th>
                   <th className="p-4 text-center">الإجراءات</th>
                 </tr>
@@ -261,6 +264,9 @@ export function TeacherSubscriptionsSection() {
                   const phone = sub.studentPhone || sub.student.phone || "-";
                   const parentPhone = sub.parentPhone || sub.student.parentPhone || "-";
                   const isLang = sub.languageTrack === "languages" || sub.languageTrack === "english";
+                  const isGateway = sub.paymentSource === "PAYMENT_GATEWAY";
+                  const isWallet = sub.paymentSource === "WALLET";
+                  const isTester = sub.paymentSource === "TESTER_BYPASS" || (sub.amount === 0 && sub.paymentSource !== "MANUAL");
 
                   return (
                     <tr key={sub.id} className="hover:bg-[var(--bg)]/50 transition-colors">
@@ -293,16 +299,60 @@ export function TeacherSubscriptionsSection() {
                           </div>
                         </div>
                       </td>
+                      <td className="p-4 text-center">
+                        {isGateway ? (
+                          <span
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-black bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+                            title={sub.paymentRef ? `بوابة دفع إلكترونية - الرقم المرجعي: ${sub.paymentRef}` : "بوابة دفع إلكترونية (Payment Gateway Log)"}
+                          >
+                            <span>💳</span>
+                            <span>بوابة دفع (Payment Gateway)</span>
+                          </span>
+                        ) : isWallet ? (
+                          <span
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-black bg-purple-500/15 text-purple-300 border border-purple-500/30"
+                            title="خصم مباشر من رصيد المحفظة"
+                          >
+                            <span>👛</span>
+                            <span>رصيد المحفظة (Wallet)</span>
+                          </span>
+                        ) : isTester ? (
+                          <span
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-black bg-slate-500/15 text-slate-300 border border-slate-500/30"
+                            title="حساب فحص تجريبي أو مجاني"
+                          >
+                            <span>🧪</span>
+                            <span>تجريبي (QA Bypass)</span>
+                          </span>
+                        ) : (
+                          <span
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-black bg-amber-500/15 text-amber-300 border border-amber-500/30"
+                            title="تسجيل يدوي بواسطة المعلم أو المشرف"
+                          >
+                            <span>✍️</span>
+                            <span>يدوي (Manual)</span>
+                          </span>
+                        )}
+                      </td>
                       <td className="p-4 font-mono text-[11px] dir-ltr text-right">
                         <div>📱 الطالب: {phone}</div>
                         {parentPhone !== "-" && <div className="text-[10px] text-[var(--ink-muted)]">👨‍👩‍👦 ولي الأمر: {parentPhone}</div>}
                       </td>
-                      <td className="p-4 text-[11px] text-[var(--ink-muted)]">
-                        {new Date(sub.createdAt).toLocaleDateString("ar-EG", {
-                          year: "numeric",
-                          month: "short",
-                          day: "numeric",
-                        })}
+                      <td className="p-4 text-center text-[11px] font-mono whitespace-nowrap">
+                        <div className="text-[var(--ink)] font-bold">
+                          {new Date(sub.createdAt).toLocaleDateString("ar-EG", {
+                            year: "numeric",
+                            month: "2-digit",
+                            day: "2-digit",
+                          })}
+                        </div>
+                        <div className="text-[10px] text-sky-400 font-semibold mt-0.5">
+                          ⏰ {new Date(sub.createdAt).toLocaleTimeString("ar-EG", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            hour12: true,
+                          })}
+                        </div>
                       </td>
                       <td className="p-4 text-center">
                         <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">

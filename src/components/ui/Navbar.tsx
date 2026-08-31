@@ -8,7 +8,7 @@ import { BrandLogo } from "@/components/ui/BrandLogo";
 import { useToast } from "@/components/ui/Toast";
 
 interface NavbarProps {
-  user?: { name: string; role: string } | null;
+  user?: { id?: string; name: string; role: string } | null;
 }
 
 interface Notification {
@@ -60,8 +60,16 @@ const getServerSnapshot = (): Theme => "light";
 
 import { ParentVerificationBanner } from "@/components/ui/ParentVerificationBanner";
 
+function formatStudentName(name: string): string {
+  if (!name) return "";
+  const parts = name.trim().split(/\s+/);
+  if (parts.length <= 2) return name;
+  if (parts.length === 3) return `${parts[0]} ${parts[1]}`;
+  return `${parts[0]} ${parts[1]} ${parts[parts.length - 1]}`;
+}
+
 export function Navbar({ user: propUser }: NavbarProps) {
-  const [fetchedUser, setFetchedUser] = useState<{ name: string; role: string } | null>(null);
+  const [fetchedUser, setFetchedUser] = useState<{ id?: string; name: string; role: string } | null>(null);
 
   useEffect(() => {
     if (propUser !== undefined) return;
@@ -69,7 +77,7 @@ export function Navbar({ user: propUser }: NavbarProps) {
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (d?.user) {
-          setFetchedUser({ name: d.user.name, role: d.user.role });
+          setFetchedUser({ id: d.user.id, name: d.user.name, role: d.user.role });
         } else {
           setFetchedUser(null);
         }
@@ -149,9 +157,9 @@ export function Navbar({ user: propUser }: NavbarProps) {
       .finally(() => setNotifLoading(false));
   }, [notifOpen, user]);
 
-  // Fetch unread count and trigger celebratory notification on student re-entry
+  // Fetch unread count and trigger celebratory notification on student re-entry (at most once per notification)
   useEffect(() => {
-    if (!user) return;
+    if (!user?.id) return;
     fetch("/api/notifications", { credentials: "include" })
       .then((r) => r.ok ? r.json() : null)
       .then((d: { notifications?: Notification[]; unreadCount?: number } | null) => {
@@ -162,12 +170,16 @@ export function Navbar({ user: propUser }: NavbarProps) {
         const latestPayment = d.notifications?.find(
           (n) => n.type === "payment_success" && !n.isRead && (Date.now() - new Date(n.createdAt).getTime()) < 24 * 60 * 60 * 1000
         );
-        if (latestPayment) {
-          toastSuccess(latestPayment.title || "🎉 تم استلام وتأكيد دفعتك بنجاح! المحتوى متاح الآن في حسابك.");
+        if (latestPayment && typeof window !== "undefined") {
+          const sessionKey = `shown_notif_toast_${latestPayment.id}`;
+          if (!sessionStorage.getItem(sessionKey)) {
+            sessionStorage.setItem(sessionKey, "1");
+            toastSuccess(latestPayment.title || "🎉 تم استلام وتأكيد دفعتك بنجاح! المحتوى متاح الآن في حسابك.");
+          }
         }
       })
       .catch(() => {});
-  }, [user, toastSuccess]);
+  }, [user?.id, toastSuccess]);
 
   // Fetch student points and streak
   useEffect(() => {
@@ -184,6 +196,30 @@ export function Navbar({ user: propUser }: NavbarProps) {
     await fetch("/api/notifications", { method: "POST", credentials: "include" }).catch(() => {});
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
     setUnreadCount(0);
+  };
+
+  const deleteNotification = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    const prev = notifications;
+    setNotifications((old) => old.filter((n) => n.id !== id));
+    setUnreadCount((c) => {
+      const wasUnread = prev.find((n) => n.id === id && !n.isRead);
+      return wasUnread ? Math.max(0, c - 1) : c;
+    });
+    await fetch(`/api/notifications?id=${id}`, {
+      method: "DELETE",
+      credentials: "include",
+    }).catch(() => {});
+  };
+
+  const clearAllNotifications = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setNotifications([]);
+    setUnreadCount(0);
+    await fetch("/api/notifications?all=true", {
+      method: "DELETE",
+      credentials: "include",
+    }).catch(() => {});
   };
 
   // Debounced search
@@ -243,6 +279,20 @@ export function Navbar({ user: propUser }: NavbarProps) {
         {/* Actions */}
         <div className="flex items-center gap-[8px] sm:gap-[12px] justify-self-end">
           
+          {/* Leaderboard Button (PC View - Top Left - Emoji Only) */}
+          <Link
+            href="/leaderboard"
+            title="لوحة الشرف والمتصدرين"
+            aria-label="لوحة الشرف"
+            className={`hidden lg:inline-flex items-center justify-center w-[38px] h-[38px] rounded-[10px] border transition-all no-underline text-lg cursor-pointer ${
+              isActive("/leaderboard")
+                ? "bg-amber-500/15 border-amber-500/40 shadow-sm"
+                : "border-[var(--border)] bg-[var(--surface-2)] text-[var(--ink-2)] hover:border-amber-500/30 hover:bg-amber-500/10"
+            }`}
+          >
+            🏆
+          </Link>
+
           {/* Notification bell */}
           <div ref={notifRef} className="lg:relative">
             <button type="button" onClick={() => { setNotifOpen((o) => !o); setSearchOpen(false); setProfileMenuOpen(false); }}
@@ -262,11 +312,18 @@ export function Navbar({ user: propUser }: NavbarProps) {
               <div className="absolute top-full mt-2 rounded-[16px] overflow-hidden z-[var(--z-dropdown)] lg:right-0 lg:left-auto right-3 left-3 lg:w-[320px] w-auto"
                 style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-lg)" }}>
                 <div className="flex items-center justify-between" style={{ padding: "14px 18px", borderBottom: "1px solid var(--border)" }}>
-                  {unreadCount > 0 && (
-                    <button onClick={markAllRead} style={{ fontSize: 12, fontWeight: 600, color: "var(--brand)", background: "none", border: "none", cursor: "pointer" }}>
-                      قراءة الكل
-                    </button>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {unreadCount > 0 && (
+                      <button type="button" onClick={markAllRead} style={{ fontSize: 11.5, fontWeight: 700, color: "var(--brand)", background: "none", border: "none", cursor: "pointer" }}>
+                        قراءة الكل
+                      </button>
+                    )}
+                    {notifications.length > 0 && (
+                      <button type="button" onClick={clearAllNotifications} style={{ fontSize: 11.5, fontWeight: 700, color: "var(--danger)", background: "none", border: "none", cursor: "pointer" }}>
+                        مسح الكل
+                      </button>
+                    )}
+                  </div>
                   <h3 style={{ fontFamily: "var(--font-head)", fontWeight: 800, fontSize: 15, margin: 0, color: "var(--ink)" }}>الإشعارات</h3>
                 </div>
 
@@ -289,7 +346,7 @@ export function Navbar({ user: propUser }: NavbarProps) {
                     <div
                       key={n.id}
                       onClick={() => { if (n.link) router.push(n.link); setNotifOpen(false); }}
-                      className={`flex items-start gap-3 transition-colors ${n.link ? "cursor-pointer" : ""}`}
+                      className={`group flex items-start gap-3 transition-colors ${n.link ? "cursor-pointer" : ""}`}
                       style={{
                         padding: "14px 18px",
                         borderBottom: "1px solid var(--border)",
@@ -299,14 +356,25 @@ export function Navbar({ user: propUser }: NavbarProps) {
                       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = n.isRead ? "transparent" : "var(--brand-soft)"; }}
                     >
                       <span style={{ fontSize: 22, lineHeight: 1, marginTop: 2 }}>{NOTIF_ICON[n.type] ?? "🔔"}</span>
-                      <div style={{ flex: 1, textAlign: "right" }}>
+                      <div style={{ flex: 1, textAlign: "right", minWidth: 0 }}>
                         <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--ink)", marginBottom: 3 }}>{n.title}</div>
                         <div style={{ fontSize: 12.5, color: "var(--ink-2)", lineHeight: 1.5 }}>{n.body}</div>
                         <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 4 }}>
                           {new Date(n.createdAt).toLocaleDateString("ar-EG", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                         </div>
                       </div>
-                      {!n.isRead && <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--brand)", flexShrink: 0, marginTop: 4 }} />}
+                      <div className="flex flex-col items-center gap-2 shrink-0 pt-0.5">
+                        <button
+                          type="button"
+                          onClick={(e) => deleteNotification(e, n.id)}
+                          title="حذف هذا الإشعار"
+                          className="cursor-pointer text-[var(--ink-3)] hover:text-[var(--danger)] transition-colors p-1 rounded-md hover:bg-[var(--danger-soft)] text-xs leading-none flex items-center justify-center"
+                          style={{ border: "none", background: "none" }}
+                        >
+                          ✕
+                        </button>
+                        {!n.isRead && <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--brand)" }} />}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -420,16 +488,18 @@ export function Navbar({ user: propUser }: NavbarProps) {
 
           {/* User profile / auth */}
           {user ? (
-            <div ref={profileMenuRef} className="relative">
+            <div ref={profileMenuRef} className="relative shrink-0">
               <button type="button" onClick={() => { setProfileMenuOpen((o) => !o); setNotifOpen(false); setSearchOpen(false); }}
-                className="flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface-2)] no-underline cursor-pointer hover:bg-[var(--border)] transition-colors h-[38px]"
-                style={{ padding: "4px 12px 4px 6px" }}>
+                className="flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface-2)] no-underline cursor-pointer hover:bg-[var(--border)] transition-colors h-[38px] max-w-[170px] sm:max-w-[210px] px-2 sm:px-3"
+                title={user.name}>
                 <span className="w-7 h-7 rounded-full flex items-center justify-center shrink-0"
                   style={{ background: "var(--brand-soft)", color: "var(--brand)", fontWeight: 800, fontSize: 14 }}>
                   {user.name?.[0] ?? "م"}
                 </span>
-                <b style={{ fontSize: 14, color: "var(--ink)", fontWeight: 600 }} className="hidden sm:inline">{user.name}</b>
-                <span className="text-[10px] text-[var(--ink-3)] transition-transform duration-200" style={{ transform: profileMenuOpen ? "rotate(180deg)" : "rotate(0)" }}>
+                <span style={{ fontSize: 13.5, color: "var(--ink)", fontWeight: 600 }} className="hidden sm:inline truncate whitespace-nowrap">
+                  {formatStudentName(user.name)}
+                </span>
+                <span className="text-[10px] text-[var(--ink-3)] transition-transform duration-200 shrink-0" style={{ transform: profileMenuOpen ? "rotate(180deg)" : "rotate(0)" }}>
                   ▼
                 </span>
               </button>

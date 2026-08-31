@@ -48,12 +48,7 @@ export function Footer() {
           <ul className="space-y-3">
             <li>
               <Link href="/terms" className="text-sm no-underline hover:text-white transition-colors" style={{ color: "#CBD5E1" }}>
-                شروط الاستخدام
-              </Link>
-            </li>
-            <li>
-              <Link href="/privacy" className="text-sm no-underline hover:text-white transition-colors" style={{ color: "#CBD5E1" }}>
-                سياسة الخصوصية
+                الشروط والأحكام
               </Link>
             </li>
           </ul>

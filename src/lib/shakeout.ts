@@ -122,9 +122,11 @@ export async function createShakeOutPayment(
       headers: {
         "Accept": "application/json",
         "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Authorization": `apikey ${publicKey}`,
       },
       body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(10000),
     });
 
     const data = await res.json().catch(() => ({}));
@@ -192,8 +194,10 @@ export async function getShakeOutInvoiceStatus(invoiceId: string, invoiceRef?: s
       method: "GET",
       headers: {
         "Accept": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Authorization": `apikey ${publicKey}`,
       },
+      signal: AbortSignal.timeout(8000),
     });
 
     let data = await res.json().catch(() => ({}));
@@ -205,8 +209,10 @@ export async function getShakeOutInvoiceStatus(invoiceId: string, invoiceRef?: s
         method: "GET",
         headers: {
           "Accept": "application/json",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
           "Authorization": `apikey ${publicKey}`,
         },
+        signal: AbortSignal.timeout(8000),
       }).catch(() => null);
       if (fallbackRes && fallbackRes.ok) {
         const fallbackData = await fallbackRes.json().catch(() => ({}));

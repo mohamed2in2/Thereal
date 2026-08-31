@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { isAdminRole, hasPermission } from "@/lib/rbac";
 import { logAdminAction } from "@/lib/admin-auth";
+import { invalidateUserSessionCache } from "@/lib/cache";
 
 /**
  * Clears a student's registered devices so they can sign in from a new device
@@ -36,7 +37,15 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
   if (!allowed) return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
 
-  const { count } = await prisma.device.deleteMany({ where: { userId: studentId } });
+  // Delete registered devices and revoke active JWT sessions globally
+  const [deleteResult] = await prisma.$transaction([
+    prisma.device.deleteMany({ where: { userId: studentId } }),
+    prisma.user.update({
+      where: { id: studentId },
+      data: ({ tokenVersion: { increment: 1 } } as any),
+    }),
+  ]);
+  invalidateUserSessionCache(studentId);
 
   try {
     await logAdminAction({
@@ -51,5 +60,5 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     console.error("Failed to log admin action for device reset:", err);
   }
 
-  return NextResponse.json({ success: true, cleared: count });
+  return NextResponse.json({ success: true, cleared: deleteResult.count });
 }

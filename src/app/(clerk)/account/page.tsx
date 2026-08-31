@@ -270,6 +270,9 @@ export default function AccountPage() {
   const [stats, setStats] = useState<StudentStats | null>(null);
   const [courses, setCourses] = useState<Course[] | null>(null);
   const [plans, setPlans] = useState<any[] | null>(null);
+  const [courseToDelete, setCourseToDelete] = useState<Course | null>(null);
+  const [deletingCourse, setDeletingCourse] = useState(false);
+  const [courseDeleteError, setCourseDeleteError] = useState("");
   const [results, setResults] = useState<ShapedResult[] | null>(null);
   const [devices, setDevices] = useState<Device[] | null>(null);
   const [wrongQuestions, setWrongQuestions] = useState<{ total: number; bySubject: Record<string, WrongQuestion[]>; questions: WrongQuestion[] } | null>(null);
@@ -381,6 +384,26 @@ export default function AccountPage() {
     const res = await fetch("/api/auth/me", { method: "DELETE", credentials: "include" });
     setDeleting(false);
     if (res.ok) { router.push("/login"); router.refresh(); } else setError("تعذر حذف الحساب");
+  };
+
+  const confirmDeleteCourse = async () => {
+    if (!courseToDelete) return;
+    setDeletingCourse(true);
+    setCourseDeleteError("");
+    try {
+      const res = await fetch(`/api/courses/enrolled/${courseToDelete.id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "تعذر حذف الكورس من المكتبة");
+      setCourses((prev) => (prev ? prev.filter((c) => c.id !== courseToDelete.id) : []));
+      setCourseToDelete(null);
+    } catch (err) {
+      setCourseDeleteError(err instanceof Error ? err.message : "حدث خطأ أثناء الحذف");
+    } finally {
+      setDeletingCourse(false);
+    }
   };
 
   const redeemBalance = async () => {
@@ -672,7 +695,25 @@ export default function AccountPage() {
                           const pct = Math.round((watched / Math.max(total, 1)) * 100);
                           return (
                             <div key={c.id} className="flex items-center gap-3" style={{ padding: "14px 16px", borderRadius: 12, background: "var(--surface-2)", border: "1px solid var(--border)" }}>
-                              <Link href={`/courses/${c.id}/learn`} className="shrink-0 no-underline rounded-[9px] text-white hover:opacity-80" style={{ padding: "8px 14px", background: "var(--brand)", fontSize: 13, fontWeight: 700 }}>▶ تعلم</Link>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <Link href={`/courses/${c.id}/learn`} className="no-underline rounded-[9px] text-white hover:opacity-80 flex items-center gap-1" style={{ padding: "8px 14px", background: "var(--brand)", fontSize: 13, fontWeight: 700 }}>
+                                  ▶ تعلم
+                                </Link>
+                                <button
+                                  type="button"
+                                  onClick={() => { setCourseToDelete(c); setCourseDeleteError(""); }}
+                                  title="إزالة الكورس من مكتبتي"
+                                  className="cursor-pointer rounded-[9px] hover:opacity-80 transition-opacity flex items-center justify-center text-xs font-bold"
+                                  style={{
+                                    padding: "8px 10px",
+                                    background: "var(--danger-soft)",
+                                    color: "var(--danger)",
+                                    border: "1px solid rgba(239, 68, 68, 0.3)",
+                                  }}
+                                >
+                                  🗑️
+                                </button>
+                              </div>
                               <div className="flex-1 min-w-0">
                                 <div style={{ fontWeight: 700, fontSize: 14, color: "var(--ink)", marginBottom: 3 }}>{c.title}</div>
                                 <div style={{ fontSize: 12, color: "var(--ink-3)", marginBottom: 6 }}>{c.subject} · {c.teacher.name}</div>
@@ -686,6 +727,79 @@ export default function AccountPage() {
                         })}
                       </div>
                     )}
+
+                {/* ── Confirm Delete Course Modal ── */}
+                {courseToDelete && (
+                  <div
+                    className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center p-4"
+                    style={{ background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)" }}
+                    onClick={() => !deletingCourse && setCourseToDelete(null)}
+                  >
+                    <div
+                      className="w-full max-w-md rounded-2xl p-6"
+                      style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-lg)" }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="w-10 h-10 rounded-full flex items-center justify-center text-lg shrink-0" style={{ background: "var(--danger-soft)", color: "var(--danger)" }}>
+                          🗑️
+                        </div>
+                        <div>
+                          <h3 style={{ fontFamily: "var(--font-head)", fontWeight: 800, fontSize: 16, color: "var(--ink)", margin: 0 }}>
+                            إزالة الكورس من المكتبة
+                          </h3>
+                          <p style={{ fontSize: 12, color: "var(--ink-3)", margin: "2px 0 0" }}>
+                            تأكيد حذف الكورس من حسابك
+                          </p>
+                        </div>
+                      </div>
+
+                      <p style={{ fontSize: 13.5, color: "var(--ink-2)", lineHeight: 1.6, marginBottom: 16 }}>
+                        هل أنت متأكد من رغبتك في إزالة كورس <strong style={{ color: "var(--ink)" }}>«{courseToDelete.title}»</strong> من مكتبتك؟
+                        <br />
+                        <span style={{ fontSize: 12, color: "var(--danger)" }}>
+                          ⚠️ لن تتمكن من مشاهدة محتوى هذا الكورس إلا بإعادة التسجيل فيه مجدداً.
+                        </span>
+                      </p>
+
+                      {courseDeleteError && (
+                        <div className="mb-4 text-xs font-bold text-red-500 bg-red-500/10 p-2.5 rounded-lg border border-red-500/20">
+                          {courseDeleteError}
+                        </div>
+                      )}
+
+                      <div className="flex gap-2 justify-end">
+                        <button
+                          type="button"
+                          onClick={() => setCourseToDelete(null)}
+                          disabled={deletingCourse}
+                          className="px-4 py-2 rounded-xl text-xs font-bold cursor-pointer transition-colors"
+                          style={{ background: "var(--surface-2)", color: "var(--ink)", border: "1px solid var(--border)" }}
+                        >
+                          إلغاء
+                        </button>
+                        <button
+                          type="button"
+                          onClick={confirmDeleteCourse}
+                          disabled={deletingCourse}
+                          className="px-4 py-2 rounded-xl text-xs font-bold text-white cursor-pointer transition-colors flex items-center gap-1.5"
+                          style={{ background: "#ef4444" }}
+                        >
+                          {deletingCourse ? (
+                            <>
+                              <span className="inline-block w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                              <span>جارٍ الحذف...</span>
+                            </>
+                          ) : (
+                            <>
+                              <span>تأكيد الحذف</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

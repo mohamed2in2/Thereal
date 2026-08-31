@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { checkVideoAccess } from "@/lib/authorization";
 
 /**
  * Student and Teacher-facing questions for a video.
@@ -14,6 +15,22 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   if (!session) return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
 
   const { id: videoId } = await params;
+
+  const video = await prisma.video.findUnique({
+    where: { id: videoId },
+    select: { id: true, isFree: true },
+  });
+
+  if (!video) {
+    return NextResponse.json({ error: "الفيديو غير موجود" }, { status: 404 });
+  }
+
+  if (!video.isFree) {
+    const hasAccess = await checkVideoAccess(session.id, session.role, videoId);
+    if (!hasAccess) {
+      return NextResponse.json({ error: "لا يوجد صلاحية للوصول لأسئلة هذا الدرس" }, { status: 403 });
+    }
+  }
 
   // Fetch all questions for this video
   const questions = await prisma.videoQuestion.findMany({

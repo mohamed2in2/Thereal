@@ -1,18 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { timingSafeEqual } from "node:crypto";
-
-const PREVIEW_PASSWORD = process.env.PREVIEW_PASSWORD || "codeup2030";
-const PREVIEW_COOKIE_NAME = "codeup_preview_auth";
-const PREVIEW_COOKIE_MAX_AGE = 60 * 60 * 24 * 7; // 7 days
-
-function safeCompare(a: string, b: string): boolean {
-  if (typeof a !== "string" || typeof b !== "string") return false;
-  const bufA = Buffer.from(a);
-  const bufB = Buffer.from(b);
-  if (bufA.length !== bufB.length) return false;
-  return timingSafeEqual(bufA, bufB);
-}
+import {
+  PREVIEW_COOKIE_NAME,
+  PREVIEW_COOKIE_MAX_AGE,
+  generatePreviewCookieToken,
+  verifyPreviewCookie,
+  verifyPreviewPassword,
+} from "@/lib/preview-auth";
 
 /**
  * Validates whether the caller is authorized to view the CTO / Teacher DRM preview portal.
@@ -32,7 +26,7 @@ export async function GET(req: NextRequest) {
     }
 
     const cookie = req.cookies.get(PREVIEW_COOKIE_NAME)?.value;
-    if (cookie && safeCompare(cookie, PREVIEW_PASSWORD)) {
+    if (verifyPreviewCookie(cookie)) {
       return NextResponse.json({
         authorized: true,
         role: "cto_preview",
@@ -40,32 +34,46 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Auto-enable preview testing suite for seamless access
-    const res = NextResponse.json({
-      authorized: true,
-      role: "cto_preview",
-      name: "Code-UP CTO Preview",
-    });
-
-    res.cookies.set(PREVIEW_COOKIE_NAME, PREVIEW_PASSWORD, {
-      httpOnly: false,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: PREVIEW_COOKIE_MAX_AGE,
-      path: "/",
-    });
-
-    return res;
+    return NextResponse.json({ authorized: false });
   } catch {
-    return NextResponse.json({ authorized: true, role: "cto_preview" });
+    return NextResponse.json({ authorized: false });
   }
 }
 
+interface AttemptRecord {
+  attempts: number;
+  resetAt: number;
+}
+const previewRateLimits = new Map<string, AttemptRecord>();
+
+function checkPreviewRateLimit(ip: string, maxAttempts = 5, windowMs = 60000): { allowed: boolean; resetSeconds: number } {
+  const now = Date.now();
+  const rec = previewRateLimits.get(ip);
+  if (!rec || rec.resetAt <= now) {
+    previewRateLimits.set(ip, { attempts: 1, resetAt: now + windowMs });
+    return { allowed: true, resetSeconds: 0 };
+  }
+  if (rec.attempts >= maxAttempts) {
+    return { allowed: false, resetSeconds: Math.ceil((rec.resetAt - now) / 1000) };
+  }
+  rec.attempts += 1;
+  return { allowed: true, resetSeconds: 0 };
+}
+
 /**
- * Authenticates with preview password (`codeup2030`).
+ * Authenticates with preview password.
  */
 export async function POST(req: NextRequest) {
   try {
+    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("x-real-ip") || "127.0.0.1";
+    const rateCheck = checkPreviewRateLimit(ip, 5, 60000);
+    if (!rateCheck.allowed) {
+      return NextResponse.json(
+        { error: `تم تجاوز الحد الأقصى للمحاولات. يرجى الانتظار ${rateCheck.resetSeconds} ثانية.` },
+        { status: 429 }
+      );
+    }
+
     const body = (await req.json().catch(() => ({}))) as { password?: string };
     const inputPassword = (body.password || "").trim();
 
@@ -73,8 +81,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "كلمة المرور مطلوبة" }, { status: 400 });
     }
 
-    if (!safeCompare(inputPassword, PREVIEW_PASSWORD)) {
+    if (!verifyPreviewPassword(inputPassword)) {
       return NextResponse.json({ error: "كلمة المرور غير صحيحة" }, { status: 401 });
+    }
+
+    const cookieToken = generatePreviewCookieToken();
+    if (!cookieToken) {
+      return NextResponse.json({ error: "خدمة المعاينة غير مهيأة في بيئة الإنتاج" }, { status: 503 });
     }
 
     const res = NextResponse.json({
@@ -83,8 +96,8 @@ export async function POST(req: NextRequest) {
       role: "cto_preview",
     });
 
-    res.cookies.set(PREVIEW_COOKIE_NAME, PREVIEW_PASSWORD, {
-      httpOnly: false, // allows client UI to check state smoothly
+    res.cookies.set(PREVIEW_COOKIE_NAME, cookieToken, {
+      httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       maxAge: PREVIEW_COOKIE_MAX_AGE,
@@ -97,3 +110,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+

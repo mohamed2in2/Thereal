@@ -75,7 +75,19 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json(
-      { user: updatedUser },
+      {
+        user: {
+          id: updatedUser.id,
+          name: updatedUser.name,
+          email: updatedUser.email,
+          role: updatedUser.role,
+          phone: updatedUser.phone,
+          parentPhone: updatedUser.parentPhone,
+          age: updatedUser.age,
+          educationalStage: updatedUser.educationalStage,
+          profileCompleted: updatedUser.profileCompleted,
+        },
+      },
       { status: 200 }
     )
   } catch (error) {

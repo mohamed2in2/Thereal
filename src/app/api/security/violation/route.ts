@@ -1,14 +1,63 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-
 import { whatsappOrchestrator } from "@/lib/whatsapp/orchestrator";
+
+interface RateRecord {
+  count: number;
+  resetAt: number;
+}
+
+const violationRateMap = new Map<string, RateRecord>();
+const lastParentAlertByStudent = new Map<string, number>();
+
+const RATE_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
+const MAX_VIOLATIONS_PER_WINDOW = 10;
+const PARENT_ALERT_COOLDOWN_MS = 6 * 60 * 60 * 1000; // 6 hours
+
+function checkViolationRateLimit(key: string): boolean {
+  const now = Date.now();
+  const record = violationRateMap.get(key);
+
+  if (!record || now > record.resetAt) {
+    violationRateMap.set(key, { count: 1, resetAt: now + RATE_WINDOW_MS });
+    return true;
+  }
+
+  if (record.count >= MAX_VIOLATIONS_PER_WINDOW) {
+    return false;
+  }
+
+  record.count += 1;
+  return true;
+}
+
+function shouldSendParentAlert(studentId: string): boolean {
+  const now = Date.now();
+  const lastAlert = lastParentAlertByStudent.get(studentId) || 0;
+  if (now - lastAlert < PARENT_ALERT_COOLDOWN_MS) {
+    return false;
+  }
+  lastParentAlertByStudent.set(studentId, now);
+  return true;
+}
 
 export async function POST(req: NextRequest) {
   try {
     const session = await getSession();
     if (!session || !session.id) {
       return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
+    }
+
+    const ip = req.headers.get("x-forwarded-for")?.split(",")[0] || req.headers.get("x-real-ip") || "127.0.0.1";
+
+    // Rate Limiting (10 violation reports per 5 minutes per student/IP)
+    const rateLimitKey = `${session.id}:${ip}`;
+    if (!checkViolationRateLimit(rateLimitKey)) {
+      return NextResponse.json(
+        { error: "تم إرسال عدد كبير من البلاغات في وقت قصير. يرجى الانتظار." },
+        { status: 429 }
+      );
     }
 
     const body = await req.json();
@@ -22,7 +71,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "نوع المخالفة مطلوب" }, { status: 400 });
     }
 
-    const ip = req.headers.get("x-forwarded-for")?.split(",")[0] || req.headers.get("x-real-ip") || "127.0.0.1";
     const userAgent = req.headers.get("user-agent") || undefined;
 
     await prisma.securityViolation.create({
@@ -45,8 +93,8 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Notify parent via WhatsApp on threshold (e.g. 3, 6, 9 violations)
-    if (recentViolations >= 3 && recentViolations % 3 === 0) {
+    // Notify parent via WhatsApp on threshold (e.g. 3, 6, 9 violations) with 6h cooldown
+    if (recentViolations >= 3 && recentViolations % 3 === 0 && shouldSendParentAlert(session.id)) {
       const student = await prisma.user.findUnique({
         where: { id: session.id },
         select: { name: true, parentPhone: true },
@@ -71,3 +119,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "خطأ داخلي" }, { status: 500 });
   }
 }
+

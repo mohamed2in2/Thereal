@@ -679,7 +679,7 @@ async function testTokenVersionRevocation() {
     assert.equal(refreshedUser?.tokenVersion, 2, "DB tokenVersion must increment to 2");
 
     // Verify token payload against DB version
-    const isRevoked = (payload1?.tokenVersion !== undefined && refreshedUser?.tokenVersion !== payload1.tokenVersion);
+    const isRevoked = (payload1?.tokenVersion !== undefined && (refreshedUser?.tokenVersion as any) !== (payload1.tokenVersion as any));
     assert.equal(isRevoked, true, "Token version 1 must be considered revoked after version increments to 2");
 
     // Sign new token with version 2
@@ -811,6 +811,244 @@ async function testWhatsAppWorkerAutostartGuard() {
   );
 }
 
+// ── Test 24 ──────────────────────────────────────────────────────────────────
+// Preview auth password must fail closed in production when PREVIEW_PASSWORD is unset.
+async function testPreviewAuthFailsClosedInProduction() {
+  const originalEnv = process.env.NODE_ENV;
+  const originalSecret = process.env.PREVIEW_PASSWORD;
+  try {
+    delete process.env.PREVIEW_PASSWORD;
+    process.env.NODE_ENV = "production";
+    const { getPreviewPassword, verifyPreviewPassword } = await import("../src/lib/preview-auth.ts");
+    assert.equal(getPreviewPassword(), null, "getPreviewPassword must return null in production if unset");
+    assert.equal(verifyPreviewPassword("codeup2030"), false, "verifyPreviewPassword must refuse static fallback in production");
+  } finally {
+    process.env.NODE_ENV = originalEnv;
+    if (originalSecret) process.env.PREVIEW_PASSWORD = originalSecret;
+  }
+}
+
+// ── Test 25 ──────────────────────────────────────────────────────────────────
+// GET /api/preview/auth must not auto-authorize or issue cookies to anonymous callers.
+async function testPreviewAuthDoesNotAutoAuthorizeAnonymous() {
+  const { GET } = await import("../src/app/api/preview/auth/route.ts");
+  const req = new Request("http://localhost/api/preview/auth", { method: "GET" }) as any;
+  req.cookies = { get: () => undefined };
+
+  const res = await GET(req);
+  const data = await res.json();
+  assert.equal(data.authorized, false, "GET /api/preview/auth must return authorized: false for anonymous users");
+}
+
+// ── Test 26 ──────────────────────────────────────────────────────────────────
+// AI summary route must enforce checkVideoAccess on paid videos.
+async function testAiSummaryEnforcesVideoAccess() {
+  const source = await import("node:fs/promises").then((fs) =>
+    fs.readFile(new URL("../src/app/api/videos/[id]/ai-summary/route.ts", import.meta.url), "utf8")
+  );
+  assert.ok(
+    /checkVideoAccess/.test(source),
+    "ai-summary route must call checkVideoAccess before returning lecture summaries"
+  );
+}
+
+// ── Test 27 ──────────────────────────────────────────────────────────────────
+// Video questions and answer submissions must enforce checkVideoAccess.
+async function testVideoQuestionsEnforceVideoAccess() {
+  const questionsSource = await import("node:fs/promises").then((fs) =>
+    fs.readFile(new URL("../src/app/api/videos/[id]/questions/route.ts", import.meta.url), "utf8")
+  );
+  const answerSource = await import("node:fs/promises").then((fs) =>
+    fs.readFile(new URL("../src/app/api/videos/[id]/questions/[qid]/answer/route.ts", import.meta.url), "utf8")
+  );
+
+  assert.ok(
+    /checkVideoAccess/.test(questionsSource),
+    "questions route must call checkVideoAccess before returning questions"
+  );
+  assert.ok(
+    /checkVideoAccess/.test(answerSource),
+    "answer route must call checkVideoAccess before accepting student submissions"
+  );
+}
+
+// ── Test 28 ──────────────────────────────────────────────────────────────────
+// Profile completion response must not leak password hashes.
+async function testProfileCompletionDoesNotLeakPasswordHash() {
+  const source = await import("node:fs/promises").then((fs) =>
+    fs.readFile(new URL("../src/app/api/auth/complete-profile/route.ts", import.meta.url), "utf8")
+  );
+  assert.ok(
+    !/\{\s*user:\s*updatedUser\s*\}/.test(source),
+    "complete-profile route must not serialize raw database user record with password hash"
+  );
+}
+
+// ── Test 29 ──────────────────────────────────────────────────────────────────
+// Forgot password route must enforce reCAPTCHA.
+async function testForgotPasswordEnforcesCaptcha() {
+  const source = await import("node:fs/promises").then((fs) =>
+    fs.readFile(new URL("../src/app/api/auth/forgot-password/route.ts", import.meta.url), "utf8")
+  );
+  assert.ok(
+    /enforceCaptcha/.test(source),
+    "forgot-password route must call enforceCaptcha to protect against automated scanning"
+  );
+}
+
+// ── Test 30 ──────────────────────────────────────────────────────────────────
+// VdoCipher server upload endpoint must enforce folder ownership before creating video.
+async function testServerUploadEnforcesFolderOwnership() {
+  const source = await import("node:fs/promises").then((fs) =>
+    fs.readFile(new URL("../src/app/api/teacher/vdocipher/server-upload/route.ts", import.meta.url), "utf8")
+  );
+  assert.ok(
+    /prisma\.folder\.findFirst/.test(source) &&
+    /teacherId:\s*session\.id/.test(source) &&
+    /!session/.test(source),
+    "server-upload route must verify folder ownership against session.id or superadmin before creating videos"
+  );
+}
+
+// ── Test 31 ──────────────────────────────────────────────────────────────────
+// Administrative password reset and account suspension must bump tokenVersion & invalidate cache.
+async function testAdminResetAndSuspensionRevocation() {
+  const teacherResetSource = await import("node:fs/promises").then((fs) =>
+    fs.readFile(new URL("../src/app/api/admin/teachers/[id]/reset-password/route.ts", import.meta.url), "utf8")
+  );
+  assert.ok(
+    /tokenVersion:\s*\{\s*increment:\s*1\s*\}/.test(teacherResetSource) &&
+    /invalidateUserSessionCache/.test(teacherResetSource),
+    "teacher reset-password route must increment tokenVersion and invalidate session cache"
+  );
+
+  const staffSource = await import("node:fs/promises").then((fs) =>
+    fs.readFile(new URL("../src/app/api/admin/superadmin/staff-accounts/[id]/route.ts", import.meta.url), "utf8")
+  );
+  assert.ok(
+    /tokenVersion:\s*\{\s*increment:\s*1\s*\}/.test(staffSource) &&
+    /invalidateUserSessionCache/.test(staffSource),
+    "staff accounts route must increment tokenVersion and invalidate session cache on password reset and deletion"
+  );
+
+  const studentSource = await import("node:fs/promises").then((fs) =>
+    fs.readFile(new URL("../src/app/api/admin/superadmin/students/[id]/route.ts", import.meta.url), "utf8")
+  );
+  assert.ok(
+    /tokenVersion:\s*\{\s*increment:\s*1\s*\}/.test(studentSource) &&
+    /invalidateUserSessionCache/.test(studentSource),
+    "student administration route must increment tokenVersion and invalidate session cache on suspension/deletion"
+  );
+}
+
+// ── Test 32 ──────────────────────────────────────────────────────────────────
+// Parent portal link reissue must reject if parent phone is identical to student phone.
+async function testParentTokenReissueRejectsStudentOwnPhone() {
+  const source = await import("node:fs/promises").then((fs) =>
+    fs.readFile(new URL("../src/app/api/student/parent-phone/route.ts", import.meta.url), "utf8")
+  );
+  assert.ok(
+    /reissueParentToken/.test(source),
+    "student parent-phone route must delegate to reissueParentToken which rejects student own phone"
+  );
+}
+
+// ── Test 33 ──────────────────────────────────────────────────────────────────
+// DRM preview endpoint must enforce teacher course ownership for registered videos.
+async function testDrmPreviewEnforcesTeacherCourseOwnership() {
+  const source = await import("node:fs/promises").then((fs) =>
+    fs.readFile(new URL("../src/app/api/teacher/drm-preview/route.ts", import.meta.url), "utf8")
+  );
+  assert.ok(
+    /isOwnerTeacher/.test(source) &&
+    /registeredVideo/.test(source),
+    "drm-preview route must verify teacher ownership for registered course assets"
+  );
+}
+
+// ── Test 34 ──────────────────────────────────────────────────────────────────
+// Preview cookie must store a keyed HMAC digest, never the plaintext password.
+async function testPreviewCookieStoresHmacNotPlaintext() {
+  const { generatePreviewCookieToken, verifyPreviewCookie } = await import("../src/lib/preview-auth.ts");
+  const token = generatePreviewCookieToken();
+  assert.ok(token && token.length === 64, "preview cookie token must be a 64-char HMAC digest");
+  assert.notEqual(token, "codeup2030", "cookie token must not match plaintext password");
+  assert.equal(verifyPreviewCookie(token), true, "valid HMAC token must be accepted");
+  assert.equal(verifyPreviewCookie("invalid-fake-token"), false, "invalid token must be rejected");
+}
+
+// ── Test 35 ──────────────────────────────────────────────────────────────────
+// Security violation endpoint must contain rate limiting & 6-hour parent alert cooldown.
+async function testSecurityViolationRateLimitingAndAlertCooldown() {
+  const source = await import("node:fs/promises").then((fs) =>
+    fs.readFile(new URL("../src/app/api/security/violation/route.ts", import.meta.url), "utf8")
+  );
+  assert.ok(
+    /checkViolationRateLimit/.test(source) &&
+    /shouldSendParentAlert/.test(source) &&
+    /PARENT_ALERT_COOLDOWN_MS/.test(source),
+    "security violation route must enforce rate limiting and parent notification cooldown"
+  );
+}
+
+// ── Test 36 ──────────────────────────────────────────────────────────────────
+// VdoCipher upload-ticket endpoint must safely handle accountId and avoid null dereference.
+async function testVdoCipherUploadTicketHandlesFallbackAccountSafely() {
+  const source = await import("node:fs/promises").then((fs) =>
+    fs.readFile(new URL("../src/app/api/teacher/vdocipher/upload-ticket/route.ts", import.meta.url), "utf8")
+  );
+  assert.ok(
+    /if\s*\(\s*accountId\s*\)/.test(source),
+    "upload-ticket route must guard vdoCipherVideoAsset creation with accountId check"
+  );
+}
+
+// ── Test 37 ──────────────────────────────────────────────────────────────────
+// VdoCipher folder uploads must strictly require an authenticated staff session.
+async function testVdoCipherFolderUploadsRequireStaffSession() {
+  const uploadTicketSource = await import("node:fs/promises").then((fs) =>
+    fs.readFile(new URL("../src/app/api/teacher/vdocipher/upload-ticket/route.ts", import.meta.url), "utf8")
+  );
+  assert.ok(
+    /!session\s*\|\|\s*!\["teacher",\s*"admin",\s*"superadmin"\]/.test(uploadTicketSource),
+    "upload-ticket route must reject unauthenticated/preview-only callers when folderId is specified"
+  );
+
+  const gdriveImportSource = await import("node:fs/promises").then((fs) =>
+    fs.readFile(new URL("../src/app/api/teacher/vdocipher/gdrive-import/route.ts", import.meta.url), "utf8")
+  );
+  assert.ok(
+    /!session\s*\|\|\s*!\["teacher",\s*"admin",\s*"superadmin"\]/.test(gdriveImportSource),
+    "vdocipher gdrive-import route must reject unauthenticated/preview-only callers when folderId is specified"
+  );
+}
+
+// ── Test 38 ──────────────────────────────────────────────────────────────────
+// Admin student device reset must increment tokenVersion & invalidate session cache.
+async function testAdminStudentDeviceResetRevokesSessions() {
+  const source = await import("node:fs/promises").then((fs) =>
+    fs.readFile(new URL("../src/app/api/admin/students/[id]/reset-devices/route.ts", import.meta.url), "utf8")
+  );
+  assert.ok(
+    /tokenVersion:\s*\{\s*increment:\s*1\s*\}/.test(source) &&
+    /invalidateUserSessionCache/.test(source),
+    "admin reset-devices route must increment user tokenVersion and invalidate session cache"
+  );
+}
+
+// ── Test 39 ──────────────────────────────────────────────────────────────────
+// Preview password authentication endpoint must enforce IP rate limiting.
+async function testPreviewAuthRateLimiting() {
+  const source = await import("node:fs/promises").then((fs) =>
+    fs.readFile(new URL("../src/app/api/preview/auth/route.ts", import.meta.url), "utf8")
+  );
+  assert.ok(
+    /checkPreviewRateLimit/.test(source) &&
+    /status:\s*429/.test(source),
+    "preview auth route must enforce rate limiting and return 429 when threshold exceeded"
+  );
+}
+
 const TESTS: Array<[string, () => Promise<void>]> = [
   ["challenge cookie leaks nothing crackable", testChallengeCookieLeaksNothingCrackable],
   ["challenge is single use", testChallengeIsSingleUse],
@@ -835,6 +1073,22 @@ const TESTS: Array<[string, () => Promise<void>]> = [
   ["VdoCipher OTP TTL default 120s", testVdoCipherShortOtpTtl],
   ["expired challenge cleanup in cron", testChallengeCleanupInCron],
   ["WhatsApp worker-0 autostart guard", testWhatsAppWorkerAutostartGuard],
+  ["preview auth fails closed in production when unset", testPreviewAuthFailsClosedInProduction],
+  ["GET /api/preview/auth does not auto-authorize anonymous", testPreviewAuthDoesNotAutoAuthorizeAnonymous],
+  ["ai-summary enforces checkVideoAccess", testAiSummaryEnforcesVideoAccess],
+  ["video questions and answers enforce checkVideoAccess", testVideoQuestionsEnforceVideoAccess],
+  ["complete-profile does not leak password hash", testProfileCompletionDoesNotLeakPasswordHash],
+  ["forgot-password enforces reCAPTCHA", testForgotPasswordEnforcesCaptcha],
+  ["server-upload enforces folder ownership", testServerUploadEnforcesFolderOwnership],
+  ["admin reset and suspension revoke active sessions", testAdminResetAndSuspensionRevocation],
+  ["parent token reissue rejects student own phone", testParentTokenReissueRejectsStudentOwnPhone],
+  ["drm-preview enforces teacher course ownership", testDrmPreviewEnforcesTeacherCourseOwnership],
+  ["preview cookie stores HMAC not plaintext", testPreviewCookieStoresHmacNotPlaintext],
+  ["security violation enforces rate limit and cooldown", testSecurityViolationRateLimitingAndAlertCooldown],
+  ["upload-ticket guards fallback account safely", testVdoCipherUploadTicketHandlesFallbackAccountSafely],
+  ["vdocipher folder uploads require staff session", testVdoCipherFolderUploadsRequireStaffSession],
+  ["admin student device reset revokes sessions", testAdminStudentDeviceResetRevokesSessions],
+  ["preview auth enforces IP rate limiting", testPreviewAuthRateLimiting],
 ];
 
 async function main() {
@@ -864,3 +1118,4 @@ main().catch(async (error) => {
   await prisma?.$disconnect().catch(() => {});
   process.exitCode = 1;
 });
+

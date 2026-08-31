@@ -10,6 +10,49 @@ interface Superadmin {
   isActive: boolean;
 }
 
+interface FoundStudent {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  parentPhone: string | null;
+  educationalStage: string | null;
+  age: number | null;
+  isActive: boolean;
+  points: number;
+  createdAt: string;
+  lastLoginAt: string | null;
+  _count?: {
+    accessCodes: number;
+    courseEnrollments: number;
+    quizResults: number;
+  };
+}
+
+interface ActivityLogItem {
+  id: string;
+  adminName: string;
+  action: string;
+  targetType: string;
+  targetId: string;
+  targetName: string;
+  createdAt: string;
+  meta?: Record<string, any> | null;
+}
+
+interface LiveLogStudent {
+  id: string;
+  name: string;
+  phone: string | null;
+  parentPhone: string | null;
+  educationalStage: string | null;
+  email: string;
+  createdAt: string;
+  lastLoginAt: string | null;
+  isActive: boolean;
+  points: number;
+}
+
 const card = "rounded-2xl border border-gray-700 bg-gray-800 p-5";
 const input =
   "w-full rounded-lg border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-sky-500";
@@ -18,6 +61,20 @@ export function InstanceControlSection() {
   const { success: toastSuccess, error: toastError } = useToast();
   const [actionPassword, setActionPassword] = useState("");
   const [busy, setBusy] = useState(false);
+
+  // Student phone search & Impersonation state
+  const [studentPhoneSearch, setStudentPhoneSearch] = useState("");
+  const [foundStudents, setFoundStudents] = useState<FoundStudent[]>([]);
+  const [searchingStudent, setSearchingStudent] = useState(false);
+  const [impersonatingId, setImpersonatingId] = useState<string | null>(null);
+
+  // Real-time Live Activity & Deletions state
+  const [liveStudents, setLiveStudents] = useState<LiveLogStudent[]>([]);
+  const [activityLogs, setActivityLogs] = useState<ActivityLogItem[]>([]);
+  const [totalStudentsCount, setTotalStudentsCount] = useState(0);
+  const [loadingLiveLogs, setLoadingLiveLogs] = useState(false);
+  const [liveTab, setLiveTab] = useState<"students" | "actions">("students");
+  const [autoRefreshLive, setAutoRefreshLive] = useState(true);
 
   const [maintOn, setMaintOn] = useState(false);
   const [maintMsg, setMaintMsg] = useState("");
@@ -246,6 +303,89 @@ export function InstanceControlSection() {
     }
   };
 
+  // ── Student Impersonation / Direct Login (Owner High Security) ──
+  const searchStudent = async () => {
+    if (!studentPhoneSearch.trim()) {
+      toastError("يرجى إدخال رقم هاتف الطالب أولاً");
+      return;
+    }
+    setSearchingStudent(true);
+    setFoundStudents([]);
+    try {
+      const res = await fetch("/api/admin/superadmin/impersonate", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "search", phone: studentPhoneSearch }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "لم يتم العثور على طالب");
+      setFoundStudents(data.students || []);
+      toastSuccess(`تم العثور على ${data.students?.length} حساب`);
+    } catch (e) {
+      toastError(e instanceof Error ? e.message : "خطأ أثناء البحث");
+    } finally {
+      setSearchingStudent(false);
+    }
+  };
+
+  const loginAsStudent = async (studentId: string, studentName: string) => {
+    if (!needPw()) return;
+    setImpersonatingId(studentId);
+    try {
+      const res = await fetch("/api/admin/superadmin/impersonate", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "impersonate",
+          studentId,
+          actionPassword,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "تعذر الدخول لحساب الطالب");
+      toastSuccess(`جاري الانتقال لحساب الطالب: ${studentName}...`);
+      setTimeout(() => {
+        window.location.href = data.redirectUrl || "/courses";
+      }, 600);
+    } catch (e) {
+      toastError(e instanceof Error ? e.message : "خطأ أثناء الدخول للحساب");
+      setImpersonatingId(null);
+    }
+  };
+
+  // ── Real-Time Live Activity & Deletions Feed ──
+  const fetchLiveLogs = useCallback(async (showToast = false) => {
+    setLoadingLiveLogs(true);
+    try {
+      const res = await fetch("/api/admin/superadmin/live-logs", {
+        credentials: "include",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        setLiveStudents(data.recentStudents || []);
+        setActivityLogs(data.activityLogs || []);
+        setTotalStudentsCount(data.totalStudents || 0);
+        if (showToast) toastSuccess("تم تحديث السجلات المباشرة");
+      }
+    } catch {
+      // quiet poll error
+    } finally {
+      setLoadingLiveLogs(false);
+    }
+  }, [toastSuccess]);
+
+  // Initial load & Polling interval
+  useEffect(() => {
+    void fetchLiveLogs();
+    if (!autoRefreshLive) return;
+    const timer = setInterval(() => {
+      void fetchLiveLogs();
+    }, 10000);
+    return () => clearInterval(timer);
+  }, [fetchLiveLogs, autoRefreshLive]);
+
   return (
     <div className="max-w-3xl space-y-6" dir="rtl">
       {/* Shared action password */}
@@ -260,6 +400,301 @@ export function InstanceControlSection() {
           placeholder="••••••••"
           className={input}
         />
+      </div>
+
+      {/* ── Direct Student Access (Owner High Security) ── */}
+      <div className="rounded-2xl border border-amber-500/30 bg-gradient-to-b from-gray-800 to-gray-850 p-5 shadow-lg relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-2xl pointer-events-none" />
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xl">🔐</span>
+              <h3 className="font-bold text-white text-base">الدخول المباشر لحساب طالب (Owner Super-Access)</h3>
+              <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-bold text-amber-300 border border-amber-500/30">
+                خاص بالمالك فقط
+              </span>
+            </div>
+            <p className="text-xs text-gray-400 mt-1">
+              ابحث برقم هاتف أي طالب لمعاينة المنصة بعينيه مباشرة وحل مشكلاته الفنية والتعليمية.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row items-center gap-2 mt-4">
+          <div className="relative flex-1 w-full">
+            <input
+              type="text"
+              dir="ltr"
+              value={studentPhoneSearch}
+              onChange={(e) => setStudentPhoneSearch(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && void searchStudent()}
+              placeholder="+201113871409 أو 01113871409"
+              className={`${input} font-mono text-left pl-3 pr-9`}
+            />
+            <span className="absolute right-3 top-2.5 text-gray-400 text-sm pointer-events-none">
+              📱
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={searchStudent}
+            disabled={searchingStudent}
+            className="w-full sm:w-auto shrink-0 rounded-lg bg-amber-500 px-5 py-2 text-sm font-bold text-gray-950 hover:bg-amber-400 disabled:opacity-50 transition-colors flex items-center justify-center gap-2 shadow-md shadow-amber-500/10"
+          >
+            {searchingStudent ? (
+              <>
+                <span className="inline-block w-4 h-4 border-2 border-gray-950 border-t-transparent rounded-full animate-spin" />
+                <span>جارٍ البحث...</span>
+              </>
+            ) : (
+              <>
+                <span>بحث عن الطالب</span>
+                <span>🔍</span>
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* Found Students Results */}
+        {foundStudents.length > 0 && (
+          <div className="mt-4 space-y-3 pt-4 border-t border-gray-700/60">
+            <div className="text-xs font-semibold text-gray-300 mb-2">
+              نتائج البحث ({foundStudents.length}):
+            </div>
+            {foundStudents.map((st) => (
+              <div
+                key={st.id}
+                className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-xl bg-gray-900/80 border border-gray-700/80 hover:border-amber-500/40 transition-colors"
+              >
+                <div className="min-w-0 space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-bold text-white text-sm">{st.name}</span>
+                    <span className="rounded bg-sky-500/20 text-sky-300 text-[11px] font-semibold px-2 py-0.5 border border-sky-500/30">
+                      {st.educationalStage === "sec_1"
+                        ? "أولى ثانوي"
+                        : st.educationalStage === "sec_2"
+                        ? "ثانية ثانوي"
+                        : st.educationalStage === "sec_3"
+                        ? "ثالثة ثانوي"
+                        : st.educationalStage || "غير محدد"}
+                    </span>
+                    <span
+                      className={`rounded text-[10px] font-bold px-1.5 py-0.5 ${
+                        st.isActive
+                          ? "bg-emerald-500/20 text-emerald-400"
+                          : "bg-rose-500/20 text-rose-400"
+                      }`}
+                    >
+                      {st.isActive ? "نشط" : "معطل"}
+                    </span>
+                  </div>
+                  <div className="text-xs text-gray-400 flex items-center gap-3 flex-wrap">
+                    <span className="font-mono text-gray-300">📱 {st.phone || "—"}</span>
+                    {st.parentPhone && (
+                      <span className="font-mono text-gray-400">👨‍👧 ولي الأمر: {st.parentPhone}</span>
+                    )}
+                    <span className="text-amber-400/90 font-bold">⭐ {st.points} نقطة</span>
+                    <span className="text-gray-500 text-[11px]">
+                      مسجل في: {st._count?.courseEnrollments || st._count?.accessCodes || 0} كورس
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => loginAsStudent(st.id, st.name)}
+                  disabled={impersonatingId === st.id}
+                  className="w-full sm:w-auto shrink-0 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-500 px-4 py-2 text-xs font-bold text-white hover:from-emerald-400 hover:to-teal-400 disabled:opacity-50 transition-all flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/20"
+                >
+                  {impersonatingId === st.id ? (
+                    <>
+                      <span className="inline-block w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>جارٍ الدخول...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>🚀 الدخول لحساب الطالب</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Real-Time Live Stream & Activity Log ── */}
+      <div className="rounded-2xl border border-sky-500/30 bg-gradient-to-b from-gray-800 to-gray-850 p-5 shadow-lg relative overflow-hidden">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
+          <div className="flex items-center gap-2.5">
+            <span className="relative flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+            </span>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-white text-base">سجل الأنشطة وتسجيل الطلاب المباشر (Live Stream)</h3>
+                <span className="rounded-full bg-sky-500/20 px-2 py-0.5 text-[10px] font-bold text-sky-300 border border-sky-500/30">
+                  إجمالي الطلاب: {totalStudentsCount}
+                </span>
+              </div>
+              <p className="text-xs text-gray-400 mt-0.5">
+                تتبع لحظي بالوقت والتاريخ لحسابات الطلاب المنشأة وحذف الكورسات والعمليات الحية.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+            <button
+              type="button"
+              onClick={() => setAutoRefreshLive(!autoRefreshLive)}
+              className={`text-xs px-2.5 py-1 rounded-lg border font-semibold transition-colors flex items-center gap-1.5 ${
+                autoRefreshLive
+                  ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                  : "bg-gray-700/50 text-gray-400 border-gray-600"
+              }`}
+            >
+              <span>{autoRefreshLive ? "🟢 تحديث تلقائي (10ث)" : "⚪ متوقف"}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => void fetchLiveLogs(true)}
+              disabled={loadingLiveLogs}
+              className="text-xs px-3 py-1 rounded-lg bg-gray-700 hover:bg-gray-600 text-white font-bold border border-gray-600 transition-colors flex items-center gap-1"
+            >
+              <span>{loadingLiveLogs ? "..." : "🔄 تحديث"}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Tab Switcher */}
+        <div className="flex border-b border-gray-700 mb-3 gap-2">
+          <button
+            type="button"
+            onClick={() => setLiveTab("students")}
+            className={`pb-2 px-3 text-xs font-bold transition-colors border-b-2 flex items-center gap-1.5 ${
+              liveTab === "students"
+                ? "border-sky-500 text-sky-400"
+                : "border-transparent text-gray-400 hover:text-gray-200"
+            }`}
+          >
+            <span>👥 تسجيلات الطلاب الحية</span>
+            <span className="rounded-full bg-gray-700 px-1.5 py-0.2 text-[10px] text-gray-300">
+              {liveStudents.length}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setLiveTab("actions")}
+            className={`pb-2 px-3 text-xs font-bold transition-colors border-b-2 flex items-center gap-1.5 ${
+              liveTab === "actions"
+                ? "border-sky-500 text-sky-400"
+                : "border-transparent text-gray-400 hover:text-gray-200"
+            }`}
+          >
+            <span>🗑️ سجل العمليات وحذف الكورسات</span>
+            <span className="rounded-full bg-gray-700 px-1.5 py-0.2 text-[10px] text-gray-300">
+              {activityLogs.length}
+            </span>
+          </button>
+        </div>
+
+        {/* Tab 1: Live Students Stream */}
+        {liveTab === "students" && (
+          <div className="max-h-72 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+            {liveStudents.length === 0 ? (
+              <div className="text-center py-6 text-xs text-gray-400">لا توجد تسجيلات حديثة.</div>
+            ) : (
+              liveStudents.map((st) => (
+                <div
+                  key={st.id}
+                  className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 p-2.5 rounded-lg bg-gray-900/60 border border-gray-700/50 hover:bg-gray-900 transition-colors text-xs"
+                >
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    <span className="font-mono text-[11px] text-sky-400 bg-sky-500/10 px-1.5 py-0.5 rounded border border-sky-500/20">
+                      ⏱️ {new Date(st.createdAt).toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                    </span>
+                    <span className="font-bold text-white">{st.name}</span>
+                    <span className="font-mono text-gray-300">{st.phone || st.email}</span>
+                    <span className="rounded bg-gray-800 text-gray-300 text-[10px] px-1.5 py-0.5 border border-gray-700">
+                      {st.educationalStage === "sec_1"
+                        ? "أولى ثانوي"
+                        : st.educationalStage === "sec_2"
+                        ? "ثانية ثانوي"
+                        : st.educationalStage === "sec_3"
+                        ? "ثالثة ثانوي"
+                        : st.educationalStage || "عام"}
+                    </span>
+                    <span className="text-gray-500 text-[11px]">
+                      📅 {new Date(st.createdAt).toLocaleDateString("ar-EG", { month: "short", day: "numeric" })}
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => loginAsStudent(st.id, st.name)}
+                    disabled={impersonatingId === st.id}
+                    className="shrink-0 px-2.5 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-[11px] font-bold border border-amber-500/30 transition-colors flex items-center gap-1"
+                  >
+                    {impersonatingId === st.id ? "..." : "🚀 دخول كطالب"}
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* Tab 2: Activity & Deletion Log */}
+        {liveTab === "actions" && (
+          <div className="max-h-72 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+            {activityLogs.length === 0 ? (
+              <div className="text-center py-6 text-xs text-gray-400">لا توجد عمليات مسجلة حديثاً.</div>
+            ) : (
+              activityLogs.map((log) => (
+                <div
+                  key={log.id}
+                  className="p-2.5 rounded-lg bg-gray-900/60 border border-gray-700/50 hover:bg-gray-900 transition-colors text-xs flex flex-col gap-1"
+                >
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono text-[11px] text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                        ⏱️ {new Date(log.createdAt).toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                      </span>
+                      <span
+                        className={`font-bold px-2 py-0.5 rounded text-[11px] ${
+                          log.action === "COURSE_LIBRARY_REMOVE"
+                            ? "bg-rose-500/20 text-rose-300 border border-rose-500/30"
+                            : log.action === "STUDENT_IMPERSONATE"
+                            ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                            : "bg-blue-500/20 text-blue-300 border border-blue-500/30"
+                        }`}
+                      >
+                        {log.action === "COURSE_LIBRARY_REMOVE"
+                          ? "🗑️ حذف كورس من المكتبة"
+                          : log.action === "STUDENT_IMPERSONATE"
+                          ? "🔐 دخول إداري كطالب"
+                          : log.action}
+                      </span>
+                      <span className="text-white font-semibold">{log.adminName}</span>
+                    </div>
+                    <span className="text-gray-500 text-[11px]">
+                      📅 {new Date(log.createdAt).toLocaleDateString("ar-EG", { month: "short", day: "numeric", year: "numeric" })}
+                    </span>
+                  </div>
+
+                  <div className="text-gray-300 text-[11px] flex items-center gap-2 flex-wrap pr-1">
+                    <span>الهدف: <strong className="text-white">{log.targetName}</strong></span>
+                    {log.meta && (
+                      <span className="text-gray-400 font-mono text-[10px]">
+                        {log.meta.studentPhone ? `(هاتف: ${log.meta.studentPhone})` : ""}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
       </div>
 
       {/* Maintenance */}

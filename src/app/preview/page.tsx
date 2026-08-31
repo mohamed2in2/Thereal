@@ -1,4 +1,4 @@
-"use client";
+ "use client";
 
 import React, { useState, useEffect, useCallback, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
@@ -123,8 +123,8 @@ function PreviewDashboardContent() {
   const urlTitle = searchParams.get("title") || "";
   const urlProvider = searchParams.get("provider") || "";
 
-  // ── Auth Gate State (Always enabled by default for testing suite) ───────────
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(true);
+  // ── Auth Gate State (Checks preview/staff auth on mount) ─────────────────
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [passwordInput, setPasswordInput] = useState("");
   const [authError, setAuthError] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
@@ -199,11 +199,12 @@ function PreviewDashboardContent() {
   // ── Check Auth status on mount ─────────────────────────────────────────────
   useEffect(() => {
     fetch("/api/preview/auth", { method: "GET", credentials: "include" })
-      .then(() => {
-        setIsAuthenticated(true);
+      .then((res) => res.json())
+      .then((data) => {
+        setIsAuthenticated(!!data?.authorized);
       })
       .catch(() => {
-        setIsAuthenticated(true);
+        setIsAuthenticated(false);
       });
   }, []);
 

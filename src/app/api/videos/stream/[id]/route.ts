@@ -2,25 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { checkVideoAccess } from "@/lib/authorization";
-import { timingSafeEqual } from "node:crypto";
+import { PREVIEW_COOKIE_NAME, verifyPreviewCookie } from "@/lib/preview-auth";
 import fs from "fs";
 import path from "path";
 
 const UPLOAD_DIR = path.join(process.cwd(), "uploads", "videos");
-const PREVIEW_PASSWORD = process.env.PREVIEW_PASSWORD || "codeup2030";
-const PREVIEW_COOKIE_NAME = "codeup_preview_auth";
-
-function isValidPreviewCookie(value: string | undefined): boolean {
-  if (!value) return false;
-  const actual = Buffer.from(value);
-  const expected = Buffer.from(PREVIEW_PASSWORD);
-  return actual.length === expected.length && timingSafeEqual(actual, expected);
-}
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await getSession();
-    const isPreviewAuthorized = isValidPreviewCookie(req.cookies.get(PREVIEW_COOKIE_NAME)?.value);
+    const isPreviewAuthorized = verifyPreviewCookie(req.cookies.get(PREVIEW_COOKIE_NAME)?.value);
     if (!session && !isPreviewAuthorized) {
       return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
     }

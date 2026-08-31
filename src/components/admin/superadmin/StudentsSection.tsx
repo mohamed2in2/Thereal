@@ -66,7 +66,7 @@ function stageLabel(value: string | null) {
   return EDUCATIONAL_STAGES.find((s) => s.value === value)?.label ?? value;
 }
 
-export function StudentsSection({ userRole = "superadmin" }: { userRole?: string }) {
+export function StudentsSection({ userRole = "superadmin", refreshKey }: { userRole?: string; refreshKey?: number }) {
   const { success: toastSuccess, error: toastError } = useToast();
   const canManageDevices = hasPermission(userRole, "suspend_student");
   const [maxDevices, setMaxDevices] = useState<number | null>(null);
@@ -148,6 +148,12 @@ export function StudentsSection({ userRole = "superadmin" }: { userRole?: string
     setPage(0);
     void search(EMPTY_FILTERS, 0);
   };
+
+  useEffect(() => {
+    if (refreshKey && refreshKey > 0) {
+      void search(lastSearch.current.filters, lastSearch.current.page);
+    }
+  }, [refreshKey, search]);
 
   // Re-issue parent link for student
   const handleResendLink = async (student: Student) => {
@@ -408,20 +414,30 @@ export function StudentsSection({ userRole = "superadmin" }: { userRole?: string
           </div>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="submit"
             disabled={loading}
-            className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+            className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors cursor-pointer"
           >
             {loading ? "جارٍ البحث..." : "بحث"}
           </button>
           <button
             type="button"
             onClick={handleReset}
-            className="px-5 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm font-medium rounded-lg transition-colors"
+            className="px-5 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm font-medium rounded-lg transition-colors cursor-pointer"
           >
             عرض الكل
+          </button>
+          <button
+            type="button"
+            onClick={() => search(lastSearch.current.filters, lastSearch.current.page)}
+            disabled={loading}
+            className="px-3.5 py-2 bg-gray-700/80 hover:bg-gray-600/80 text-gray-200 text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+            title="تحديث القائمة"
+          >
+            <span className={loading ? "animate-spin" : ""}>🔄</span>
+            <span>تحديث</span>
           </button>
         </div>
       </form>

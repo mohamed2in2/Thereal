@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { hasPermission } from "@/lib/rbac";
 import { logAdminAction, LOG_ACTIONS, verifyRoleActionPassword } from "@/lib/admin-auth";
+import { invalidateUserSessionCache } from "@/lib/cache";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -51,7 +52,14 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
 
     if (action === "toggle_active") {
       const nowActive = !target.isActive;
-      await prisma.user.update({ where: { id }, data: { isActive: nowActive } });
+      await prisma.user.update({
+        where: { id },
+        data: {
+          isActive: nowActive,
+          ...(!nowActive ? { tokenVersion: { increment: 1 } } : {}),
+        } as any,
+      });
+      invalidateUserSessionCache(id);
       await logAdminAction({
         adminId: session.id,
         adminName: session.name,
@@ -71,7 +79,14 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
         return NextResponse.json({ error: "كلمة المرور يجب أن تكون 6 أحرف على الأقل" }, { status: 400 });
       }
       const hashed = await bcrypt.hash(newPassword, 12);
-      await prisma.user.update({ where: { id }, data: { password: hashed } });
+      await prisma.user.update({
+        where: { id },
+        data: {
+          password: hashed,
+          tokenVersion: { increment: 1 },
+        } as any,
+      });
+      invalidateUserSessionCache(id);
       await logAdminAction({
         adminId: session.id,
         adminName: session.name,
@@ -128,8 +143,14 @@ export async function DELETE(req: NextRequest, ctx: Ctx) {
 
     await prisma.user.update({
       where: { id },
-      data: { isDeleted: true, deletedAt: new Date(), isActive: false },
+      data: {
+        isDeleted: true,
+        deletedAt: new Date(),
+        isActive: false,
+        tokenVersion: { increment: 1 },
+      } as any,
     });
+    invalidateUserSessionCache(id);
 
     await logAdminAction({
       adminId: session.id,

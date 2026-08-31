@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { verifyRoleActionPassword, logAdminAction, LOG_ACTIONS } from "@/lib/admin-auth";
 import { hasPermission } from "@/lib/rbac";
 import { getStudentMaxDevices } from "@/lib/settings";
+import { invalidateUserSessionCache } from "@/lib/cache";
 
 export async function GET(
   _req: NextRequest,
@@ -48,6 +49,26 @@ export async function GET(
             },
           },
           orderBy: { usedAt: "desc" },
+        },
+        studentSubscriptions: {
+          select: {
+            id: true,
+            planType: true,
+            planLabel: true,
+            amount: true,
+            paymentSource: true,
+            paymentRef: true,
+            status: true,
+            createdAt: true,
+            expiresAt: true,
+            teacher: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+          orderBy: { createdAt: "desc" },
         },
       },
     });
@@ -137,7 +158,14 @@ export async function PATCH(
       return NextResponse.json({ error: "المتعلم غير موجود" }, { status: 404 });
     }
 
-    await prisma.user.update({ where: { id }, data: { isActive: body.isActive } });
+    await prisma.user.update({
+      where: { id },
+      data: {
+        isActive: body.isActive,
+        ...(body.isActive === false ? { tokenVersion: { increment: 1 } } : {}),
+      } as any,
+    });
+    invalidateUserSessionCache(id);
 
     await logAdminAction({
       adminId: session.id,
@@ -210,9 +238,15 @@ export async function DELETE(
     } else {
       await prisma.user.update({
         where: { id },
-        data: { isDeleted: true, deletedAt: new Date(), isActive: false },
+        data: {
+          isDeleted: true,
+          deletedAt: new Date(),
+          isActive: false,
+          tokenVersion: { increment: 1 },
+        } as any,
       });
     }
+    invalidateUserSessionCache(id);
 
     await logAdminAction({
       adminId: session.id,

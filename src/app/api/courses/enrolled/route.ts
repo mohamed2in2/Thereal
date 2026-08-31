@@ -23,11 +23,10 @@ export async function GET() {
           { accessCodes: { some: { studentId: session.id } } },
         ],
       } : {
-        accessCodes: {
-          some: {
-            studentId: session.id,
-          },
-        },
+        OR: [
+          { accessCodes: { some: { studentId: session.id, isActive: true } } },
+          { enrollments: { some: { studentId: session.id } } },
+        ],
       },
       select: {
         id: true,

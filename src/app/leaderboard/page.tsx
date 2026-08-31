@@ -7,7 +7,7 @@ import Link from "next/link";
 import { Clock, Flame } from "lucide-react";
 import { DEFAULT_LEADERBOARD_PRIZES, type LeaderboardPrize } from "@/lib/leaderboard-refresh";
 
-export const revalidate = 86400; // Cache page for 24 hours (Next.js ISR)
+export const dynamic = "force-dynamic";
 
 
 function getCompetitionTier(stage: string | null): string[] {
@@ -16,6 +16,14 @@ function getCompetitionTier(stage: string | null): string[] {
   if (stage.startsWith("prep"))    return ["prep_1", "prep_2", "prep_3"];
   if (stage.startsWith("sec"))     return ["sec_1", "sec_2"];
   return [];
+}
+
+function formatStudentName(name: string): string {
+  if (!name) return "";
+  const parts = name.trim().split(/\s+/);
+  if (parts.length <= 2) return name;
+  if (parts.length === 3) return `${parts[0]} ${parts[1]}`;
+  return `${parts[0]} ${parts[1]} ${parts[parts.length - 1]}`;
 }
 
 export default async function LeaderboardPage({
@@ -216,11 +224,11 @@ export default async function LeaderboardPage({
           </div>
         </div>
 
-        {/* Two-column grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+        {/* Two-column grid / Full-width when streak */}
+        <div className={`grid grid-cols-1 ${activeTab === "points" ? "lg:grid-cols-3" : "lg:grid-cols-1 max-w-4xl mx-auto"} gap-6 items-start`}>
 
           {/* Leaderboard card */}
-          <div className="lg:col-span-2" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 18, overflow: "hidden", boxShadow: "var(--shadow-sm)" }}>
+          <div className={activeTab === "points" ? "lg:col-span-2" : "w-full"} style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 18, overflow: "hidden", boxShadow: "var(--shadow-sm)" }}>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3" style={{ padding: "20px 24px", borderBottom: "1px solid var(--border)" }}>
               {isStudent ? (
                 <span className="inline-flex items-center gap-1"
@@ -259,7 +267,7 @@ export default async function LeaderboardPage({
                         </span>
                         <div className="flex-1 min-w-0">
                           <div className="truncate" style={{ fontWeight: 700, color: "var(--ink)", fontSize: 14 }}>
-                            {row.name}{row.age ? <span style={{ fontSize: 11.5, color: "var(--ink-3)", marginRight: 6 }}>({row.age} سنة)</span> : null}
+                            {formatStudentName(row.name)}{row.age ? <span style={{ fontSize: 11.5, color: "var(--ink-3)", marginRight: 6 }}>({row.age} سنة)</span> : null}
                           </div>
                           <div className="truncate" style={{ fontSize: 12, color: "var(--ink-3)" }}>{row.educationalStage || "—"}</div>
                         </div>
@@ -319,7 +327,7 @@ export default async function LeaderboardPage({
                             </span>
                           </td>
                           <td style={{ padding: "14px 14px", fontWeight: 700, color: "var(--ink)", fontSize: 14 }}>
-                            {row.name}
+                            {formatStudentName(row.name)}
                             {row.age && <span style={{ fontSize: 11.5, color: "var(--ink-3)", marginRight: 6 }}>({row.age} سنة)</span>}
                           </td>
                           <td style={{ padding: "14px 14px", color: "var(--ink-2)", fontSize: 13 }}>
@@ -387,7 +395,7 @@ export default async function LeaderboardPage({
                       </span>
                       <div className="flex-1 min-w-0">
                         <div className="text-sm sm:text-[17px] truncate" style={{ fontWeight: 700, color: "var(--ink)" }}>
-                          {student.name} {isMe && <span className="text-xs" style={{ color: "var(--brand)" }}>(أنت)</span>}
+                          {formatStudentName(student.name)} {isMe && <span className="text-xs" style={{ color: "var(--brand)" }}>(أنت)</span>}
                         </div>
                         <div className="text-xs sm:text-[12.5px] truncate" style={{ color: "var(--ink-3)" }}>{student.educationalStage || "غير محدد"}</div>
                       </div>
@@ -412,7 +420,7 @@ export default async function LeaderboardPage({
                       </span>
                       <div className="flex-1 min-w-0">
                         <div className="text-sm sm:text-[17px] truncate" style={{ fontWeight: 700, color: "var(--ink)" }}>
-                          {student.name} {isMe && <span className="text-xs" style={{ color: "var(--gold-2)" }}>(أنت)</span>}
+                          {formatStudentName(student.name)} {isMe && <span className="text-xs" style={{ color: "var(--gold-2)" }}>(أنت)</span>}
                         </div>
                         <div className="text-xs sm:text-[12.5px] truncate" style={{ color: "var(--ink-3)" }}>{student.educationalStage || "غير محدد"}</div>
                       </div>
@@ -427,104 +435,106 @@ export default async function LeaderboardPage({
             )}
           </div>
 
-          {/* Right column */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+          {/* Right column — Points tab only */}
+          {activeTab === "points" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
 
-            {/* Prizes */}
-            <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 18, overflow: "hidden", boxShadow: "var(--shadow-sm)" }}>
-              <div className="flex items-center justify-between" style={{ padding: "18px 22px", borderBottom: "1px solid var(--border)" }}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--gold-2)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M20 12v10H4V12M2 7h20v5H2zM12 22V7M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7zM12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/>
-                </svg>
-                <div className="text-right">
-                  <h3 style={{ fontFamily: "var(--font-head)", fontWeight: 800, fontSize: 18, margin: 0, color: "var(--ink)" }}>جوائز الـ 24 ساعة</h3>
-                  <p style={{ fontSize: 11, color: "var(--ink-3)", margin: "2px 0 0" }}>المراكز العشرة الأولى (تحديث يومي 3:00 ص)</p>
-                </div>
-              </div>
-              <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 8, maxHeight: "560px", overflowY: "auto" }}>
-                {dynamicPrizes.map((p) => {
-                  const isTop3 = p.rank <= 3;
-                  const isGold = p.highlight || isTop3;
-                  const b = prizeBadge(p.rank, p.highlight);
-                  const arabicRank = ["١","٢","٣","٤","٥","٦","٧","٨","٩","١٠"][p.rank - 1] ?? p.rank;
-                  return (
-                    <div key={p.rank} className="flex items-center gap-[11px]"
-                      style={{ padding: "10px 12px", borderRadius: 12, border: `1px solid ${isGold ? "var(--gold-2)" : "var(--border)"}`, background: isGold ? "var(--gold-soft)" : "var(--surface-2)" }}>
-                      <span className="flex items-center justify-center shrink-0 font-black text-[12.5px]"
-                        style={{
-                          width: 30, height: 30, borderRadius: 8,
-                          background: b.bg,
-                          color: b.color,
-                          fontFamily: "var(--font-head)",
-                        }}>
-                        {arabicRank}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5" style={{ fontWeight: 700, fontSize: 13.5, color: "var(--ink)" }}>
-                          <span>{p.icon || "🎁"}</span>
-                          <span className="truncate">{p.title || p.rankLabel || `المركز ${p.rank}`}</span>
-                        </div>
-                        <div className="truncate" style={{ fontSize: 11.5, color: "var(--ink-2)", marginTop: 2 }}>{p.prize}</div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Daily challenge — students only */}
-            {isStudent && (
+              {/* Prizes */}
               <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 18, overflow: "hidden", boxShadow: "var(--shadow-sm)" }}>
-                <div className="flex items-center justify-between"
-                  style={{ padding: "16px 22px", background: "linear-gradient(120deg,var(--gold-2),#9a6a1c)" }}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
+                <div className="flex items-center justify-between" style={{ padding: "18px 22px", borderBottom: "1px solid var(--border)" }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--gold-2)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20 12v10H4V12M2 7h20v5H2zM12 22V7M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7zM12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/>
                   </svg>
-                  <h3 style={{ fontFamily: "var(--font-head)", fontWeight: 800, fontSize: 18, margin: 0, color: "#fff" }}>التحدي اليومي</h3>
+                  <div className="text-right">
+                    <h3 style={{ fontFamily: "var(--font-head)", fontWeight: 800, fontSize: 18, margin: 0, color: "var(--ink)" }}>جوائز الـ 24 ساعة</h3>
+                    <p style={{ fontSize: 11, color: "var(--ink-3)", margin: "2px 0 0" }}>المراكز العشرة الأولى (تحديث يومي 3:00 ص)</p>
+                  </div>
                 </div>
-                <div style={{ padding: "24px 22px" }}>
-                  {dailyExam ? (
-                    dailyExam.results.length > 0 ? (
-                      <div className="text-center">
-                        <span className="inline-flex items-center justify-center mb-4" style={{ width: 54, height: 54, borderRadius: "50%", background: "var(--brand-soft)" }}>
-                          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+                <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 8, maxHeight: "560px", overflowY: "auto" }}>
+                  {dynamicPrizes.map((p) => {
+                    const isTop3 = p.rank <= 3;
+                    const isGold = p.highlight || isTop3;
+                    const b = prizeBadge(p.rank, p.highlight);
+                    const arabicRank = ["١","٢","٣","٤","٥","٦","٧","٨","٩","١٠"][p.rank - 1] ?? p.rank;
+                    return (
+                      <div key={p.rank} className="flex items-center gap-[11px]"
+                        style={{ padding: "10px 12px", borderRadius: 12, border: `1px solid ${isGold ? "var(--gold-2)" : "var(--border)"}`, background: isGold ? "var(--gold-soft)" : "var(--surface-2)" }}>
+                        <span className="flex items-center justify-center shrink-0 font-black text-[12.5px]"
+                          style={{
+                            width: 30, height: 30, borderRadius: 8,
+                            background: b.bg,
+                            color: b.color,
+                            fontFamily: "var(--font-head)",
+                          }}>
+                          {arabicRank}
                         </span>
-                        <h3 style={{ fontWeight: 700, fontSize: 16, color: "var(--ink)", marginBottom: 6 }}>أكملت التحدي بنجاح!</h3>
-                        <p style={{ fontSize: 13.5, color: "var(--ink-2)", marginBottom: 16 }}>
-                          حصلت على {dailyExam.results[0].score} من {dailyExam.results[0].totalQ} إجابة صحيحة
-                        </p>
-                        <button disabled style={{ width: "100%", padding: 13, borderRadius: 12, border: "none", background: "var(--surface-2)", color: "var(--ink-3)", fontWeight: 700, fontSize: 14, cursor: "not-allowed", fontFamily: "var(--font-body)" }}>
-                          عد غداً لتحدي جديد
-                        </button>
-                      </div>
-                    ) : (
-                      <div>
-                        <h3 style={{ fontWeight: 700, fontSize: 16, color: "var(--ink)", marginBottom: 8 }}>{dailyExam.title}</h3>
-                        <div className="flex items-center gap-4 mb-6" style={{ fontSize: 13.5, color: "var(--ink-3)" }}>
-                          <span className="flex items-center gap-1"><Clock className="w-4 h-4" /> {dailyExam.timeLimitMinutes} دقيقة</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5" style={{ fontWeight: 700, fontSize: 13.5, color: "var(--ink)" }}>
+                            <span>{p.icon || "🎁"}</span>
+                            <span className="truncate">{p.title || p.rankLabel || `المركز ${p.rank}`}</span>
+                          </div>
+                          <div className="truncate" style={{ fontSize: 11.5, color: "var(--ink-2)", marginTop: 2 }}>{p.prize}</div>
                         </div>
-                        <Link href={`/leaderboard/daily-exam/${dailyExam.id}`}
-                          className="flex items-center justify-center no-underline font-bold transition-opacity hover:opacity-90"
-                          style={{ padding: 13, borderRadius: 12, background: "var(--gold-2)", color: "#fff", fontSize: 15, fontFamily: "var(--font-head)", boxShadow: "0 6px 18px -6px rgba(200,146,47,.5)" }}>
-                          ابدأ التحدي الآن
-                        </Link>
                       </div>
-                    )
-                  ) : (
-                    <div className="text-center py-8">
-                      <span className="inline-flex items-center justify-center mb-3" style={{ width: 54, height: 54, borderRadius: "50%", background: "var(--surface-2)" }}>
-                        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--ink-3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
-                        </svg>
-                      </span>
-                      <p style={{ fontSize: 14.5, color: "var(--ink-2)", margin: 0 }}>لا يوجد تحدٍّ متاح لصفّك التدريبي اليوم.</p>
-                    </div>
-                  )}
+                    );
+                  })}
                 </div>
               </div>
-            )}
 
-          </div>
+              {/* Daily challenge — students only */}
+              {isStudent && (
+                <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 18, overflow: "hidden", boxShadow: "var(--shadow-sm)" }}>
+                  <div className="flex items-center justify-between"
+                    style={{ padding: "16px 22px", background: "linear-gradient(120deg,var(--gold-2),#9a6a1c)" }}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
+                    </svg>
+                    <h3 style={{ fontFamily: "var(--font-head)", fontWeight: 800, fontSize: 18, margin: 0, color: "#fff" }}>التحدي اليومي</h3>
+                  </div>
+                  <div style={{ padding: "24px 22px" }}>
+                    {dailyExam ? (
+                      dailyExam.results.length > 0 ? (
+                        <div className="text-center">
+                          <span className="inline-flex items-center justify-center mb-4" style={{ width: 54, height: 54, borderRadius: "50%", background: "var(--brand-soft)" }}>
+                            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+                          </span>
+                          <h3 style={{ fontWeight: 700, fontSize: 16, color: "var(--ink)", marginBottom: 6 }}>أكملت التحدي بنجاح!</h3>
+                          <p style={{ fontSize: 13.5, color: "var(--ink-2)", marginBottom: 16 }}>
+                            حصلت على {dailyExam.results[0].score} من {dailyExam.results[0].totalQ} إجابة صحيحة
+                          </p>
+                          <button disabled style={{ width: "100%", padding: 13, borderRadius: 12, border: "none", background: "var(--surface-2)", color: "var(--ink-3)", fontWeight: 700, fontSize: 14, cursor: "not-allowed", fontFamily: "var(--font-body)" }}>
+                            عد غداً لتحدي جديد
+                          </button>
+                        </div>
+                      ) : (
+                        <div>
+                          <h3 style={{ fontWeight: 700, fontSize: 16, color: "var(--ink)", marginBottom: 8 }}>{dailyExam.title}</h3>
+                          <div className="flex items-center gap-4 mb-6" style={{ fontSize: 13.5, color: "var(--ink-3)" }}>
+                            <span className="flex items-center gap-1"><Clock className="w-4 h-4" /> {dailyExam.timeLimitMinutes} دقيقة</span>
+                          </div>
+                          <Link href={`/leaderboard/daily-exam/${dailyExam.id}`}
+                            className="flex items-center justify-center no-underline font-bold transition-opacity hover:opacity-90"
+                            style={{ padding: 13, borderRadius: 12, background: "var(--gold-2)", color: "#fff", fontSize: 15, fontFamily: "var(--font-head)", boxShadow: "0 6px 18px -6px rgba(200,146,47,.5)" }}>
+                            ابدأ التحدي الآن
+                          </Link>
+                        </div>
+                      )
+                    ) : (
+                      <div className="text-center py-8">
+                        <span className="inline-flex items-center justify-center mb-3" style={{ width: 54, height: 54, borderRadius: "50%", background: "var(--surface-2)" }}>
+                          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--ink-3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
+                          </svg>
+                        </span>
+                        <p style={{ fontSize: 14.5, color: "var(--ink-2)", margin: 0 }}>لا يوجد تحدٍّ متاح لصفّك التدريبي اليوم.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+            </div>
+          )}
         </div>
       </main>
 

@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -43,14 +44,14 @@ const STYLES: Record<ToastType, string> = {
 
 function ToastItem({ toast, onDismiss }: { toast: ToastMessage; onDismiss: (id: string) => void }) {
   useEffect(() => {
-    const timer = window.setTimeout(() => onDismiss(toast.id), 4500);
+    const timer = window.setTimeout(() => onDismiss(toast.id), 4000);
     return () => window.clearTimeout(timer);
   }, [toast.id, onDismiss]);
 
   return (
     <div
       role="status"
-      className={`pointer-events-auto flex items-start gap-3 rounded-2xl border px-4 py-3 shadow-lg backdrop-blur-md ${STYLES[toast.type]}`}
+      className={`pointer-events-auto flex items-start gap-3 rounded-2xl border px-4 py-3 shadow-lg backdrop-blur-md animate-in fade-in slide-in-from-top-2 duration-200 ${STYLES[toast.type]}`}
     >
       <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-black/5 text-sm font-bold dark:bg-white/10">
         {ICONS[toast.type]}
@@ -59,7 +60,7 @@ function ToastItem({ toast, onDismiss }: { toast: ToastMessage; onDismiss: (id: 
       <button
         type="button"
         onClick={() => onDismiss(toast.id)}
-        className="shrink-0 rounded-lg px-1.5 py-0.5 text-xs opacity-60 hover:opacity-100"
+        className="shrink-0 rounded-lg px-1.5 py-0.5 text-xs opacity-60 hover:opacity-100 cursor-pointer"
         aria-label="إغلاق"
       >
         ✕
@@ -77,16 +78,30 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const toast = useCallback((type: ToastType, text: string) => {
-    const id = `toast-${++idRef.current}`;
-    setToasts((current) => [...current.slice(-4), { id, type, text }]);
+    if (!text) return;
+    setToasts((current) => {
+      // Prevent spamming identical toast messages if one is already active
+      if (current.some((t) => t.text === text && t.type === type)) {
+        return current;
+      }
+      const id = `toast-${++idRef.current}`;
+      return [...current.slice(-3), { id, type, text }];
+    });
   }, []);
 
-  const value: ToastContextValue = {
-    toast,
-    success: (text) => toast("success", text),
-    error: (text) => toast("error", text),
-    info: (text) => toast("info", text),
-  };
+  const success = useCallback((text: string) => toast("success", text), [toast]);
+  const error = useCallback((text: string) => toast("error", text), [toast]);
+  const info = useCallback((text: string) => toast("info", text), [toast]);
+
+  const value = useMemo<ToastContextValue>(
+    () => ({
+      toast,
+      success,
+      error,
+      info,
+    }),
+    [toast, success, error, info]
+  );
 
   return (
     <ToastContext.Provider value={value}>

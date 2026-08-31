@@ -25,7 +25,7 @@ const GEMINI_KEYS = [
 const BACKUP_BASE_RAW = process.env.AI_BACKUP_BASE_URL || "https://generativelanguage.googleapis.com/v1beta";
 const BACKUP_BASE_URL = BACKUP_BASE_RAW.replace(/\/+$/, "");
 const BACKUP_MODEL = process.env.AI_BACKUP_MODEL || "gemini-flash-lite-latest";
-const PROVIDER_TIMEOUT_MS = 12_000;
+const PROVIDER_TIMEOUT_MS = 2_500;
 
 function providerSignal(requestSignal?: AbortSignal): AbortSignal {
   const timeout = AbortSignal.timeout(PROVIDER_TIMEOUT_MS);
@@ -80,6 +80,22 @@ export interface ChatMessage {
   content: string;
 }
 
+export interface InteractiveQuestionOption {
+  id: string;
+  text: string;
+}
+
+export interface InteractiveQuestionPayload {
+  questionId: string;
+  topic: string;
+  question: string;
+  options: InteractiveQuestionOption[];
+  correctAnswer: string;
+  explanation: string;
+  hint?: string;
+  difficulty?: "easy" | "medium" | "hard";
+}
+
 export interface AIAction {
   type:
     | "create_grade_request"
@@ -87,8 +103,9 @@ export interface AIAction {
     | "submit_feedback"
     | "navigate"
     | "show_insights"
+    | "interactive_question"
     | "none";
-  payload?: Record<string, unknown>;
+  payload?: Record<string, unknown> | InteractiveQuestionPayload;
 }
 
 export interface AIChatResult {
@@ -101,11 +118,22 @@ const SYSTEM_PROMPT = `أنت "مرشد Code-UP"، الموجه الذكي وا�
 
 شخصيتك وأسلوبك:
 - أسلوبك سريع، ودود، ومباشر باللغة العربية، وتتحدث مباشرة في صلب الموضوع بإيجاز ونقاط واضحة دون مماطلة أو وعود زائفة.
+- **شرح المفاهيم وتدريب الطالب (Educational Tutoring & Concept Explanations):**
+  - إذا سأل الطالب عن مفهوم علمي، أو طلب شرحاً، أو ضغط "اسأل المساعد عن المفهوم"، أو جاءت الرسالة بصيغة: *"اشرح لي بالتفصيل مفهوم ... ولا تعطني الإجابة مباشرة؛ ساعدني في فهم الفكرة"*:
+  - **اشرح المفهوم العلمي خطوة بخطوة باللغة العربية مع تبسيط كامل وتلميحات ذكية في نص message**.
+  - **ممنوع منعاً باتاً إنشاء سؤال اختباري جديد أو وضع action من نوع interactive_question في هذه الحالة**.
+  - إذا طلب الطالب عدم إعطاء الإجابة المباشرة، اتبع الأسلوب السقراطي: اشرح التسلسل المنطقي والفكرة الجوهرية وقدم تلميحاً ذكياً يساعده على استنتاج الخيار الصحيح بنفسه.
+- **توليد الأسئلة والاختبارات التفاعلية (Interactive Question Generation):** فقط وحصرياً إذا طلب الطالب صراحة أن تختبره أو تسأله (مثل "اسألني سؤال"، "اختبرني"، "كويز على الدرس"، "اديني سؤال جديد")، **ممنوع كتابة الخيارات كنص مجرد في message**. يجب حتماً تضمين action من نوع "interactive_question" يحتوي على:
+  - topic: عنوان الموضوع والدرس
+  - question: نص السؤال
+  - options: مصفوفة الخيارات (A, B, C, D أو أ، ب، ج، د)
+  - correctAnswer: رمز الإجابة الصحيحة
+  - explanation: التفسير والشرح النموذجي الدقيق.
 - **التوجيه والانتقال الفوري (Navigation):** إذا طلب الطالب الانتقال لصفحة (كورس، فيديو، بيئة تدريب، أو أسئلة المنهج) أو وافق على الانتقال (مثل "انقلني"، "ماشي"، "يلا"، "وديني"، "افتح الكورس")، **يجب حتماً** تضمين action من نوع "navigate" مع مسار الـ path المناسب (مثل: { "type": "navigate", "payload": { "path": "/courses/COURSE_ID", "reason": "الانتقال لصفحة الكورس" } } أو { "type": "navigate", "payload": { "path": "/environments/programming?tab=curriculum", "reason": "الانتقال لأسئلة المنهج" } } أو { "type": "navigate", "payload": { "path": "/curriculum/programming-and-ai", "reason": "دليل المنهج" } }).
 - **المنهج الدراسي الرسمي (البرمجة والذكاء الاصطناعي - 2 ثانوي / بكالوريا مصرية):**
   إذا سأل الطالب عن "المنهج"، "منهج الوزارة"، "محتوى أول درس"، "دروس المنهج"، "تانية ثانوي":
   - اشرح له محتوى درس المنهج الوزاري الفعلي بدقة:
-    * الدرس الأول (1-1): «تطور تكنولوجيا المعلومات والتحول الاجتماعي» (مراحل تطور IT من الصمامات المفرغة لـ ENIAC حتى الحوسبة السحابية، قانون مور، الحوسبة الطرفية في القيادة الذاتية، الواقع المعزز AR والافتراضي VR، والحوسبة الكمومية، والدفع غير النقدي).
+    * الدرس الأول (1-1): «تطور تكنولوجيا المعلومات والتحول الاجتماعي» (المراحل الزمنية الأربعة: بداية ظهور الحاسب ➔ تسويق الإنترنت تجارياً ➔ ظهور الهواتف الذكية ➔ انتشار الحوسبة السحابية، قانون مور وتضاعف الترانزستورات، الحوسبة الطرفية في السيارات ذاتية القيادة، الواقع المعزز AR والافتراضي VR، الحوسبة الكمومية، والشمول المالي والدفع غير النقدي).
     * الدرس الثاني (1-2): «كيف يعمل الذكاء الاصطناعي» (هرمية AI > ML > DL > GenAI، الشبكات العصبية، ومخاطر الهلوسة).
     * الفصل 2: «الأمن السيبراني» (HTTPS ومصافحة TLS، 2FA، DMZ، Zero Trust، الدفاع في العمق، والاستجابة للحوادث).
     * الفصل 3: «تطبيقات الويب» (الطبقات الثلاث، HTTP/HTTPS، GET/POST، الرموز 200/404/500، HTML الدلالية والتصميم المتجاوب).
@@ -121,13 +149,14 @@ const SYSTEM_PROMPT = `أنت "مرشد Code-UP"، الموجه الذكي وا�
   "message": "ردك الودود المباشر والموجز باللغة العربية",
   "actions": [
     {
-      "type": "create_grade_request" | "create_ticket" | "submit_feedback" | "navigate" | "show_insights" | "none",
+      "type": "create_grade_request" | "create_ticket" | "submit_feedback" | "navigate" | "show_insights" | "interactive_question" | "none",
       "payload": { ... }
     }
   ]
 }
 
 أنواع الـ payload:
+- interactive_question: { "questionId": "q_1", "topic": "تطور تكنولوجيا المعلومات", "question": "نص السؤال؟", "options": [{"id":"A","text":"خيار أ"},{"id":"B","text":"خيار ب"},{"id":"C","text":"خيار ج"},{"id":"D","text":"خيار د"}], "correctAnswer": "A", "explanation": "تفسير سبب صحة الخيار أ ولماذا الخيارات الأخرى خاطئة" }
 - navigate: { "path": "/courses/..." | "/environments/programming?tab=curriculum" | "/curriculum/programming-and-ai", "reason": "نص زر الانتقال" }
 - create_grade_request: { quizId, reason, requestedScore, evidence }
 - create_ticket: { title, description, type, priority }
@@ -135,9 +164,9 @@ const SYSTEM_PROMPT = `أنت "مرشد Code-UP"، الموجه الذكي وا�
 - show_insights: {}`;
 
 function summarizeContext(ctx: StudentContext): string {
-  const courseLines = ctx.courses
+  const courseLines = (ctx.courses || [])
     .map((c) => {
-      const quizSummary = c.quizResults
+      const quizSummary = (c.quizResults || [])
         .filter((q) => q.date)
         .map((q) => `${q.quizTitle}: ${Math.round(q.percentage)}%`)
         .join(", ");
@@ -145,31 +174,29 @@ function summarizeContext(ctx: StudentContext): string {
     })
     .join("\n");
 
-  const weakAreasText = ctx.weakAreas.length > 0
-    ? ctx.weakAreas.map((w) => `- ${w.subject}: ${w.topic} (${w.reason})`).join("\n")
+  const weakAreasText = (ctx.weakAreas?.length || 0) > 0
+    ? ctx.weakAreas!.map((w) => `- ${w.subject}: ${w.topic} (${w.reason})`).join("\n")
     : "لا يوجد نقاط ضعف واضحة";
 
-  const insightsText = ctx.aiInsights.length > 0
-    ? ctx.aiInsights.map((i) => `- [${i.type}] ${i.title}: ${i.description}`).join("\n")
-
-
+  const insightsText = (ctx.aiInsights?.length || 0) > 0
+    ? ctx.aiInsights!.map((i) => `- [${i.type}] ${i.title}: ${i.description}`).join("\n")
     : "لا يوجد رؤى سابقة";
 
-  const feedbackText = ctx.recentFeedback.length > 0
-    ? ctx.recentFeedback.map((f) => `- [${f.type}] في ${f.course}: ${f.content}`).join("\n")
+  const feedbackText = (ctx.recentFeedback?.length || 0) > 0
+    ? ctx.recentFeedback!.map((f) => `- [${f.type}] في ${f.course}: ${f.content}`).join("\n")
     : "لم يقدم ملاحظات سابقة";
 
   return `بيانات المتعلم الكاملة:
 
 الملف الشخصي:
-- الاسم: ${ctx.profile.name}
-- المرحلة: ${ctx.profile.educationalStage ?? "غير محددة"}
+- الاسم: ${ctx.profile?.name || "طالب"}
+- المرحلة: ${ctx.profile?.educationalStage ?? "غير محددة"}
 
 الإحصائيات:
-- عدد الكورسات: ${ctx.overallStats.totalCourses}
-- متوسط الدرجات: ${ctx.overallStats.averageScore}%
-- كويزات: ${ctx.overallStats.totalQuizzesTaken}
-- فيديوهات: ${ctx.overallStats.totalVideosWatched}
+- عدد الكورسات: ${ctx.overallStats?.totalCourses ?? 0}
+- متوسط الدرجات: ${ctx.overallStats?.averageScore ?? 0}%
+- كويزات: ${ctx.overallStats?.totalQuizzesTaken ?? 0}
+- فيديوهات: ${ctx.overallStats?.totalVideosWatched ?? 0}
 
 الكورسات:
 ${courseLines || "لم يسجل بعد"}
@@ -293,7 +320,8 @@ async function callPrimary(messages: ChatMessage[], requestSignal?: AbortSignal)
 }
 
 async function callBackup(messages: ChatMessage[], requestSignal?: AbortSignal): Promise<AIChatResult | null> {
-  if (GEMINI_KEYS.length === 0) return null;
+  const validKeys = GEMINI_KEYS.filter((k) => k && (k.startsWith("AIzaSy") || k.length > 20));
+  if (validKeys.length === 0) return null;
   const sys = messages.find((m) => m.role === "system")?.content || "";
   const userMsgs = messages.filter((m) => m.role !== "system");
   const promptText = sys
@@ -301,9 +329,9 @@ async function callBackup(messages: ChatMessage[], requestSignal?: AbortSignal):
     : userMsgs.map((m) => `${m.role === "user" ? "المتعلم" : "المرشد"}: ${m.content}`).join("\n");
 
   const geminiBase = BACKUP_BASE_URL.endsWith("/models") ? BACKUP_BASE_URL : `${BACKUP_BASE_URL}/models`;
-  const models = Array.from(new Set([BACKUP_MODEL, "gemini-flash-lite-latest", "gemini-flash-latest", "gemini-2.5-pro"]));
-  // Try each Gemini key/model in rotation
-  for (const key of GEMINI_KEYS) {
+  const models = [BACKUP_MODEL, "gemini-2.0-flash-lite"];
+
+  for (const key of validKeys) {
     for (const model of models) {
       try {
         const url = `${geminiBase}/${model}:generateContent?key=${key}`;
@@ -317,10 +345,8 @@ async function callBackup(messages: ChatMessage[], requestSignal?: AbortSignal):
           signal: providerSignal(requestSignal),
         });
         if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          console.warn(`[AI Provider Gemini (${model})] Error: ${res.status}`, (errData as any)?.error?.message?.slice(0, 80));
-          if (res.status === 401 || res.status === 403) break;
-          continue;
+          console.warn(`[AI Provider Gemini (${model})] Error: ${res.status}`);
+          break; // Key failed on this endpoint, immediately move to next
         }
         const data = (await res.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
         const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
@@ -329,6 +355,7 @@ async function callBackup(messages: ChatMessage[], requestSignal?: AbortSignal):
       } catch (err) {
         if (requestSignal?.aborted) throw err;
         console.warn("[AI Provider Gemini] Error:", err);
+        break; // Stop retrying on error/timeout
       }
     }
   }
@@ -474,6 +501,329 @@ function buildChatContextForStaff(history: ChatMessage[], ctx: StudentContext): 
     ctx.weakAreas.length > 0 ? `نقاط ضعف: ${ctx.weakAreas.map((w) => `${w.subject}: ${w.topic}`).join("، ")}` : "",
   ].filter(Boolean).join("\n");
   return { chatHistory, studentInfo };
+}
+
+export const CURRICULUM_QUESTION_BANK: InteractiveQuestionPayload[] = [
+  // ── الدرس 1-1: تطور تكنولوجيا المعلومات ──
+  {
+    questionId: "q_it_timeline",
+    topic: "الدرس 1-1: مراحل تطور تكنولوجيا المعلومات",
+    question: "ما الترتيب الزمني الصحيح لمراحل تطور تكنولوجيا المعلومات (IT)؟",
+    options: [
+      { id: "A", text: "بداية ظهور الحاسب ➔ تسويق الإنترنت تجارياً ➔ ظهور الهواتف الذكية ➔ انتشار الحوسبة السحابية" },
+      { id: "B", text: "بداية ظهور الحاسب ➔ ظهور الهواتف الذكية ➔ تسويق الإنترنت تجارياً ➔ انتشار الحوسبة السحابية" },
+      { id: "C", text: "ظهور الهواتف الذكية ➔ تسويق الإنترنت تجارياً ➔ ظهور الحاسب ➔ انتشار الحوسبة السحابية" },
+      { id: "D", text: "تسويق الإنترنت تجارياً ➔ بداية ظهور الحاسب ➔ انتشار الحوسبة السحابية ➔ ظهور الهواتف الذكية" },
+    ],
+    correctAnswer: "A",
+    explanation: "الترتيب التاريخي الدقيق لتطور تكنولوجيا المعلومات (IT) وفقاً للمنهج: 1. بداية ظهور الحواسيب (1940s-1970s)، 2. تسويق الإنترنت تجارياً في التسعينيات (1990s)، 3. ثورة الهواتف الذكية (2000s)، 4. انتشار الحوسبة السحابية والخدمات الرقمية.",
+    difficulty: "medium",
+  },
+  {
+    questionId: "q_it_1",
+    topic: "الدرس 1-1: تطور تكنولوجيا المعلومات",
+    question: "ما هو المكون الإلكتروني الرئيسي الذي ميّز الجيل الأول من الحواسيب مثل حاسوب (ENIAC) في أربعينيات القرن الماضي؟",
+    options: [
+      { id: "A", text: "الصمامات المفرغة (Vacuum Tubes)" },
+      { id: "B", text: "الترانزستورات (Transistors)" },
+      { id: "C", text: "الدوائر المتكاملة (Integrated Circuits)" },
+      { id: "D", text: "المعالجات الدقيقة (Microprocessors)" },
+    ],
+    correctAnswer: "A",
+    explanation: "اعتمد الجيل الأول (مثل حاسوب ENIAC) على الصمامات المفرغة الزجاجية للتحكم في تدفق الإلكترونات، وكانت ضخمة وتولد حرارة هائلة وتستهلك طاقة كبيرة، قبل أن يبتكر العلماء الترانزستور في الجيل الثاني لتصغير الحجم وزيادة السرعة.",
+    difficulty: "easy",
+  },
+  {
+    questionId: "q_it_2",
+    topic: "الدرس 1-1: تطور تكنولوجيا المعلومات",
+    question: "ينص «قانون مور» (Moore's Law) الشهير الذي صاغه جوردون مور على أن:",
+    options: [
+      { id: "A", text: "حجم ذاكرة الوصول العشوائي يتضاعف كل 6 أشهر" },
+      { id: "B", text: "عدد الترانزستورات على شريحة المعالج يتضاعف كل سنتين تقريباً مع انخفاض التكلفة" },
+      { id: "C", text: "سرعة الإنترنت تتضاعف سنوياً دون زيادة الأسعار" },
+      { id: "D", text: "استهلاك الطاقة يقل للنصف كل 10 سنوات" },
+    ],
+    correctAnswer: "B",
+    explanation: "توقع جوردون مور عام 1965 أن كثافة الترانزستورات على شريحة السيليكون تتضاعف تقريباً كل عامين مع انخفاض تكلفتها، مما شكل الدافع الرئيسي لقفزات الأداء الهائلة وتصغير الأجهزة الذكية.",
+    difficulty: "medium",
+  },
+  {
+    questionId: "q_it_3",
+    topic: "الدرس 1-1: الحوسبة السحابية والطرفية",
+    question: "لماذا تعتمد أنظمة السيارات ذاتية القيادة وأجهزة إنترنت الأشياء (IoT) على «الحوسبة الطرفية - Edge Computing» بدلاً من الاعتماد الكلي على السحابة؟",
+    options: [
+      { id: "A", text: "لتقليل استهلاك بطارية المركبة فقط" },
+      { id: "B", text: "لمعالجة البيانات بالقرب من مصدرها لتقليل زمن الاستجابة (Latency) واتخاذ قرارات فورية" },
+      { id: "C", text: "لأن السحابة لا تستطيع تخزين مقاطع الفيديو إطلاقاً" },
+      { id: "D", text: "لأن الحوسبة الطرفية تعمل بدون معالجات" },
+    ],
+    correctAnswer: "B",
+    explanation: "في أنظمة السلامة والقيادة الذاتية، التأخير ولو لأجزاء من الثانية قد يؤدي لحادث؛ لذا تتم المعالجة الحسابية محلياً عند حافة الشبكة (Edge) لتفادي زمن نقل البيانات لخوادم سحابية بعيدة.",
+    difficulty: "medium",
+  },
+  {
+    questionId: "q_it_4",
+    topic: "الدرس 1-1: التقنيات الناشئة والكمومية",
+    question: "ما هي الوحدة الحسابية الأساسية في «الحوسبة الكمومية - Quantum Computing» القادرة على التواجد في حالة تراكب كمي (Superposition)؟",
+    options: [
+      { id: "A", text: "البت التقليدي (Classical Bit)" },
+      { id: "B", text: "الكيوبت (Qubit)" },
+      { id: "C", text: "البايت الكمومي (Q-Byte)" },
+      { id: "D", text: "النانوميتر (Nanometer)" },
+    ],
+    correctAnswer: "B",
+    explanation: "الكيوبت (Qubit) هو وحدة البت الكمومي، وبفضل ظاهرتي التراكب (Superposition) والتشابك الكمي (Entanglement)، يمكن للكيوبت تمثيل الحالتين 0 و 1 معاً مما يضاعف القدرة الحسابية أضعافاً مضاعفة.",
+    difficulty: "hard",
+  },
+  {
+    questionId: "q_it_5",
+    topic: "الدرس 1-1: فيزياء الحوسبة وقانون مور",
+    question: "مع اقتراب تصنيع الترانزستورات من الأبعاد الذرية النانوية (مثل 2nm)، ما هو التحدي الفيزيائي الحاسم الذي يهدد استمرار «قانون مور» بصورته الكلاسيكية؟",
+    options: [
+      { id: "A", text: "ظاهرة النفق الكمي (Quantum Tunneling) وتسريب الإلكترونات والحرارة الهائلة" },
+      { id: "B", text: "عدم توفر مادة السيليكون الطبيعية في القشرة الأرضية" },
+      { id: "C", text: "انخفاض تكلفة المعالجات لدرجة انعدام أرباح الشركات" },
+      { id: "D", text: "عدم استيعاب أنظمة التشغيل لأكثر من ترانزستور واحد" },
+    ],
+    correctAnswer: "A",
+    explanation: "عند تصغير الترانزستور لحجم ذرات معدودة، تبدأ الإلكترونات في النفاذ تلقائياً عبر الحواجز (Quantum Tunneling)، مما يُحدث تسريباً كهربائياً وحرارة خطيرة، وهو ما دفع العالم نحو المعالجة المتوازية (Multi-core) والـ GPUs والحوسبة الكمومية.",
+    difficulty: "hard",
+  },
+  {
+    questionId: "q_it_6",
+    topic: "الدرس 1-1: الحوسبة السحابية والطرفية المتقدمة",
+    question: "في منظومة المركبات ذاتية القيادة (Autonomous Vehicles)، لماذا لا يكفي الاعتماد على شبكات الجيل الخامس 5G والحوسبة السحابية وحدها، ويُشترط وجود «الحوسبة الطرفية Edge Computing» داخل السيارة؟",
+    options: [
+      { id: "A", text: "لأن الحوسبة السحابية غير قادرة على معالجة البيانات النصية" },
+      { id: "B", text: "لأن قرارات الفرملة والمناورة تتطلب زمناً أقل من 10ms (Real-time latency) وانقطاع الشبكة المفاجئ قد يسبب كوارث" },
+      { id: "C", text: "لأن الكاميرات الرادارية لا ترسل بيانات إلكترونية" },
+      { id: "D", text: "لأن استهلاك السحابة للكهرباء ممنوع قانونياً في القيادة" },
+    ],
+    correctAnswer: "B",
+    explanation: "حتى مع سرعة 5G، قد تواجه المركبة مناطق حجب إشارة (Dead Zones) أو تأخيرات في الشبكة (Jitter)؛ وبما أن قرارات الحوادث تتطلب أجزاء من الثانية (Zero-tolerance latency)، يجب أن تتم المعالجة الحسابية محلياً بالكامل على معالجات السيارة الطرفية.",
+    difficulty: "hard",
+  },
+
+  // ── الدرس 1-2: كيف يعمل الذكاء الاصطناعي ──
+  {
+    questionId: "q_ai_1",
+    topic: "الدرس 1-2: كيف يعمل الذكاء الاصطناعي",
+    question: "أي من العبارات التالية تصف العلاقة الهرمية الصحيحة بين مجالات الذكاء الاصطناعي؟",
+    options: [
+      { id: "A", text: "التعلم العميق يشتمل على الذكاء الاصطناعي والتعلم الآلي" },
+      { id: "B", text: "الذكاء الاصطناعي (AI) > التعلم الآلي (ML) > التعلم العميق (DL) > الذكاء التوليدي (GenAI)" },
+      { id: "C", text: "الذكاء التوليدي منفصل تماماً عن التعلم الآلي" },
+      { id: "D", text: "التعلم الآلي والذكاء الاصطناعي هما نفس الشيء تماماً بلا فرق" },
+    ],
+    correctAnswer: "B",
+    explanation: "الذكاء الاصطناعي (AI) هو المظلة الكبرى، يتفرع منه التعلم الآلي (ML) الذي يتعلم من البيانات، ويتفرع منه التعلم العميق (DL) القائم على الشبكات العصبية متعددة الطبقات، وتعد النماذج التوليدية (GenAI) تطبيقاً متقدماً للتعلم العميق.",
+    difficulty: "easy",
+  },
+  {
+    questionId: "q_ai_2",
+    topic: "الدرس 1-2: الشبكات العصبية الاصطناعية",
+    question: "في الشبكة العصبية الاصطناعية (ANN)، ما هي وظيفة «الطبقات المخفية - Hidden Layers»؟",
+    options: [
+      { id: "A", text: "استقبال البيانات الخام من المستخدم فقط دون أي تعديل" },
+      { id: "B", text: "استخراج الميزات والأنماط المعقدة وتعديل الأوزان (Weights) للوصول للاستنتاج" },
+      { id: "C", text: "عرض النتيجة النهائية للمستخدم على الشاشة" },
+      { id: "D", text: "إيقاف عمل الشبكة عند حدوث أخطاء" },
+    ],
+    correctAnswer: "B",
+    explanation: "الطبقات المخفية (Hidden Layers) هي العقل المحرك للشبكة العصبية؛ حيث تستقبل الإشارات من الطبقة السابقة وتجري عليها تحويلات رياضية غير خطية وتعدل الأوزان (Weights والـ Biases) لاستخلاص الأنماط والملامح.",
+    difficulty: "medium",
+  },
+  {
+    questionId: "q_ai_3",
+    topic: "الدرس 1-2: موثوقية الذكاء الاصطناعي",
+    question: "ماذا يُقصد بمصطلح «هلوسة الذكاء الاصطناعي - AI Hallucination» في النماذج اللغوية الكبيرة (LLMs)؟",
+    options: [
+      { id: "A", text: "بطء استجابة النموذج عند كثرة المستخدمين" },
+      { id: "B", text: "توليد النموذج لإجابات واثقة ومقنعة لغوياً ولكنها خاطئة تماماً أو غير حقيقية" },
+      { id: "C", text: "توقف الخادم بسبب هجوم إلكتروني" },
+      { id: "D", text: "ترجمة النصوص بين اللغات بدقة متناهية" },
+    ],
+    correctAnswer: "B",
+    explanation: "الهلوسة (Hallucination) تحدث عندما يولد النموذج إجابات تبدو صحيحة ومسبوكة لغوياً بشكل مقنع جداً، لكنها في الواقع تحتوي على معلومات مختلقة أو غير صحيحة علمياً.",
+    difficulty: "medium",
+  },
+
+  // ── الفصل 2: الأمن السيبراني ──
+  {
+    questionId: "q_sec_1",
+    topic: "الفصل 2: تقنيات التشفير والمصادقة",
+    question: "ما الفرق الأساسي بين التشفير المتماثل (Symmetric) والتشفير غير المتماثل (Asymmetric)؟",
+    options: [
+      { id: "A", text: "التشفير المتماثل يستخدم مفتاحين، بينما غير المتماثل يستخدم مفتاحاً واحداً" },
+      { id: "B", text: "التشفير المتماثل يستخدم نفس المفتاح السري للتشفير وفك التشفير، بينما غير المتماثل يستخدم زوج مفاتيح (عام وخاص)" },
+      { id: "C", text: "التشفير المتماثل لا يمكن فك تشفيره نهائياً" },
+      { id: "D", text: "التشفير غير المتماثل مخصص لكلمات المرور فقط" },
+    ],
+    correctAnswer: "B",
+    explanation: "التشفير المتماثل (مثل AES) يعتمد على مفتاح سري موحد للطرفين، وهو سريع جداً في تشفير كميات البيانات الكبيرة. أما غير المتماثل (مثل RSA) فيستخدم المفتاح العام (Public) للتشفير والمفتاح الخاص (Private) لفك التشفير بأمان.",
+    difficulty: "medium",
+  },
+  {
+    questionId: "q_sec_2",
+    topic: "الفصل 2: تصميم أمن الشبكات",
+    question: "ما هو المفهوم الجوهري لاستراتيجية «انعدام الثقة - Zero Trust Architecture» في الأمن السيبراني؟",
+    options: [
+      { id: "A", text: "منح الموظفين داخل مقر الشركة ثقة كاملة تلقائياً" },
+      { id: "B", text: "«لا تثق بأحد افتراضياً وتحقق دائماً» — التحقق الصارم والمستمر من هوية وصلاحية كل طلب وجهاز" },
+      { id: "C", text: "عدم استخدام أي برامج حماية جدار ناري (Firewall)" },
+      { id: "D", text: "حظر جميع الاتصالات الواردة من خارج الدولة فقط" },
+    ],
+    correctAnswer: "B",
+    explanation: "مبدأ Zero Trust ينص على: (Never Trust, Always Verify). فلا يتم الوثوق بأي جهاز أو مستخدم حتى لو كان داخل الشبكة المحلية للمؤسسة، بل يجب التحقق من الهوية والصلاحيات وسياق كل طلب باستمرار.",
+    difficulty: "medium",
+  },
+  {
+    questionId: "q_sec_3",
+    topic: "الفصل 2: المصادقة الثنائية (2FA)",
+    question: "تعتمد المصادقة متعددة العوامل (MFA / 2FA) على التحقق من عاملين مختلفين على الأقل من بين:",
+    options: [
+      { id: "A", text: "شيء تعرفه (كلمة المرور) + شيء تمتلكه (هاتف/رمز OTP) + شيء أنت عليه (بصمة/وجه)" },
+      { id: "B", text: "كلمتي مرور مختلفتين لنفس الحساب" },
+      { id: "C", text: "اسم المستخدم والبريد الإلكتروني فقط" },
+      { id: "D", text: "سؤال الأمان وتاريخ الميلاد فقط" },
+    ],
+    correctAnswer: "A",
+    explanation: "ركائز المصادقة الثلاث هي: 1. Something you know (كلمة سر)، 2. Something you have (هاتف/تطبيق مصادقة)، 3. Something you are (بصمة إصبع/التعرف على الوجه). الجمع بين اثنين منها يحمي الحساب حتى لو سُرقت كلمة المرور.",
+    difficulty: "easy",
+  },
+
+  // ── الفصل 3: تطبيقات الويب ──
+  {
+    questionId: "q_web_1",
+    topic: "الفصل 3: معمارية تطبيقات الويب",
+    question: "في معمارية تطبيقات الويب ثلاثية الطبقات (3-Tier Architecture)، ما هي الطبقات الثلاث؟",
+    options: [
+      { id: "A", text: "المتصفح ➔ نظام التشغيل ➔ المعالج" },
+      { id: "B", text: "طبقة العرض (Presentation Tier) ➔ طبقة المنطق والتطبيق (Application Tier) ➔ طبقة البيانات (Data Tier)" },
+      { id: "C", text: "HTML ➔ CSS ➔ JavaScript" },
+      { id: "D", text: "الراوتر ➔ السويتش ➔ السيرفر" },
+    ],
+    correctAnswer: "B",
+    explanation: "تتكون المعمارية القياسية من: 1. Presentation Tier (واجهة المستخدم في المتصفح)، 2. Application Tier (السيرفر وخوادم المعالجة والمنطق البرمجي)، 3. Data Tier (قواعد البيانات مثل PostgreSQL لحفظ واسترجاع البيانات).",
+    difficulty: "easy",
+  },
+  {
+    questionId: "q_web_2",
+    topic: "الفصل 3: بروتوكول HTTP ورموز الاستجابة",
+    question: "إذا قام العميل بطلب صفحة ويب وحصل على رمز الاستجابة (HTTP 404 Not Found)، فهذا يعني أن:",
+    options: [
+      { id: "A", text: "الطلب تم بنجاح والسيرفر أعاد الصفحة المطلوبة" },
+      { id: "B", text: "السيرفر واجه خطأ داخلياً في برمجته وتعطل" },
+      { id: "C", text: "السيرفر استلم الطلب ولكن المسار أو المورد المطلوب غير موجود لديه" },
+      { id: "D", text: "المستخدم غير مسجل الدخول ويحتاج صلاحيات" },
+    ],
+    correctAnswer: "C",
+    explanation: "رمز 404 (Not Found) يعني أن السيرفر متصل وتلقى الطلب لكن الرابط أو الملف المطلوب غير موجود على الخادم. (بينما 200 تعني نجاح، و 401 تعني غير مصرح، و 500 تعني خطأ برمجي بالسيرفر).",
+    difficulty: "easy",
+  },
+  {
+    questionId: "q_web_3",
+    topic: "الفصل 3: طرق طلبات HTTP",
+    question: "ما هي طريقة طلب الـ HTTP (Method) الأكثر ملاءمة عند إرسال بيانات حساسة كنموذج تسجيل دخول أو إنشاء حساب جديد على الخادم؟",
+    options: [
+      { id: "A", text: "GET" },
+      { id: "B", text: "POST" },
+      { id: "C", text: "HEAD" },
+      { id: "D", text: "OPTIONS" },
+    ],
+    correctAnswer: "B",
+    explanation: "طلب POST يضع البيانات داخل جسم الطلب (Request Body) وليس في رابط الـ URL المكشوف، مما يجعله آمناً ومناسباً لإرسال كلمات المرور والبيانات الحساسة وإنشاء سجلات جديدة.",
+    difficulty: "easy",
+  },
+
+  // ── البرمجة والتفكير المنطقي ──
+  {
+    questionId: "q_code_1",
+    topic: "البرمجة: بايثون وحلقات التكرار",
+    question: "ما هو ناتج تنفيذ الكود التالي في لغة Python؟\n\n```python\nnums = [1, 2, 3, 4]\nresult = [x * 2 for x in nums if x % 2 == 0]\nprint(result)\n```",
+    options: [
+      { id: "A", text: "[2, 4, 6, 8]" },
+      { id: "B", text: "[4, 8]" },
+      { id: "C", text: "[2, 6]" },
+      { id: "D", text: "[2, 4]" },
+    ],
+    correctAnswer: "B",
+    explanation: "تعبير List Comprehension يقوم أولاً بفلترة الأعداد الزوجية `x % 2 == 0` (وهي 2 و 4)، ثم يضرب كل عدد منها في 2: (2 * 2 = 4) و (4 * 2 = 8)، فيكون الناتج القائمة `[4, 8]`.",
+    difficulty: "medium",
+  },
+  {
+    questionId: "q_code_2",
+    topic: "البرمجة: الدوال ونطاق المتغيرات",
+    question: "ما هو ناتج تنفيذ الكود التالي؟\n\n```javascript\nlet count = 5;\nfunction update() {\n  let count = 10;\n}\nupdate();\nconsole.log(count);\n```",
+    options: [
+      { id: "A", text: "10" },
+      { id: "B", text: "5" },
+      { id: "C", text: "undefined" },
+      { id: "D", text: "ReferenceError" },
+    ],
+    correctAnswer: "B",
+    explanation: "المتغير `let count = 10` داخل الدالة `update` له نطاق محلي (Block Scope) ولا يغير قيمة المتغير العام `count = 5` المعرف بالخارج؛ لذا ستطبع الدالة `5`.",
+    difficulty: "medium",
+  },
+  {
+    questionId: "q_media_1",
+    topic: "الفصل 4: مبادئ تصميم الوسائط CRAP",
+    question: "في مبادئ تصميم واجهات المستخدم والوسائط (CRAP Principles)، إلى ماذا يرمز حرف (C)؟",
+    options: [
+      { id: "A", text: "التباين والوضوح البصري (Contrast)" },
+      { id: "B", text: "الألوان (Color)" },
+      { id: "C", text: "المحتوى (Content)" },
+      { id: "D", text: "الإبداع (Creativity)" },
+    ],
+    correctAnswer: "A",
+    explanation: "مبادئ CRAP الأربعة الشهيرة للتصميم هي: Contrast (التباين للتمييز بين العناصر المهمة)، Repetition (التكرار للاتساق البصري)، Alignment (المحاذاة لتنظيم وتوجيه العين)، و Proximity (التقارب لربط العناصر المترابطة معاً).",
+    difficulty: "medium",
+  },
+];
+
+export function generateInteractiveQuestion(query?: string): InteractiveQuestionPayload {
+  const q = (query || "").toLowerCase();
+
+  // 0. Direct match for specific question if asked directly
+  const directMatch = CURRICULUM_QUESTION_BANK.find((item) =>
+    (q.length > 8 && item.question.toLowerCase().includes(q.slice(0, 25))) ||
+    (q.includes("ترتيب") && q.includes("زمني") && item.questionId === "q_it_timeline")
+  );
+  if (directMatch) return directMatch;
+
+  let candidates = CURRICULUM_QUESTION_BANK;
+
+  // Topic classification with typo tolerance (درس/دؤس, اول/أول/1)
+  if (/درس.*(أول|اول|1)|دؤس.*(أول|اول|1)|الدرس.*(أول|اول|1)|الدؤس.*(أول|اول|1)|1-1|تطور.*تكنولوجيا|تحول.*اجتماعي|صمامات|قانون مور|حوسبة طرفية|edge computing|كمومية|qubit|ترتيب|زمني|مراحل/i.test(q)) {
+    candidates = CURRICULUM_QUESTION_BANK.filter((item) => item.topic.includes("1-1"));
+  } else if (/درس.*(ثاني|تاني|2)|دؤس.*(ثاني|تاني|2)|1-2|كيف يعمل الذكاء|شبكات عصبية|هلوسة|neural|genai|توليدي/i.test(q)) {
+    candidates = CURRICULUM_QUESTION_BANK.filter((item) => item.topic.includes("1-2"));
+  } else if (/فصل.*(ثاني|تاني|2)|أمن|امن|سيبراني|cyber|تشفير|2fa|zero trust|rsa|aes|مفتاح/i.test(q)) {
+    candidates = CURRICULUM_QUESTION_BANK.filter((item) => item.topic.includes("الفصل 2"));
+  } else if (/فصل.*(ثالث|تالت|3)|ويب|تطبيقات الويب|3-tier|http|status|post|get|404/i.test(q)) {
+    candidates = CURRICULUM_QUESTION_BANK.filter((item) => item.topic.includes("الفصل 3"));
+  } else if (/فصل.*(رابع|4)|تصميم|وسائط|crap|wireframe|persona|pdca/i.test(q)) {
+    candidates = CURRICULUM_QUESTION_BANK.filter((item) => item.topic.includes("الفصل 4"));
+  } else if (/بايثون|python/i.test(q)) {
+    candidates = CURRICULUM_QUESTION_BANK.filter((item) => item.topic.includes("بايثون"));
+  } else if (/جافا|javascript|js/i.test(q)) {
+    candidates = CURRICULUM_QUESTION_BANK.filter((item) => item.topic.includes("javascript") || item.topic.includes("الدوال"));
+  } else if (/كود|برمجة|تكويد|برمجيات|coding|خوارزم/i.test(q)) {
+    candidates = CURRICULUM_QUESTION_BANK.filter((item) => item.topic.includes("البرمجة"));
+  }
+
+  // Difficulty filter: if user requested hardest / tough question (أصعب / اصعب / اصعي / صعب / تحدي)
+  const wantsHard = /صعب|أصعب|اصعب|اصعي|تحدي|متقدم|معقد|hard|tough|difficult|challeng/i.test(q);
+  if (wantsHard) {
+    const hardCandidates = candidates.filter((item) => item.difficulty === "hard");
+    if (hardCandidates.length > 0) {
+      candidates = hardCandidates;
+    }
+  }
+
+  if (!candidates || candidates.length === 0) candidates = CURRICULUM_QUESTION_BANK;
+
+  return candidates[Math.floor(Math.random() * candidates.length)];
 }
 
 function fallbackResponse(
@@ -630,9 +980,35 @@ function fallbackResponse(
 
   // ── Pick response ─────────────────────────────────────────────────────────
 
+  // ── Curriculum & Subject Intent Detection ──────────────────────────────────
+  const isCurriculumL1 = /الدرس الأول|الدرس الاول|درس 1|1-1|تطور تكنولوجيا|تحول اجتماعي|صمامات مفرغة|قانون مور|eniac|moore|حوسبة طرفية|edge computing|حوسبة كمومية|quantum/i.test(i);
+  const isCurriculumL2 = /الدرس الثاني|الدرس التاني|درس 2|1-2|كيف يعمل الذكاء|شبكات عصبية|neural network|هلوسة|hallucination|تعلم آلي/i.test(i);
+  const isCurriculumL3 = /الدرس الثالث|الدرس التالت|درس 3|1-3|الحياة اليومية والصناعة|تطبيقات الذكاء/i.test(i);
+  const isCurriculumL4 = /الدرس الرابع|درس 4|1-4|القضايا الأخلاقية|أخلاقيات الذكاء/i.test(i);
+  const isCurriculumCh2 = /الفصل الثاني|الفصل التاني|أمن سيبراني|الامن السيبراني|تشفير|2-1|2-2|2-3|tls|https|zero trust|2fa|dmz|جدار الحماية/i.test(i);
+  const isCurriculumCh3 = /الفصل الثالث|الفصل التالت|تطبيقات الويب|3-1|3-2|web app|http status|html الدلالية/i.test(i);
+  const isCurriculumCh4 = /الفصل الرابع|الفصل الرابع|تصميم الوسائط|crap|wireframe|persona|pdca|4-1|4-2/i.test(i);
+  const isCurriculumGeneral = /المنهج|منهج|تانية ثانوي|2 ثانوي|ثانوية|منهج الوزارة|محتوى المنهج|كتاب الوزارة|curriculum/i.test(i);
+
   const isAPI = /api|واجهة برمجية|واجهه برمجيه/i.test(i);
   const isCoding = /coding|كود|برمجة|تكويد|برمجيات|برنامج|python|javascript|c\+\+|html|css|java|react|node|sql|database|backend|frontend/i.test(i);
-  const isExplain = /اشرح|شرح|يعني ايه|ما هو|إيه هو|معنى/i.test(i);
+  const isExplainOrHelp = /اشرح|شرح|فهمني|فهم الفكرة|فهمتني|وضح|توضيح|مفهوم|ما هو|ما هي|ماذا يعني|ما معنى|معنى|تعريف|ساعدني|السؤال الحالي|ولا تعطيني الإجابة|ولا تعطني الإجابة|ليه|لماذا|ازاي|إزاي|حللي|حل لي|تفسير|فسر|عايز أفهم|عاوز افهم/i.test(i);
+
+  const isExplicitQuizRequest = !isExplainOrHelp && (
+    /^(اسألني|اسالني|اختبرني|اختبرنى|امتحني|امتحنى|اديني سؤال|هات سؤال|اعملي كويز|اعمل كويز|quiz|test me|ask me)/i.test(i.trim()) ||
+    ((i.includes("اديني") || i.includes("هات") || i.includes("اعمل") || i.includes("عايز") || i.includes("عاوز")) &&
+     (i.includes("سؤال") || i.includes("سوال") || i.includes("كويز") || i.includes("اختبار") || i.includes("تحدي")))
+  );
+
+  if (isExplicitQuizRequest) {
+    const qData = generateInteractiveQuestion(i);
+    actions.push({
+      type: "interactive_question",
+      payload: qData,
+    });
+    message = `🎯 **تحدي تدريبي في ${qData.topic}!**\n\nاختر الإجابة الصحيحة بالأسفل لتكتشف النتيجة والتفسير النموذجي فوراً 💡:`;
+    return { message, actions, source: "fallback" };
+  }
 
   if (isBye) {
     const byes = [
@@ -642,14 +1018,93 @@ function fallbackResponse(
     ];
     message = byes[Math.floor(Date.now() / 1000) % byes.length];
 
+  } else if (isCurriculumL1 || (isCurriculumGeneral && (i.includes("اول") || i.includes("أول") || i.includes("1")))) {
+    actions.push({
+      type: "navigate",
+      payload: { path: "/curriculum/programming-and-ai", reason: "تصفح أسئلة وتفاصيل الدرس الأول" },
+    });
+    message = `يا هلا بيك يا ${nm}! 🌟 إليك شرح وافٍ ومبسط **للدرس الأول (1-1): تطور تكنولوجيا المعلومات والتحول الاجتماعي** من منهج البرمجة والذكاء الاصطناعي:\n\n` +
+      `━━━━━━━━━━━━━━━━\n` +
+      `⏳ **1️⃣ الترتيب الزمني الصحيح لمراحل تطور تكنولوجيا المعلومات (IT Timeline):**\n` +
+      `1. **بداية ظهور الحاسب (Early Computing)** ➔ في منتصف القرن العشرين مع الصمامات المفرغة (ENIAC) والترانزستورات وظهور الحواسيب.\n` +
+      `2. **تسويق الإنترنت تجارياً (Commercialization of Internet)** ➔ في التسعينات مع انتشار شبكة الويب (WWW) وتحول الإنترنت لخدمة عامة وتجارية.\n` +
+      `3. **ظهور الهواتف الذكية (Smartphone Era)** ➔ في العقد الأول من الألفية (2007 وما بعدها) مع ثورة التطبيقات المحمولة والاتصال الدائم.\n` +
+      `4. **انتشار الحوسبة السحابية (Cloud Computing)** ➔ تخزين ومعالجة البيانات على خوادم عملاقة عبر الإنترنت، وظهور إنترنت الأشياء والذكاء الاصطناعي.\n\n` +
+      `💡 **تلميح ذكي لفهم الترتيب والتحدي:**\n` +
+      `فكر في التطور كرحلة منطقية: *صنعنا الحاسب أولاً ➔ ثم ربطناه بالإنترنت عالمياً ➔ ثم صغّرناه في جيبنا كهاتف ذكي ➔ ثم نقلنا التخزين والمعالجة للسحابة السحابية*!\n\n` +
+      `━━━━━━━━━━━━━━━━\n` +
+      `📚 **2️⃣ مفاهيم ومصطلحات أساسية في الدرس:**\n` +
+      `• **قانون مور (Moore's Law)**: يتضاعف عدد الترانزستورات على شريحة السيليكون كل عامين تقريباً مع انخفاض التكلفة وزيادة القوة الحاسوبية.\n` +
+      `• **الحوسبة الطرفية (Edge Computing)**: معالجة البيانات لحظياً بالقرب من الجهاز لتقليل زمن التأخير (مثل السيارات ذاتية القيادة).\n` +
+      `• **الحوسبة الكمومية (Quantum Computing)**: الاعتماد على البتات الكمومية (Qubits) لإجراء عمليات حاسوبية فائقة التعقيد.\n` +
+      `• **التحول الاجتماعي والشمول المالي**: التوسع في المدفوعات الرقمية غير النقدية (Cashless) والمعاملات الإلكترونية الآمنة.\n\n` +
+      `💡 *اسألني عن أي جزئية تحب نوضحها أكتر!*`;
+
+  } else if (isCurriculumL2 || (isCurriculumGeneral && (i.includes("تاني") || i.includes("ثاني") || i.includes("2")))) {
+    actions.push({
+      type: "navigate",
+      payload: { path: "/curriculum/programming-and-ai", reason: "تصفح أسئلة الدرس الثاني" },
+    });
+    message = `أهلاً يا ${nm}! 🧠 إليك ملخص **الدرس الثاني (1-2): كيف يعمل الذكاء الاصطناعي**:\n\n` +
+      `• **هرمية الذكاء الاصطناعي**: AI > Machine Learning (ML) > Deep Learning (DL) > Generative AI (GenAI).\n` +
+      `• **الشبكات العصبية الاصطناعية (ANN)**: مستوحاة من خلايا الدماغ وتتكون من طبقة إدخال (Input)، طبقات مخفية (Hidden)، وطبقة إخراج (Output).\n` +
+      `• **مراحل الذكاء الاصطناعي**: مرحلة التدريب (Training على البيانات الضخمة) ومرحلة الاستنتاج والتنبؤ (Inference).\n` +
+      `• **مخاطر الهلوسة (AI Hallucination)**: توليد معلومات تبدو مقنعة لكنها غير صحيحة أو غير دقيقة علمياً.\n\n` +
+      `💡 *اسألني لو حابب تفهم أي جزء في الشبكات العصبية أو النماذج التوليدية!*`;
+
+  } else if (isCurriculumCh2) {
+    actions.push({
+      type: "navigate",
+      payload: { path: "/curriculum/programming-and-ai", reason: "تصفح أسئلة الأمن السيبراني" },
+    });
+    message = `🛡️ ملخص **الفصل الثاني: الأمن السيبراني (Cybersecurity)**:\n\n` +
+      `• **التشفير المتماثل (Symmetric - مثل AES)**: مفتاح واحد للتشفير وفك التشفير (سريع).\n` +
+      `• **التشفير غير المتماثل (Asymmetric - مثل RSA)**: زوج مفاتيح (عام Public وخاص Private).\n` +
+      `• **بروتوكول HTTPS ومصافحة TLS**: تأمين نقل البيانات بين المتصفح والخادم لمنع التنصت والتلاعب.\n` +
+      `• **المصادقة الثنائية (2FA)**: خطوتان للتحقق (كلمة مرور + رمز OTP على الهاتف).\n` +
+      `• **معمارية انعدام الثقة (Zero Trust)**: "لا تثق بأحد وتحقق من كل شيء دائماً".\n` +
+      `• **دورة الاستجابة للحوادث**: التحضير ➔ الاكتشاف ➔ الاحتواء ➔ الاستئصال ➔ التعافي ➔ الدروس المستفادة.`;
+
+  } else if (isCurriculumCh3) {
+    actions.push({
+      type: "navigate",
+      payload: { path: "/curriculum/programming-and-ai", reason: "تصفح أسئلة تطبيقات الويب" },
+    });
+    message = `🌐 ملخص **الفصل الثالث: تطبيقات الويب (Web Applications)**:\n\n` +
+      `• **معمارية الطبقات الثلاث (3-Tier Architecture)**: طبقة العرض (Client UI) + طبقة المنطق والتطبيق (Server) + طبقة البيانات (Database).\n` +
+      `• **طرق طلبات HTTP**: GET (قراءة بيانات)، POST (إرسال بيانات جديدة)، PUT (تعديل)، DELETE (حذف).\n` +
+      `• **رموز الاستجابة (Status Codes)**: 200 (نجاح OK)، 400 (طلب خاطئ)، 401 (غير مصرح)، 404 (الصفحة غير موجودة)، 500 (خطأ بالسيرفر).\n` +
+      `• **HTML الدلالية والتصميم المتجاوب (Responsive Design)**.`;
+
+  } else if (isCurriculumGeneral) {
+    actions.push({
+      type: "navigate",
+      payload: { path: "/curriculum/programming-and-ai", reason: "دليل المنهج الدراسي التفاعلي" },
+    });
+    message = `📚 **منهج البرمجة والذكاء الاصطناعي (الصف الثاني الثانوي - الترم الأول)**:\n\n` +
+      `━━━━━━━━━━━━━━━━\n` +
+      `1️⃣ **الفصل 1: تكنولوجيا المعلومات والمجتمع**\n` +
+      `  • 1-1: تطور تكنولوجيا المعلومات والتحول الاجتماعي\n` +
+      `  • 1-2: كيف يعمل الذكاء الاصطناعي\n` +
+      `  • 1-3: الذكاء الاصطناعي في الحياة اليومية والصناعة\n` +
+      `  • 1-4: القضايا الأخلاقية للذكاء الاصطناعي\n\n` +
+      `2️⃣ **الفصل 2: الأمن السيبراني**\n` +
+      `  • 2-1: تقنيات التشفير والمصادقة (AES, RSA, TLS)\n` +
+      `  • 2-2: تصميم أمن الشبكات (Zero Trust, DMZ)\n` +
+      `  • 2-3: الاستجابة للحوادث وإدارة المخاطر\n\n` +
+      `3️⃣ **الفصل 3: تطبيقات الويب** (3-Tier, HTTP/HTTPS, Status Codes)\n` +
+      `4️⃣ **الفصل 4: تصميم الوسائط** (مبادئ CRAP, Wireframes, دورة PDCA)\n` +
+      `━━━━━━━━━━━━━━━━\n\n` +
+      `💡 اكتب رقم أو اسم الدرس اللي عايزني أشرحهولك بالتفصيل يا ${nm}!`;
+
   } else if (isAPI) {
     message = `من عيوني يا بطل! 🌟 الـ API (Application Programming Interface) هي **واجهة برمجية للتطبيقات** بتشتغل كـ "وسيط" أو "جسر" لنقل البيانات بين البرامج والتطبيقات بسهولة جداً! 🌐🔗\n\nتخيل الجرسون اللطيف في المطعم 🍽️ — بتاخد طلبك (Request) وتديه للمطبخ (Server) وترجعلك بالأكل الجميل (Response)!\n\nفي منصة Code-UP، الـ API بيخلي الشاشة دي تتواصل مع السيرفر وتجيب بيانات كورساتك ودرجاتك لحظياً! ⚡\n\nعايز تتعلم أكتر عن البرمجة والـ APIs يا صديقي؟ اكتب **2** لخطة التعلّم! 📚`;
 
   } else if (isCoding) {
     message = `البرمجة (Coding) هي كتابة تعليمات وأوامر يفهمها الكمبيوتر لبناء مواقع، تطبيقات، وألعاب! 💻🚀\n\nتعتمد البرمجة على حل المشكلات والتفكير المنطقي خطوة بخطوة بلغات مثل JavaScript و Python.\n\nعلى منصة Code-UP بنساعدك تطبق عملي من خلال الكورسات والتطبيقات التفاعلية! 🌟\n\nعايز تبدأ المذاكرة معنا؟ اكتب **2** لخطة التدريب! 📚`;
 
-  } else if (isExplain && !isPerf && !isPlan && !isEdit && !isComplaint && !isStatus) {
-    message = `أنا تحت أمرك يا ${nm}! 💡\n\nعشان أقدر أشرحلك بدقة، حدد الموضوع اللي عايز تفهمه (مثلاً: "اشرحلي يعني ايه API"، "اشرحلي البرمجة"، أو "اشرحلي كورس الكيمياء").\n\nأو تقدر تختار من القائمة الرئيسية مباشرة:\n\n` + buildMainMenu(ctx).replace("اختار رقم:\n\n", "أو اختار:\n");
+  } else if (isExplainOrHelp && !isPerf && !isPlan && !isEdit && !isComplaint && !isStatus) {
+    message = `أنا تحت أمرك يا ${nm}! 💡\n\nعشان أقدر أشرحلك بدقة، حدد الموضوع اللي عايز تفهمه (مثلاً: "اشرحلي الدرس الأول في المنهج"، "اشرحلي يعني ايه API"، "اشرحلي الأمن السيبراني").\n\nأو تقدر تختار من القائمة الرئيسية مباشرة:\n\n` + buildMainMenu(ctx).replace("اختار رقم:\n\n", "أو اختار:\n");
 
   } else if (isThankYou) {
     const thanks = [
@@ -845,6 +1300,19 @@ export async function chatWithAI(
   notifications?: string,
   requestSignal?: AbortSignal,
 ): Promise<AIChatResult> {
+  // 0. Ultra-fast local fast-path only for explicit quiz requests (NOT for tutoring/concept explanation)
+  const isExplainOrHelpMsg = /اشرح|شرح|فهمني|فهم الفكرة|فهمتني|وضح|توضيح|مفهوم|ما هو|ما هي|ماذا يعني|ما معنى|معنى|تعريف|ساعدني|السؤال الحالي|ولا تعطيني الإجابة|ولا تعطني الإجابة|ليه|لماذا|ازاي|إزاي|حللي|حل لي|تفسير|فسر|عايز أفهم|عاوز افهم/i.test(userMessage);
+
+  const isExplicitQuizIntent = !isExplainOrHelpMsg && (
+    /^(اسألني|اسالني|اختبرني|اختبرنى|امتحني|امتحنى|اديني سؤال|هات سؤال|اعملي كويز|اعمل كويز|quiz|test me|ask me)/i.test(userMessage.trim()) ||
+    ((userMessage.includes("اديني") || userMessage.includes("هات") || userMessage.includes("اعمل") || userMessage.includes("عايز") || userMessage.includes("عاوز")) &&
+     (userMessage.includes("سؤال") || userMessage.includes("سوال") || userMessage.includes("كويز") || userMessage.includes("اختبار") || userMessage.includes("تحدي")))
+  );
+
+  if (isExplicitQuizIntent) {
+    return fallbackResponse(userMessage, studentContext, history, notifications);
+  }
+
   const contextSummary = summarizeContext(studentContext);
   const cleanHistory = history.slice(-8).map((m) => ({
     role: m.role,
@@ -873,7 +1341,7 @@ export async function chatWithAI(
     { role: "user", content: userMessage },
   ];
 
-  // 1. Exclusively use Google Gemini Pool
+  // 1. Try Google Gemini Pool (with fast 2.5s timeout)
   try {
     const geminiResult = await callBackup(messages, requestSignal);
     if (geminiResult?.message) {
@@ -884,12 +1352,40 @@ export async function chatWithAI(
     console.warn("[chatWithAI] Gemini call failed:", err);
   }
 
-  // 2. Friendly update fallback message if Gemini fails or is unreachable
-  return {
-    message: "مساعد الذكاء الاصطناعي قيد التحديث والصيانة حالياً، يرجى المحاولة مرة أخرى لاحقاً ⏳",
-    actions: [],
-    source: "fallback",
-  };
+  // 2. Try Primary / DeepSeek / XKiro / Groq if configured
+  try {
+    const primaryResult = await callPrimary(messages, requestSignal);
+    if (primaryResult?.message) {
+      primaryResult.message = stripFallbackMarkers(primaryResult.message);
+      return primaryResult;
+    }
+  } catch (err) {
+    console.warn("[chatWithAI] Primary call failed:", err);
+  }
+
+  try {
+    const xkiroResult = await callXKiro(messages, requestSignal);
+    if (xkiroResult?.message) {
+      xkiroResult.message = stripFallbackMarkers(xkiroResult.message);
+      return xkiroResult;
+    }
+  } catch (err) {
+    console.warn("[chatWithAI] XKiro call failed:", err);
+  }
+
+  try {
+    const groqResult = await callGroq(messages, requestSignal);
+    if (groqResult?.message) {
+      groqResult.message = stripFallbackMarkers(groqResult.message);
+      return groqResult;
+    }
+  } catch (err) {
+    console.warn("[chatWithAI] Groq call failed:", err);
+  }
+
+  // 3. Instant Smart Local Fallback (< 5ms response time)
+  // Handles curriculum explanations, study planning, performance analytics, and actions seamlessly!
+  return fallbackResponse(userMessage, studentContext, history, notifications);
 }
 
 export async function analyzeQuizAnswer(

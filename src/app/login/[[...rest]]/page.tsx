@@ -162,11 +162,7 @@ export default function LoginPage() {
           <p className="text-center text-xs text-slate-500 dark:text-slate-400 mt-4">
             بتسجيلك الدخول فإنك توافق على{" "}
             <Link href="/terms" className="text-sky-600 dark:text-sky-400 hover:underline">
-              شروط الاستخدام
-            </Link>{" "}
-            و{" "}
-            <Link href="/privacy" className="text-sky-600 dark:text-sky-400 hover:underline">
-              سياسة الخصوصية
+              الشروط والأحكام
             </Link>
           </p>
         </form>

@@ -20,6 +20,22 @@ interface AccessCodeEntry {
   course: CourseInfo;
 }
 
+interface StudentSubscriptionEntry {
+  id: string;
+  planType: string;
+  planLabel: string;
+  amount: number;
+  paymentSource: string | null;
+  paymentRef: string | null;
+  status: string;
+  createdAt: string;
+  expiresAt: string | null;
+  teacher: {
+    id: string;
+    name: string;
+  };
+}
+
 interface StudentDetail {
   id: string;
   name: string;
@@ -34,6 +50,7 @@ interface StudentDetail {
   createdAt: string;
   lastLoginAt: string | null;
   accessCodes: AccessCodeEntry[];
+  studentSubscriptions?: StudentSubscriptionEntry[];
 }
 
 interface QuizResultEntry {
@@ -379,6 +396,80 @@ export function StudentDetailModal({ studentId, onClose, onStudentModified, user
                         </span>
                       </div>
                     ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Teacher Subscriptions */}
+              <div>
+                <h4 className="text-white font-semibold text-sm mb-3">
+                  حجوزات باقات المعلمين ({data.student.studentSubscriptions?.length ?? 0})
+                </h4>
+                {!data.student.studentSubscriptions || data.student.studentSubscriptions.length === 0 ? (
+                  <p className="text-gray-500 text-sm">لا توجد حجوزات باقات مسجلة لهذا المتعلم</p>
+                ) : (
+                  <div className="space-y-2">
+                    {data.student.studentSubscriptions.map((sub) => {
+                      const isGateway = sub.paymentSource === "PAYMENT_GATEWAY";
+                      const isWallet = sub.paymentSource === "WALLET";
+                      const isTester = sub.paymentSource === "TESTER_BYPASS" || (sub.amount === 0 && sub.paymentSource !== "MANUAL");
+
+                      return (
+                        <div
+                          key={sub.id}
+                          className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-gray-900/50 rounded-lg p-3 border border-gray-700"
+                        >
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <p className="text-white text-sm font-medium">{sub.planLabel}</p>
+                              <span className="text-xs text-sky-400 font-semibold">· أ. {sub.teacher.name}</span>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2 mt-1">
+                              {isGateway ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                                  <span>💳</span>
+                                  <span>بوابة دفع (Payment Gateway)</span>
+                                </span>
+                              ) : isWallet ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                                  <span>👛</span>
+                                  <span>رصيد المحفظة (Wallet)</span>
+                                </span>
+                              ) : isTester ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-slate-500/15 text-slate-300 border border-slate-500/30">
+                                  <span>🧪</span>
+                                  <span>تجريبي (QA Bypass)</span>
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                                  <span>✍️</span>
+                                  <span>يدوي (Manual)</span>
+                                </span>
+                              )}
+                              <span className="text-xs text-emerald-400 font-bold font-mono">
+                                💰 {sub.amount > 0 ? `${sub.amount.toLocaleString("ar-EG")} ج.م` : "مجاني"}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="text-left sm:text-right text-[11px] font-mono text-gray-400 shrink-0">
+                            <div>
+                              {new Date(sub.createdAt).toLocaleDateString("ar-EG", {
+                                year: "numeric",
+                                month: "2-digit",
+                                day: "2-digit",
+                              })}
+                            </div>
+                            <div className="text-sky-400 text-[10px]">
+                              ⏰ {new Date(sub.createdAt).toLocaleTimeString("ar-EG", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                                hour12: true,
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>

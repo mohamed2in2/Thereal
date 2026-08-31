@@ -38,6 +38,14 @@ export class CostManager {
     return res;
   }
 
+  public getDailyBudgetCap(): number {
+    return Infinity; // Unlimited budget: runs continuously until user-funded API credit runs out
+  }
+
+  public isBudgetExceeded(): boolean {
+    return false; // Never block requests due to software budget cap
+  }
+
   public getCostBySubject(): Record<string, number> {
     const res: Record<string, number> = {};
     for (const r of this.records) {

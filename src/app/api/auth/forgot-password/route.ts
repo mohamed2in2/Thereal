@@ -6,12 +6,19 @@ import { generateVerificationCode, sendVerificationCode } from "@/lib/whatsapp";
 import { createPhoneVerificationChallenge, setPhoneVerificationCookie } from "@/lib/auth";
 import { checkCooldown } from "@/lib/cooldown";
 import { OtpQuotaManager } from "@/services/otp/OtpQuotaManager";
+import { enforceCaptcha } from "@/lib/login-guard";
 
 export async function POST(req: NextRequest) {
   try {
-    const { phone, forceChannel } = await req.json();
+    const { phone, forceChannel, recaptchaToken } = await req.json();
     if (!phone) {
       return NextResponse.json({ error: "رقم الهاتف مطلوب" }, { status: 400 });
+    }
+
+    // ── reCAPTCHA verification ───────────────────────────────────────────────
+    const captchaGate = await enforceCaptcha(recaptchaToken, "forgot_password");
+    if (!captchaGate.ok) {
+      return NextResponse.json({ error: captchaGate.error }, { status: captchaGate.status });
     }
 
     const normalized = normalizeEgyptPhone(String(phone));

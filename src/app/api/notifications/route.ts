@@ -92,3 +92,53 @@ export async function POST() {
 
   return NextResponse.json({ success: true });
 }
+
+/** DELETE /api/notifications — delete single notification by id or all notifications */
+export async function DELETE(req: Request) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
+
+  try {
+    const url = new URL(req.url);
+    const idFromQuery = url.searchParams.get("id");
+    const clearAll = url.searchParams.get("all") === "true";
+
+    let bodyId: string | null = null;
+    let bodyClearAll = false;
+    try {
+      const body = await req.json().catch(() => ({}));
+      if (body?.id) bodyId = body.id;
+      if (body?.clearAll) bodyClearAll = true;
+    } catch {}
+
+    const targetId = idFromQuery || bodyId;
+    const shouldClearAll = clearAll || bodyClearAll;
+
+    if (shouldClearAll) {
+      await prisma.notification.deleteMany({
+        where: { userId: session.id },
+      });
+      return NextResponse.json({ success: true, message: "تم حذف جميع الإشعارات" });
+    }
+
+    if (!targetId) {
+      return NextResponse.json({ error: "معرّف الإشعار مطلوب" }, { status: 400 });
+    }
+
+    const deleted = await prisma.notification.deleteMany({
+      where: {
+        id: targetId,
+        userId: session.id,
+      },
+    });
+
+    if (deleted.count === 0) {
+      return NextResponse.json({ error: "لم يتم العثور على الإشعار" }, { status: 404 });
+    }
+
+    return NextResponse.json({ success: true, message: "تم حذف الإشعار بنجاح" });
+  } catch (error) {
+    console.error("Delete notification error:", error);
+    return NextResponse.json({ error: "حدث خطأ أثناء حذف الإشعار" }, { status: 500 });
+  }
+}

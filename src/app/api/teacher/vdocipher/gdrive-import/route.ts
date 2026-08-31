@@ -21,18 +21,7 @@ import {
   requestVdoCipherUploadTicket,
   decryptVdoCipherSecret,
 } from "@/lib/vdocipher-accounts";
-import { timingSafeEqual } from "node:crypto";
-
-const PREVIEW_PASSWORD = process.env.PREVIEW_PASSWORD || "codeup2030";
-const PREVIEW_COOKIE_NAME = "codeup_preview_auth";
-
-function safeCompare(a: string, b: string): boolean {
-  if (typeof a !== "string" || typeof b !== "string") return false;
-  const bufA = Buffer.from(a);
-  const bufB = Buffer.from(b);
-  if (bufA.length !== bufB.length) return false;
-  return timingSafeEqual(bufA, bufB);
-}
+import { PREVIEW_COOKIE_NAME, isAuthorizedPreview } from "@/lib/preview-auth";
 
 /**
  * An S3 POST policy is a base64 JSON document carrying an expiry and a
@@ -74,13 +63,8 @@ export async function POST(req: NextRequest) {
   try {
     const session = await getSession();
     const cookie = req.cookies.get(PREVIEW_COOKIE_NAME)?.value;
-    const isPreviewCookieValid = cookie ? safeCompare(cookie, PREVIEW_PASSWORD) : false;
 
-    const isAuthorized =
-      isPreviewCookieValid ||
-      (session && (session.role === "teacher" || session.role === "admin" || session.role === "superadmin"));
-
-    if (!isAuthorized) {
+    if (!isAuthorizedPreview(session, cookie)) {
       return NextResponse.json(
         { error: "غير مصرح لك بالوصول. هذه الميزة مخصصة لحسابات المعلمين والإدارة والمعاينة." },
         { status: 403 }
@@ -114,12 +98,19 @@ export async function POST(req: NextRequest) {
     let folder: any = null;
 
     if (folderId) {
+      if (!session || !["teacher", "admin", "superadmin"].includes(session.role || "")) {
+        return NextResponse.json(
+          { error: "تسجيل الدخول كمعلم أو مشرف مطلوب لإضافة فيديو لمحاضرة" },
+          { status: 403 }
+        );
+      }
+
       // Verify folder ownership for course lecture
       folder = await prisma.folder.findFirst({
         where:
-          session?.role === "superadmin"
+          session.role === "superadmin" || session.role === "admin"
             ? { id: folderId }
-            : { id: folderId, course: { teacherId: session?.id } },
+            : { id: folderId, course: { teacherId: session.id } },
         include: { course: { select: { id: true } } },
       });
 

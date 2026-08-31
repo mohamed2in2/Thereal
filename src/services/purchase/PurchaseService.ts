@@ -1013,7 +1013,7 @@ export class PurchaseService {
       finalPrice = discountValidation.pricing?.finalPrice ?? basePrice;
     }
 
-    const monthsMap: Record<string, number> = { monthly: 1, termly: 3, yearly: 6 };
+    const monthsMap: Record<string, number> = { monthly: 1, termly: 3, yearly: 10 };
     const months = monthsMap[planType] || 1;
     const isLanguages = languageTrack === "languages" || languageTrack === "english";
 
@@ -1023,11 +1023,11 @@ export class PurchaseService {
     });
     const teacherName = profile?.displayName || profile?.slug || "المعلم";
     const planNames: Record<string, string> = {
-      monthly: "شهر واحد (1 Month)",
-      termly: "3 شهور (3 Months)",
-      yearly: "6 شهور (6 Months)",
+      monthly: "اشتراك شهري",
+      termly: "ترم كامل",
+      yearly: "سنة كاملة",
     };
-    const planLabel = `${planNames[planType] || "اشتراك"} ${isLanguages ? "(لغات / إنجليزي)" : "(عربي)"}`;
+    const planLabel = `${planNames[planType] || "اشتراك"} ${isLanguages ? "(لغات)" : "(عربي)"}`;
 
     const userDetails = await prisma.user.findUnique({
       where: { id: studentId },
@@ -1101,6 +1101,7 @@ export class PurchaseService {
             studentName: userDetails?.name || "طالب تجريبي",
             studentPhone: userDetails?.phone || "01000000000",
             parentPhone: userDetails?.parentPhone || "01000000000",
+            paymentSource: "TESTER_BYPASS",
             status: "active",
             expiresAt,
           },
@@ -1108,6 +1109,7 @@ export class PurchaseService {
             status: "active",
             expiresAt,
             amount: 0,
+            paymentSource: "TESTER_BYPASS",
           },
         });
 
@@ -1186,6 +1188,7 @@ export class PurchaseService {
       const trackedLang = isLanguages ? "languages" : "arabic";
       const activeStudentPhone = params.studentPhone || userDetails?.phone || null;
       const activeStudentName = params.studentName || userDetails?.name || null;
+      const source = paymentMethod === "wallet_balance" || paymentMethod === "balance" ? "WALLET" : "PAYMENT_GATEWAY";
 
       const sub = await tx.teacherSubscription.upsert({
         where: {
@@ -1206,6 +1209,7 @@ export class PurchaseService {
           studentName: activeStudentName,
           studentPhone: activeStudentPhone,
           parentPhone: userDetails?.parentPhone,
+          paymentSource: source,
           status: "active",
           expiresAt,
         },
@@ -1217,6 +1221,7 @@ export class PurchaseService {
           studentName: activeStudentName,
           studentPhone: activeStudentPhone,
           parentPhone: userDetails?.parentPhone,
+          paymentSource: source,
           status: "active",
           expiresAt,
         },

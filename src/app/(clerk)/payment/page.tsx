@@ -69,7 +69,7 @@ function PaymentContent() {
     if (planLabelParam) return planLabelParam;
     if (contextParam) return contextParam;
     if (teacherNameParam && planTypeParam) {
-      const planNames: Record<string, string> = { monthly: "شهر واحد", termly: "3 شهور", yearly: "6 شهور" };
+      const planNames: Record<string, string> = { monthly: "اشتراك شهري", termly: "ترم كامل", yearly: "سنة كاملة" };
       return `اشتراك ${planNames[planTypeParam] || "معلم"} — الأستاذ ${teacherNameParam}`;
     }
     return "";
@@ -136,7 +136,7 @@ function PaymentContent() {
       if (planLabelParam) setVerifiedItemName(planLabelParam);
       else if (contextParam) setVerifiedItemName(contextParam);
       else if (teacherNameParam && planTypeParam) {
-        const planNames: Record<string, string> = { monthly: "شهر واحد", termly: "3 شهور", yearly: "6 شهور" };
+        const planNames: Record<string, string> = { monthly: "اشتراك شهري", termly: "ترم كامل", yearly: "سنة كاملة" };
         setVerifiedItemName(`اشتراك ${planNames[planTypeParam] || "معلم"} — الأستاذ ${teacherNameParam}`);
       }
 

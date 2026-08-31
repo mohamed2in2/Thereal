@@ -713,11 +713,11 @@ export default function ProgrammingPage() {
     <ProfileGuard>
       <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-gray-950">
         <Navbar user={user ? { name: user.name, role: user.role } : null} />
-        <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8">
+        <main className="flex-1 max-w-7xl mx-auto w-full px-3 sm:px-6 lg:px-8 py-3 sm:py-8 pb-36 sm:pb-16">
           
           {/* Header */}
           <motion.div
-            className="mb-8 flex flex-wrap justify-between items-center gap-4"
+            className="mb-4 sm:mb-8 flex flex-wrap justify-between items-center gap-3 sm:gap-4"
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
@@ -725,40 +725,40 @@ export default function ProgrammingPage() {
             <div>
               <Link
                 href="/environments"
-                className="inline-flex items-center gap-2 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white mb-2 transition-colors"
+                className="inline-flex items-center gap-1.5 text-xs sm:text-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white mb-1.5 transition-colors"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
                 العودة للبيئات
               </Link>
-              <div className="flex items-center gap-3">
-                <div className="text-4xl">💻</div>
+              <div className="flex items-center gap-2.5 sm:gap-3">
+                <div className="text-3xl sm:text-4xl">💻</div>
                 <div>
-                  <h1 className="text-3xl font-black text-gray-900 dark:text-white">البرمجة</h1>
-                  <p className="text-gray-500 dark:text-gray-400">اختر لغة البرمجة أو تحدى مهاراتك المنطقية</p>
+                  <h1 className="text-xl sm:text-3xl font-black text-gray-900 dark:text-white">البرمجة</h1>
+                  <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">اختر لغة البرمجة أو اختبر معلوماتك في المنهج</p>
                 </div>
               </div>
             </div>
 
-            <div className="flex gap-2 items-center flex-wrap">
+            <div className="flex gap-1.5 sm:gap-2 items-center flex-wrap">
               {skills.map(sk => (
-                <span key={sk} className="px-3 py-1.5 rounded-full text-xs font-bold"
+                <span key={sk} className="px-2.5 py-1 rounded-full text-[11px] sm:text-xs font-bold"
                   style={{ background: SKILL_COLORS[sk as keyof typeof SKILL_COLORS] + "22", color: SKILL_COLORS[sk as keyof typeof SKILL_COLORS] }}>
                   {SKILL_LABELS[sk as keyof typeof SKILL_LABELS]} {iqData.skills[sk as keyof typeof SKILL_LABELS]?.score || 1000}
                 </span>
               ))}
-              <Link href="/environments/iq" className="px-3 py-1.5 rounded-full text-xs font-bold bg-indigo-100 text-indigo-600">
+              <Link href="/environments/iq" className="px-2.5 py-1 rounded-full text-[11px] sm:text-xs font-bold bg-indigo-100 text-indigo-600">
                 🧠 {iqData.overallIQ}
               </Link>
             </div>
           </motion.div>
 
           {/* Navigation Tabs */}
-          <div className="flex w-full max-w-2xl gap-2 overflow-x-auto mb-8 p-1 rounded-2xl bg-gray-200/50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 mx-auto sm:mx-0">
-            {([["sandboxes", "💻 المحررات البرمجية"], ["arena", "🏆 حلبة التحدي المعرفي"], ["curriculum", "📚 أسئلة برمجة المنهج"]] as const).map(([id, label]) => (
+          <div className="flex w-full max-w-2xl gap-1 sm:gap-2 overflow-x-auto mb-4 sm:mb-8 p-1 sm:p-1.5 rounded-2xl bg-gray-200/50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 mx-auto sm:mx-0 scrollbar-none">
+            {([["sandboxes", "💻 المحررات"], ["arena", "🏆 حلبة التحدي"], ["curriculum", "📚 أسئلة المنهج"]] as const).map(([id, label]) => (
               <button key={id} onClick={() => setTab(id)}
-                className="min-h-11 flex-1 shrink-0 px-3 py-3 text-sm font-black rounded-xl transition-all focus:outline-none focus:ring-4 focus:ring-sky-400/30"
+                className="min-h-[42px] sm:min-h-11 flex-1 shrink-0 px-2.5 sm:px-3 py-2 sm:py-2.5 text-xs sm:text-sm font-black rounded-xl transition-all focus:outline-none focus:ring-4 focus:ring-sky-400/30 whitespace-nowrap cursor-pointer"
                 style={{ background: tab === id ? "#fff" : "transparent", color: tab === id ? "#1E293B" : "#64748B", boxShadow: tab === id ? "0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)" : "none" }}>
                 {label}
               </button>
@@ -851,14 +851,13 @@ export default function ProgrammingPage() {
                 exit={{ opacity: 0, y: -15 }}
                 transition={{ duration: 0.2 }}
               >
-                <div className="mb-5 rounded-3xl border border-sky-400/20 bg-slate-950/80 p-5 text-right shadow-[0_4px_24px_rgba(0,0,0,0.18)] sm:p-7" dir="rtl">
-                  <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                      <span className="inline-flex min-h-8 items-center rounded-full border border-sky-300/30 bg-sky-400/10 px-3 py-1 text-xs font-black text-sky-200">منهج 2026 الرسمي</span>
-                      <h2 className="mt-3 text-2xl font-black text-white">أسئلة برمجة المنهج</h2>
-                      <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-300">بنك أسئلة وتحديات تفاعلية تغطي دروس البرمجة والأمن السيبراني والذكاء الاصطناعي مع توثيق المصادر من كتاب الوزارة.</p>
+                <div className="mb-3.5 sm:mb-5 rounded-2xl sm:rounded-3xl border border-teal-500/20 bg-slate-950/80 p-3.5 sm:p-6 text-right shadow-xl" dir="rtl">
+                  <div className="flex flex-wrap items-center justify-between gap-2.5">
+                    <div className="flex items-center gap-2.5">
+                      <span className="inline-flex items-center rounded-full border border-teal-300/30 bg-teal-400/10 px-2.5 py-0.5 text-[10px] sm:text-xs font-black text-teal-200">منهج 2026 الرسمي</span>
+                      <h2 className="text-base sm:text-xl font-black text-white">أسئلة برمجة المنهج الوزاري</h2>
                     </div>
-                    <span className="rounded-2xl bg-slate-900 px-4 py-3 text-xs font-bold text-slate-300">اختيار من متعدد · شرح فوري</span>
+                    <span className="hidden sm:inline-block rounded-xl bg-slate-900 px-3 py-1 text-xs font-bold text-slate-300">اختيار من متعدد · شرح وتفسير فوري</span>
                   </div>
                 </div>
                 <CurriculumPractice />

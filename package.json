@@ -4,11 +4,12 @@
   "private": true,
   "scripts": {
     "dev": "npx tsx scripts/repair-sqlite-db.ts && next dev",
-    "build": "node scripts/prisma-generate.js && npx next build",
+    "build": "node scripts/prisma-generate.js && npx next build --webpack",
     "start": "next start",
     "prod:start": "node scripts/validate-env.mjs --production && pm2 start ecosystem.config.js",
     "prod:cluster": "npm run build && node scripts/validate-env.mjs --production && pm2 start ecosystem.config.js",
     "prod:reload": "pm2 reload ecosystem.config.js",
+    "watchdog": "bash scripts/server-watchdog.sh",
     "lint": "eslint --cache",
     "test:verification": "node --import tsx scripts/run-verification-tests.ts",
     "test:security": "node --import tsx scripts/run-security-tests.mts",

@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { logAdminAction, LOG_ACTIONS } from "@/lib/admin-auth";
 import { hasPermission } from "@/lib/rbac";
+import { invalidateUserSessionCache } from "@/lib/cache";
 
 export async function POST(
   req: NextRequest,
@@ -49,7 +50,14 @@ export async function POST(
     }
 
     const hashed = await bcrypt.hash(newPassword, 12);
-    await prisma.user.update({ where: { id }, data: { password: hashed } });
+    await prisma.user.update({
+      where: { id },
+      data: {
+        password: hashed,
+        tokenVersion: { increment: 1 },
+      } as any,
+    });
+    invalidateUserSessionCache(id);
 
     await logAdminAction({
       adminId: session.id,

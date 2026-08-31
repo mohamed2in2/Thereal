@@ -30,10 +30,100 @@ async function getProgress(studentId: string) {
   };
 }
 
+async function getTopCurriculumStudents() {
+  try {
+    const topGroups = await prisma.studentContentProgress.groupBy({
+      by: ["studentId"],
+      where: {
+        content: {
+          type: ContentType.QUIZ,
+          sourceId: { startsWith: SOURCE_PREFIX },
+        },
+        score: { gte: 100 },
+      },
+      _count: {
+        id: true,
+      },
+      orderBy: {
+        _count: {
+          id: "desc",
+        },
+      },
+      take: 3,
+    });
+
+    const userIds = topGroups.map((g) => g.studentId);
+    const users = userIds.length > 0
+      ? await prisma.user.findMany({
+          where: { id: { in: userIds }, isDeleted: false },
+          select: { id: true, name: true, points: true },
+        })
+      : [];
+
+    const userMap = new Map(users.map((u) => [u.id, u]));
+    const results: { rank: number; studentId: string; name: string; correctCount: number; points: number }[] = [];
+
+    for (let i = 0; i < topGroups.length; i++) {
+      const g = topGroups[i];
+      const u = userMap.get(g.studentId);
+      if (u) {
+        results.push({
+          rank: i + 1,
+          studentId: g.studentId,
+          name: u.name?.trim() || `طالب متفوق`,
+          correctCount: g._count.id,
+          points: u.points || 0,
+        });
+      }
+    }
+
+    if (results.length < 3) {
+      const existingIds = results.map((r) => r.studentId);
+      const fallbackUsers = await prisma.user.findMany({
+        where: {
+          role: "student",
+          isDeleted: false,
+          ...(existingIds.length > 0 ? { id: { notIn: existingIds } } : {}),
+        },
+        orderBy: { points: "desc" },
+        take: 3 - results.length,
+        select: { id: true, name: true, points: true },
+      });
+
+      for (const fu of fallbackUsers) {
+        results.push({
+          rank: results.length + 1,
+          studentId: fu.id,
+          name: fu.name?.trim() || `طالب مميز`,
+          correctCount: 0,
+          points: fu.points || 0,
+        });
+      }
+    }
+
+    results.sort((a, b) => b.correctCount - a.correctCount || b.points - a.points);
+    results.forEach((r, idx) => {
+      r.rank = idx + 1;
+    });
+
+    return results;
+  } catch (err) {
+    console.error("Error getting top curriculum students:", err);
+    return [];
+  }
+}
+
 export async function GET() {
   const session = await getStudentSession();
   if (!session) return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
-  return NextResponse.json(await getProgress(session.id));
+  const [progress, topStudents] = await Promise.all([
+    getProgress(session.id),
+    getTopCurriculumStudents(),
+  ]);
+  return NextResponse.json({
+    ...progress,
+    topStudents,
+  });
 }
 
 export async function POST(req: NextRequest) {
@@ -68,10 +158,16 @@ export async function POST(req: NextRequest) {
     }
   );
 
+  const [progress, topStudents] = await Promise.all([
+    getProgress(session.id),
+    getTopCurriculumStudents(),
+  ]);
+
   return NextResponse.json({
     correct,
     explanation: question.explanation,
     revisionPrompt: correct ? null : question.revisionPrompt,
-    progress: await getProgress(session.id),
+    progress,
+    topStudents,
   });
 }

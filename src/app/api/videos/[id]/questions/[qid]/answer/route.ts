@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { checkVideoAccess } from "@/lib/authorization";
 
 /**
  * POST — Student or Teacher answers a video question.
@@ -8,6 +9,7 @@ import { prisma } from "@/lib/prisma";
  * Body: { selectedOption, answeredAtSecond, watchSessionId }
  *
  * Validates:
+ * - Caller has access to the video (checkVideoAccess)
  * - watchSessionId belongs to this user (or preview session)
  * - answeredAtSecond is within ±15s of triggerSecond (anti-bypass)
  * - selectedOption is A/B/C/D
@@ -24,6 +26,22 @@ export async function POST(
   if (!session) return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
 
   const { id: videoId, qid: questionId } = await params;
+
+  const video = await prisma.video.findUnique({
+    where: { id: videoId },
+    select: { id: true, isFree: true },
+  });
+
+  if (!video) {
+    return NextResponse.json({ error: "الفيديو غير موجود" }, { status: 404 });
+  }
+
+  if (!video.isFree) {
+    const hasAccess = await checkVideoAccess(session.id, session.role, videoId);
+    if (!hasAccess) {
+      return NextResponse.json({ error: "لا يوجد صلاحية للوصول لهذا الدرس" }, { status: 403 });
+    }
+  }
 
   const body = (await req.json().catch(() => ({}))) as {
     selectedOption?: string;
@@ -75,7 +93,7 @@ export async function POST(
     );
   }
 
-  // Validate watch session if provided
+  // Validate watch session
   if (watchSessionId) {
     const ws = await prisma.videoWatchSession.findFirst({
       where: {
@@ -88,6 +106,8 @@ export async function POST(
     if (!ws) {
       return NextResponse.json({ error: "جلسة المشاهدة غير صالحة" }, { status: 403 });
     }
+  } else if (!video.isFree && session.role === "student") {
+    return NextResponse.json({ error: "معرف جلسة المشاهدة مطلوب" }, { status: 400 });
   }
 
   const isCorrect = isEssay ? false : selectedOption === question.correctOption;

@@ -917,6 +917,8 @@ model TeacherSubscription {
   studentName      String?
   studentPhone     String?
   parentPhone      String?
+  paymentSource    String    @default("MANUAL") // "MANUAL" | "PAYMENT_GATEWAY" | "WALLET" | "TESTER_BYPASS"
+  paymentRef       String?   // Gateway reference or transaction ID if applicable
   status           String    @default("active") // "active" | "expired" | "cancelled"
   expiresAt        DateTime?
   createdAt        DateTime  @default(now())
@@ -929,6 +931,7 @@ model TeacherSubscription {
   @@index([studentId])
   @@index([teacherId])
   @@index([status])
+  @@index([paymentSource])
 }
 
 /// Superadmin-generated recharge codes students can enter to top up their balance.

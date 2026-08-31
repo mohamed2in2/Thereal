@@ -242,7 +242,7 @@ export async function POST(req: NextRequest) {
           `• 🔵 **DeepSeek V4 Flash**: ${deepseekRequests} طلبات | تكلفة: \`$${deepseekCost.toFixed(6)} USD\` (احتياطي دائم)\n\n` +
           `━━━━━━━━━━━━━━━━\n\n` +
           `🛡️ **حالة الميزانية والأمان (Budget & Safety Limits)**:\n` +
-          `• 📊 **الاستهلاك مقابل الميزانية**: \`$${totalCostUsd.toFixed(4)} / $50.00 Max USD\`\n` +
+          `• 📊 **الاستهلاك والميزانية**: \`$${totalCostUsd.toFixed(4)} USD / ∞ غير محدود (يعمل حتى نفاد رصيد الـ API)\`\n` +
           `• ⚡ **إجمالي التوكنز المستهلكة**: ${metrics.totalTokensUsed} tokens\n` +
           `• ⏳ **متوسط سرعة الاستجابة**: ${Math.round(metrics.averageLatencyMs)} ms\n` +
           `• ⚙️ **حد حفظ المحادثة الأقصى**: 15 رسالة فقط`;
@@ -734,6 +734,7 @@ async function executeAction(
         };
       }
 
+      case "interactive_question":
       case "show_insights":
       case "none":
         return { type: action.type, status: "ok", payload: action.payload };

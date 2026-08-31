@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
+import { normalizeEgyptPhone } from "@/lib/phone";
 import { whatsappOrchestrator } from "./orchestrator";
 import { notifyParentVerificationRequired } from "@/lib/notifications";
 
@@ -352,11 +353,30 @@ export async function reissueParentToken(
 
   const student = await prisma.user.findUnique({
     where: { id: studentId },
-    select: { id: true, name: true, parentPhone: true },
+    select: { id: true, name: true, phone: true, parentPhone: true },
   });
 
   if (!student) {
     throw new Error("المتعلم غير موجود.");
+  }
+
+  // Prevent student from assigning their own registered phone number as the parent contact
+  let normalizedNewParent: string | null = null;
+  let normalizedStudentPhone: string | null = null;
+  try {
+    normalizedNewParent = normalizeEgyptPhone(cleanPhone);
+  } catch {}
+  try {
+    if (student.phone) normalizedStudentPhone = normalizeEgyptPhone(student.phone);
+  } catch {}
+
+  if (
+    !options?.bypassRateLimit &&
+    normalizedStudentPhone &&
+    normalizedNewParent &&
+    normalizedStudentPhone === normalizedNewParent
+  ) {
+    throw new Error("رقم ولي الأمر لا يمكن أن يكون نفس رقمك المسجل.");
   }
 
   const existingToken = await prisma.parentToken.findUnique({

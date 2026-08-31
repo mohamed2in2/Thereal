@@ -3,18 +3,7 @@ import { getSession } from "@/lib/auth";
 import { createAxinomDrmToken } from "@/lib/axinom";
 import { prisma } from "@/lib/prisma";
 import { decryptVdoCipherSecret, generateAccountOtp, selectBestAccountForUpload } from "@/lib/vdocipher-accounts";
-import { timingSafeEqual } from "node:crypto";
-
-const PREVIEW_PASSWORD = process.env.PREVIEW_PASSWORD || "codeup2030";
-const PREVIEW_COOKIE_NAME = "codeup_preview_auth";
-
-function safeCompare(a: string, b: string): boolean {
-  if (typeof a !== "string" || typeof b !== "string") return false;
-  const bufA = Buffer.from(a);
-  const bufB = Buffer.from(b);
-  if (bufA.length !== bufB.length) return false;
-  return timingSafeEqual(bufA, bufB);
-}
+import { PREVIEW_COOKIE_NAME, isAuthorizedPreview } from "@/lib/preview-auth";
 
 /**
  * Teacher / CTO DRM Preview Endpoint:
@@ -25,13 +14,8 @@ export async function POST(req: NextRequest) {
   try {
     const session = await getSession();
     const cookie = req.cookies.get(PREVIEW_COOKIE_NAME)?.value;
-    const isPreviewCookieValid = cookie ? safeCompare(cookie, PREVIEW_PASSWORD) : false;
 
-    const isAuthorized =
-      isPreviewCookieValid ||
-      (session && (session.role === "teacher" || session.role === "admin" || session.role === "superadmin"));
-
-    if (!isAuthorized) {
+    if (!isAuthorizedPreview(session, cookie)) {
       return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
     }
 
@@ -56,13 +40,66 @@ export async function POST(req: NextRequest) {
     const watermark = body.watermarkText || studentIdentifier;
     const provider = body.provider === "vdocipher" ? "vdocipher" : "axinom";
 
+    // ── Ownership Authorization Check ──────────────────────────────────────────
+    // If this asset belongs to a registered course video, ensure the teacher owns it.
+    // Superadmins and Admins can preview any video.
+    const registeredVideo = await prisma.video.findFirst({
+      where: {
+        OR: [
+          { id: assetId },
+          { providerVideoId: assetId },
+          { vdoCipherId: assetId },
+        ],
+      },
+      include: {
+        folder: {
+          include: {
+            course: { select: { teacherId: true } },
+          },
+        },
+      },
+    });
+
+    const linkedAsset = await prisma.vdoCipherVideoAsset.findFirst({
+      where: { vdoCipherVideoId: assetId },
+      include: {
+        account: true,
+        video: {
+          include: {
+            folder: {
+              include: {
+                course: { select: { teacherId: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const targetTeacherId =
+      registeredVideo?.folder?.course?.teacherId ||
+      linkedAsset?.video?.folder?.course?.teacherId;
+
+    if (targetTeacherId) {
+      const isSuperadminOrAdmin = session?.role === "superadmin" || session?.role === "admin";
+      const isOwnerTeacher =
+        session?.role === "teacher" && targetTeacherId === session?.id;
+
+      if (!isSuperadminOrAdmin && !isOwnerTeacher) {
+        return NextResponse.json(
+          { error: "غير مصرح لك بمعاينة هذا المحتوى المحمي" },
+          { status: 403 }
+        );
+      }
+    }
+
     // ── 1. VdoCipher Provider Preview ─────────────────────────────────────────
     if (provider === "vdocipher") {
       let apiKey = "";
       let playerId: string | null = null;
 
-      // Try locating the asset in database first to find the exact account
-      const existingAsset = await prisma.vdoCipherVideoAsset.findFirst({
+      // Locate the asset in database first to find the exact account
+      const existingAsset = linkedAsset || await prisma.vdoCipherVideoAsset.findFirst({
         where: { vdoCipherVideoId: assetId },
         include: { account: true },
       });

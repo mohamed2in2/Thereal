@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession, getStudentSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateLectureSummary } from "@/lib/ai-lecture-summary";
+import { checkVideoAccess } from "@/lib/authorization";
 
 export async function GET(
   req: NextRequest,
@@ -44,6 +45,16 @@ export async function GET(
 
     if (!video) {
       return NextResponse.json({ error: "الفيديو غير موجود" }, { status: 404 });
+    }
+
+    if (!video.isFree) {
+      const hasAccess = await checkVideoAccess(session.id, session.role, video.id);
+      if (!hasAccess) {
+        return NextResponse.json(
+          { error: "لا يوجد صلاحية للوصول لملخص هذا الدرس. يرجى الاشتراك في الكورس أولاً." },
+          { status: 403 }
+        );
+      }
     }
 
     const forceRefresh = req.nextUrl.searchParams.get("refresh") === "true";
