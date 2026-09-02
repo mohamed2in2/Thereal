@@ -221,7 +221,7 @@ export function ClassicAdminShell({
   };
 
   // 50% / 50% chance: Native Dark Green ("emerald") or Native Blue ("blue")
-  const [accentTheme, setAccentTheme] = useState<"emerald" | "blue">(() => {
+  const [accentTheme] = useState<"emerald" | "blue">(() => {
     if (typeof window === "undefined") return "emerald";
     try {
       const stored = localStorage.getItem("admin_accent_mode");
@@ -233,16 +233,6 @@ export function ClassicAdminShell({
       return "emerald";
     }
   });
-
-  const toggleAccent = () => {
-    const next = accentTheme === "emerald" ? "blue" : "emerald";
-    setAccentTheme(next);
-    try {
-      localStorage.setItem("admin_accent_mode", next);
-    } catch {
-      /* ignore */
-    }
-  };
 
   const selectedMobileHub = hubs.find((h) => h.id === mobileActiveHub);
 
@@ -292,29 +282,8 @@ export function ClassicAdminShell({
 
           {/* Header Quick Actions */}
           <div className="flex items-center gap-2.5">
-            {/* 50%/50% Accent Switcher (Native Dark Green / Native Blue) */}
-            <button
-              onClick={toggleAccent}
-              type="button"
-              title={
-                accentTheme === "emerald"
-                  ? "النمط الحالي: أخضر داكن ملكي (اضغط للتبديل إلى الأزرق)"
-                  : "النمط الحالي: أزرق داكن ملكي (اضغط للتبديل إلى الأخضر)"
-              }
-              className={`px-2.5 py-1.5 rounded-xl border text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm ${
-                accentTheme === "emerald"
-                  ? "bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800"
-                  : "bg-blue-50 text-blue-800 border-blue-300 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800"
-              }`}
-            >
-              <span>{accentTheme === "emerald" ? "🟢" : "🔵"}</span>
-              <span className="hidden md:inline font-mono text-[11px]">
-                {accentTheme === "emerald" ? "أخضر داكن" : "أزرق داكن"}
-              </span>
-            </button>
-
-            {/* Custom Banana Security Key Action Password Button */}
-            <AdminActionPasswordBar />
+            {/* Custom Banana Security Key Action Password Button (Only for SuperAdmin) */}
+            {role === "superadmin" && <AdminActionPasswordBar />}
 
             {onOpenMoneyControl && (
               <button
