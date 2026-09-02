@@ -172,26 +172,26 @@ export function ClassicAdminShell({
   return (
     <div
       dir="rtl"
-      className="min-h-screen bg-slate-50 text-slate-900 dark:bg-[#070a0f] dark:text-slate-100 flex flex-col font-sans transition-colors duration-200 selection:bg-slate-900 selection:text-white dark:selection:bg-[#c5a880]/20 dark:selection:text-[#c5a880]"
+      className="min-h-screen bg-[#f8fafc] text-slate-900 dark:bg-slate-950 dark:text-slate-100 flex flex-col font-sans transition-colors duration-200 selection:bg-slate-900 selection:text-white dark:selection:bg-amber-500/20 dark:selection:text-amber-300"
     >
       {/* ── Top Executive Header (Clean White / Pure Dark) ── */}
-      <header className="sticky top-0 z-40 bg-white/95 text-slate-900 border-b border-slate-200/90 shadow-sm dark:bg-[#0b0f17]/95 dark:text-white dark:border-slate-800/80 px-4 sm:px-6 py-3.5 backdrop-blur-md">
-        <div className="flex items-center justify-between gap-4 max-w-7xl mx-auto">
+      <header className="sticky top-0 z-40 bg-white text-slate-900 border-b border-slate-200 shadow-sm dark:bg-slate-900 dark:text-white dark:border-slate-800 px-4 sm:px-8 py-3.5">
+        <div className="flex items-center justify-between gap-4 w-full max-w-[1720px] mx-auto">
           {/* Brand & Identity */}
           <div className="flex items-center gap-3.5">
-            <div className="w-9 h-9 rounded-xl bg-slate-900 text-white dark:bg-gradient-to-br dark:from-[#1b2434] dark:to-[#0f1522] border border-slate-700 dark:border-[#c5a880]/30 flex items-center justify-center shadow-md">
-              <span className="font-black text-base font-serif dark:text-[#c5a880]">C</span>
+            <div className="w-10 h-10 rounded-xl bg-slate-900 text-white dark:bg-slate-800 border border-slate-800 dark:border-slate-700 flex items-center justify-center shadow-md">
+              <span className="font-black text-lg font-serif text-amber-400">C</span>
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-sm sm:text-base font-black text-slate-900 dark:text-white tracking-wide">
+                <h1 className="text-base sm:text-lg font-black text-slate-900 dark:text-white tracking-wide">
                   {headerTitle}
                 </h1>
-                <span className="hidden sm:inline-flex px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-800 border border-slate-200 dark:bg-[#c5a880]/15 dark:text-[#c5a880] dark:border-[#c5a880]/30">
+                <span className="hidden sm:inline-flex px-2.5 py-0.5 rounded-md text-xs font-bold bg-slate-100 text-slate-800 border border-slate-200 dark:bg-slate-800 dark:text-amber-300 dark:border-slate-700">
                   {role === "superadmin" ? "المشرف العام" : role === "teacher" ? "لوحة المعلم" : role}
                 </span>
               </div>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 hidden sm:block">
+              <p className="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">
                 {headerSubtitle}
               </p>
             </div>
@@ -202,7 +202,7 @@ export function ClassicAdminShell({
             {onOpenMoneyControl && (
               <button
                 onClick={onOpenMoneyControl}
-                className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 dark:bg-slate-800/90 dark:hover:bg-slate-700 dark:text-slate-200 dark:border-slate-700/70 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
+                className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 dark:border-slate-700 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
               >
                 <span>💰</span>
                 <span className="hidden sm:inline">المصروفات والأرباح</span>
@@ -214,9 +214,9 @@ export function ClassicAdminShell({
                 onClick={onRefresh}
                 disabled={refreshing}
                 title="تحديث البيانات"
-                className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 dark:bg-slate-800/90 dark:hover:bg-slate-700 dark:text-slate-300 dark:border-slate-700/70 flex items-center justify-center transition-all disabled:opacity-50 cursor-pointer shadow-sm"
+                className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 dark:border-slate-700 flex items-center justify-center transition-all disabled:opacity-50 cursor-pointer shadow-sm"
               >
-                <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin text-slate-900 dark:text-[#c5a880]" : ""}`} />
+                <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin text-slate-900 dark:text-amber-400" : ""}`} />
               </button>
             )}
 
@@ -225,22 +225,22 @@ export function ClassicAdminShell({
             <button
               onClick={onLogout}
               title="تسجيل الخروج"
-              className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-600 border border-slate-300 dark:bg-slate-800/90 dark:hover:bg-rose-950/40 dark:text-slate-400 dark:hover:text-rose-400 dark:border-slate-700/70 flex items-center justify-center transition-all cursor-pointer shadow-sm"
+              className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-600 border border-slate-300 dark:bg-slate-800 dark:hover:bg-rose-950/40 dark:text-slate-400 dark:hover:text-rose-400 dark:border-slate-700 flex items-center justify-center transition-all cursor-pointer shadow-sm"
             >
-              <LogOut className="w-3.5 h-3.5" />
+              <LogOut className="w-4 h-4" />
             </button>
           </div>
         </div>
       </header>
 
       {/* ── Main Layout (Sidebar + Content) ── */}
-      <div className="flex-1 flex max-w-7xl w-full mx-auto pb-24 sm:pb-8">
+      <div className="flex-1 flex w-full max-w-[1720px] mx-auto pb-24 sm:pb-8">
         {/* Desktop Classic Sidebar */}
-        <aside className="hidden lg:block w-72 shrink-0 p-5 border-l border-slate-200 dark:border-slate-800/70 bg-white/80 dark:bg-[#090d15]/50">
+        <aside className="hidden lg:block w-80 shrink-0 p-5 border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/50 shadow-sm">
           <div className="sticky top-20 space-y-4">
             <div className="px-2 py-1 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">
               <span>أقسام لوحة التحكم</span>
-              <span className="text-[10px] text-slate-600 dark:text-[#c5a880] font-mono">5 Hubs</span>
+              <span className="text-xs text-slate-600 dark:text-amber-300 font-mono font-bold">5 Hubs</span>
             </div>
 
             <div className="space-y-2">

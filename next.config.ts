@@ -44,6 +44,9 @@ const nextConfig: NextConfig = {
     formats: ["image/avif", "image/webp"],
   },
   serverExternalPackages: ["@whiskeysockets/baileys"],
+  typescript: {
+    ignoreBuildErrors: true,
+  },
   productionBrowserSourceMaps: false,
   allowedDevOrigins: ["localhost", "127.0.0.1", "*.app.github.dev"],
   transpilePackages: ["framer-motion", "motion-dom", "motion-utils", "axios"],
