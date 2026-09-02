@@ -21,6 +21,8 @@ type Analytics = {
   courseBreakdown: { id: string; title: string; students: number; views: number }[];
   quizBuckets: { label: string; count: number }[];
   issues: Issue[];
+  lastAuditAt?: string;
+  nextAuditAt?: string;
   totals?: { courses: number; videos: number };
 };
 
@@ -72,19 +74,40 @@ export function TeacherOverview({
   const [courseId, setCourseId] = useState("");
   const [data, setData] = useState<Analytics | null>(null);
   const [loading, setLoading] = useState(true);
+  const [recheckingAudit, setRecheckingAudit] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (recheckAudit = false) => {
+    if (recheckAudit) setRecheckingAudit(true);
     try {
       const qs = new URLSearchParams({ period });
       if (courseId) qs.set("courseId", courseId);
+      if (recheckAudit) qs.set("recheckAudit", "true");
       const res = await fetch(`/api/admin/analytics?${qs}`, { credentials: "include" });
       if (res.ok) setData(await res.json());
     } catch { /* keep last data */ }
-    finally { setLoading(false); }
+    finally {
+      setLoading(false);
+      setRecheckingAudit(false);
+    }
   }, [period, courseId]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    let ignore = false;
+    const qs = new URLSearchParams({ period });
+    if (courseId) qs.set("courseId", courseId);
+    fetch(`/api/admin/analytics?${qs}`, { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((res) => {
+        if (!ignore && res) setData(res);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!ignore) setLoading(false);
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [period, courseId]);
 
   const firstName = data?.teacherName?.replace(/^(مستر|مس|د\.|أ\.|أستاذة?|دكتور)\s*/u, "").split(" ")[0] || data?.teacherName;
 
@@ -226,16 +249,47 @@ export function TeacherOverview({
         </div>
       </div>
 
-      {/* ── Issues feed ── */}
+      {/* ── Issues feed (24-Hour Periodic Audit Cycle) ── */}
       <div className={card}>
-        <div className="px-5 py-4 border-b border-[var(--border)] flex items-center justify-between">
-          <h3 className="font-bold text-[var(--ink)] flex items-center gap-2"><IconShield className="w-4 h-4 text-rose-500" /> ما يحتاج انتباهك</h3>
-          {data && <span className="text-xs text-[var(--ink-muted)]">{data.issues.length} عنصر</span>}
+        <div className="px-5 py-4 border-b border-[var(--border)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="font-black text-sm text-[var(--ink)] flex items-center gap-2">
+                <IconShield className="w-4 h-4 text-rose-500" />
+                <span>ما يحتاج انتباهك</span>
+              </h3>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                ⏰ فحص دوري كل 24 ساعة
+              </span>
+              {data && (
+                <span className="text-xs font-bold text-[var(--ink-muted)]">
+                  ({data.issues.length} عنصر)
+                </span>
+              )}
+            </div>
+            <p className="text-[11px] text-[var(--ink-muted)] mt-0.5">
+              يتم التحقق الشامل من روابط وصور وفيديوهات الكورسات تلقائياً كل 24 ساعة.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => void load(true)}
+            disabled={recheckingAudit}
+            className="px-3 py-1.5 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] hover:bg-[var(--border)] text-xs font-bold text-[var(--ink)] transition-all flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50 shrink-0 self-start sm:self-auto"
+            title="إجراء فحص فوري وتحديث تقرير الصحة الآن"
+          >
+            <span className={recheckingAudit ? "animate-spin" : ""}>🔄</span>
+            <span>{recheckingAudit ? "جارٍ الفحص..." : "إعادة الفحص الآن"}</span>
+          </button>
         </div>
+
         {data && data.issues.length === 0 ? (
-          <div className="py-10 text-center">
+          <div className="py-12 text-center">
             <p className="text-sm font-bold text-emerald-500">كل شيء على ما يُرام ✓</p>
-            <p className="text-xs text-[var(--ink-muted)] mt-1">لا توجد مشاكل أو شكاوى أو تنبيهات حالياً.</p>
+            <p className="text-xs text-[var(--ink-muted)] mt-1">
+              تم الفحص الدوري بنجاح ولا توجد مشاكل أو روابط مفقودة في كورساتك حالياً.
+            </p>
           </div>
         ) : (
           <ul className="divide-y divide-[var(--border)]">

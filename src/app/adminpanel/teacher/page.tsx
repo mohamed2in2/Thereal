@@ -691,6 +691,7 @@ export default function TeacherDashboardPage() {
   const [courseSettings, setCourseSettings] = useState({
     title: "", subject: "", description: "", thumbnailUrl: "", educationalStage: "", maxWatchCount: 3, sequentialAccess: true, homeworkUrl: "",
   });
+  const [showExternalThumbUrl, setShowExternalThumbUrl] = useState(false);
   const [pricingSettings, setPricingSettings] = useState({
     isPaid: false, price: "", discountPercent: "", discountExpiresAt: "", allowDirectInstall: false,
   });
@@ -3002,7 +3003,7 @@ export default function TeacherDashboardPage() {
                   />
                 )}
 
-                {/* ── SETTINGS TAB (Executive Overhaul) ── */}
+                {/* ── SETTINGS TAB (Executive 2-Column Studio Overhaul) ── */}
                 {courseTab === "settings" && (
                   <div className="rounded-3xl border border-slate-200/90 bg-white p-6 shadow-sm dark:border-slate-800/90 dark:bg-slate-900/90 space-y-6">
                     <div className="border-b border-slate-100 dark:border-slate-800 pb-4">
@@ -3011,157 +3012,224 @@ export default function TeacherDashboardPage() {
                         <span>إعدادات وهوية الكورس الأساسية</span>
                       </h3>
                       <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                        تعديل العنوان، المادة، المرحلة التدريبية، والصورة المصغرة للكورس.
+                        تعديل العنوان، المادة، المرحلة التدريبية، وغلاف الكورس التعريفي.
                       </p>
                     </div>
 
-                    <form onSubmit={saveCourseSettings} className="space-y-4 max-w-2xl">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1.5">
-                            عنوان الكورس <span className="text-rose-500">*</span>
-                          </label>
-                          <input
-                            type="text"
-                            value={courseSettings.title}
-                            onChange={(e) => setCourseSettings({ ...courseSettings, title: e.target.value })}
-                            className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-medium text-slate-900 outline-none focus:border-emerald-500 focus:bg-white dark:border-slate-800 dark:bg-slate-950 dark:text-white transition-all"
-                            required
-                          />
-                        </div>
+                    <form onSubmit={saveCourseSettings} className="space-y-6">
+                      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                        {/* Right Column: Core Course Details (7 Cols) */}
+                        <div className="lg:col-span-7 space-y-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1.5">
+                                عنوان الكورس <span className="text-rose-500">*</span>
+                              </label>
+                              <input
+                                type="text"
+                                value={courseSettings.title}
+                                onChange={(e) => setCourseSettings({ ...courseSettings, title: e.target.value })}
+                                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-medium text-slate-900 outline-none focus:border-emerald-500 focus:bg-white dark:border-slate-800 dark:bg-slate-950 dark:text-white transition-all"
+                                required
+                              />
+                            </div>
 
-                        <div>
-                          <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1.5">
-                            المادة الأكاديمية
-                          </label>
-                          <input
-                            type="text"
-                            value={courseSettings.subject}
-                            onChange={(e) => setCourseSettings({ ...courseSettings, subject: e.target.value })}
-                            className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-medium text-slate-900 outline-none focus:border-emerald-500 focus:bg-white dark:border-slate-800 dark:bg-slate-950 dark:text-white transition-all"
-                          />
-                        </div>
-                      </div>
+                            <div>
+                              <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1.5">
+                                المادة الأكاديمية
+                              </label>
+                              <input
+                                type="text"
+                                value={courseSettings.subject}
+                                onChange={(e) => setCourseSettings({ ...courseSettings, subject: e.target.value })}
+                                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-medium text-slate-900 outline-none focus:border-emerald-500 focus:bg-white dark:border-slate-800 dark:bg-slate-950 dark:text-white transition-all"
+                              />
+                            </div>
+                          </div>
 
-                      <div>
-                        <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1.5">
-                          المرحلة الدراسية والصف *
-                        </label>
-                        <select
-                          value={courseSettings.educationalStage}
-                          onChange={(e) => setCourseSettings({ ...courseSettings, educationalStage: e.target.value })}
-                          className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-medium text-slate-900 outline-none focus:border-emerald-500 focus:bg-white dark:border-slate-800 dark:bg-slate-950 dark:text-white transition-all cursor-pointer"
-                        >
-                          <option value="">اختر المرحلة</option>
-                          <option value="sec_1">أولى بكالوريا (الصف الأول الثانوي)</option>
-                          <option value="sec_2">ثانية بكالوريا (الصف الثاني الثانوي)</option>
-                          <option value="sec_3">ثالثة بكالوريا (الثانوية العامة)</option>
-                        </select>
-                      </div>
+                          <div>
+                            <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1.5">
+                              المرحلة الدراسية والصف <span className="text-rose-500">*</span>
+                            </label>
+                            <select
+                              value={courseSettings.educationalStage}
+                              onChange={(e) => setCourseSettings({ ...courseSettings, educationalStage: e.target.value })}
+                              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-medium text-slate-900 outline-none focus:border-emerald-500 focus:bg-white dark:border-slate-800 dark:bg-slate-950 dark:text-white transition-all cursor-pointer"
+                            >
+                              <option value="">اختر المرحلة</option>
+                              <option value="sec_1">أولى بكالوريا (الصف الأول الثانوي)</option>
+                              <option value="sec_2">ثانية بكالوريا (الصف الثاني الثانوي)</option>
+                              <option value="sec_3">ثالثة بكالوريا (الثانوية العامة)</option>
+                            </select>
+                          </div>
 
-                      {/* Thumbnail section */}
-                      <div>
-                        <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1.5">
-                          الصورة المصغرة (Thumbnail)
-                        </label>
-                        <div className="flex gap-2">
-                          <input
-                            type="text"
-                            value={courseSettings.thumbnailUrl}
-                            onChange={(e) => setCourseSettings({ ...courseSettings, thumbnailUrl: e.target.value })}
-                            placeholder="https://... أو اختر رفع صورة من جهازك"
-                            dir="ltr"
-                            className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-mono text-slate-900 outline-none focus:border-emerald-500 focus:bg-white dark:border-slate-800 dark:bg-slate-950 dark:text-white transition-all"
-                          />
-                          <label className="px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-100 hover:bg-slate-200 dark:border-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 transition-all cursor-pointer flex items-center shrink-0">
-                            <span>رفع صورة</span>
-                            <input
-                              type="file"
-                              accept="image/*"
-                              className="hidden"
-                              onChange={async (e) => {
-                                const file = e.target.files?.[0];
-                                if (file) {
-                                  try {
-                                    const url = await fileToResizedDataUrl(file, 600);
-                                    setCourseSettings({ ...courseSettings, thumbnailUrl: url });
-                                    notify("success", "تم اختيار الصورة بنجاح");
-                                  } catch {
-                                    notify("error", "تعذر معالجة الصورة");
-                                  }
-                                }
-                              }}
-                            />
-                          </label>
-                        </div>
-                        {courseSettings.thumbnailUrl && (
-                          <div className="mt-3 relative w-48 h-24 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm">
-                            <img
-                              src={courseSettings.thumbnailUrl}
-                              alt="Thumbnail preview"
-                              className="w-full h-full object-cover"
+                          <div>
+                            <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1.5">
+                              وصف الكورس والأهداف التعليمية
+                            </label>
+                            <textarea
+                              rows={3}
+                              value={courseSettings.description}
+                              onChange={(e) => setCourseSettings({ ...courseSettings, description: e.target.value })}
+                              placeholder="اكتب نبذة عن محتويات الكورس وما سيتعلمه الطالب..."
+                              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs text-slate-900 outline-none focus:border-emerald-500 focus:bg-white dark:border-slate-800 dark:bg-slate-950 dark:text-white transition-all resize-none font-medium"
                             />
                           </div>
-                        )}
-                      </div>
 
-                      <div>
-                        <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1.5">
-                          وصف الكورس والأهداف التعليمية
-                        </label>
-                        <textarea
-                          rows={3}
-                          value={courseSettings.description}
-                          onChange={(e) => setCourseSettings({ ...courseSettings, description: e.target.value })}
-                          placeholder="اكتب نبذة عن محتويات الكورس وما سيتعلمه الطالب..."
-                          className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs text-slate-900 outline-none focus:border-emerald-500 focus:bg-white dark:border-slate-800 dark:bg-slate-950 dark:text-white transition-all resize-none font-medium"
-                        />
-                      </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1.5">
+                                المشاهدات الافتراضية لكل طالب
+                              </label>
+                              <input
+                                type="number"
+                                min={1}
+                                max={99}
+                                value={courseSettings.maxWatchCount}
+                                onChange={(e) => setCourseSettings({ ...courseSettings, maxWatchCount: Number(e.target.value) || 3 })}
+                                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-mono text-slate-900 outline-none focus:border-emerald-500 focus:bg-white dark:border-slate-800 dark:bg-slate-950 dark:text-white transition-all"
+                                dir="ltr"
+                              />
+                            </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1.5">
-                            المشاهدات الافتراضية لكل طالب
-                          </label>
-                          <input
-                            type="number"
-                            min={1}
-                            max={99}
-                            value={courseSettings.maxWatchCount}
-                            onChange={(e) => setCourseSettings({ ...courseSettings, maxWatchCount: Number(e.target.value) || 3 })}
-                            className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-mono text-slate-900 outline-none focus:border-emerald-500 focus:bg-white dark:border-slate-800 dark:bg-slate-950 dark:text-white transition-all"
-                            dir="ltr"
-                          />
+                            <div>
+                              <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1.5">
+                                رابط صفحة الواجب المنزلي (اختياري)
+                              </label>
+                              <input
+                                type="url"
+                                value={courseSettings.homeworkUrl}
+                                onChange={(e) => setCourseSettings({ ...courseSettings, homeworkUrl: e.target.value })}
+                                placeholder="https://drive.google.com/..."
+                                dir="ltr"
+                                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-mono text-slate-900 outline-none focus:border-emerald-500 focus:bg-white dark:border-slate-800 dark:bg-slate-950 dark:text-white transition-all"
+                              />
+                            </div>
+                          </div>
                         </div>
 
-                        <div>
-                          <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1.5">
-                            رابط صفحة الواجب المنزلي (اختياري)
+                        {/* Left Column: Visual Cover / Thumbnail Studio (5 Cols) */}
+                        <div className="lg:col-span-5 space-y-3">
+                          <label className="block text-xs font-bold text-slate-800 dark:text-slate-200">
+                            غلاف الكورس التعريفي (Thumbnail Studio)
                           </label>
-                          <input
-                            type="url"
-                            value={courseSettings.homeworkUrl}
-                            onChange={(e) => setCourseSettings({ ...courseSettings, homeworkUrl: e.target.value })}
-                            placeholder="https://drive.google.com/..."
-                            dir="ltr"
-                            className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-mono text-slate-900 outline-none focus:border-emerald-500 focus:bg-white dark:border-slate-800 dark:bg-slate-950 dark:text-white transition-all"
-                          />
+
+                          <div className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-950/40 space-y-3">
+                            {/* Live 16:9 Preview Frame */}
+                            <div className="relative w-full aspect-video rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 shadow-inner flex flex-col items-center justify-center group">
+                              {courseSettings.thumbnailUrl ? (
+                                <>
+                                  <img
+                                    src={courseSettings.thumbnailUrl}
+                                    alt="غلاف الكورس"
+                                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                  />
+                                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                    <label className="px-3 py-1.5 rounded-xl bg-white/90 hover:bg-white text-slate-900 text-xs font-bold shadow-md cursor-pointer transition-all">
+                                      <span>📸 تغيير</span>
+                                      <input
+                                        type="file"
+                                        accept="image/*"
+                                        className="hidden"
+                                        onChange={async (e) => {
+                                          const file = e.target.files?.[0];
+                                          if (file) {
+                                            try {
+                                              const url = await fileToResizedDataUrl(file, 800);
+                                              setCourseSettings({ ...courseSettings, thumbnailUrl: url });
+                                              notify("success", "تم تحديث صورة الغلاف بنجاح");
+                                            } catch {
+                                              notify("error", "تعذر معالجة الصورة");
+                                            }
+                                          }
+                                        }}
+                                      />
+                                    </label>
+                                    <button
+                                      type="button"
+                                      onClick={() => setCourseSettings({ ...courseSettings, thumbnailUrl: "" })}
+                                      className="px-3 py-1.5 rounded-xl bg-rose-600/90 hover:bg-rose-600 text-white text-xs font-bold shadow-md cursor-pointer transition-all"
+                                    >
+                                      🗑️ إزالة
+                                    </button>
+                                  </div>
+                                </>
+                              ) : (
+                                <label className="flex flex-col items-center justify-center p-6 text-center cursor-pointer w-full h-full hover:bg-slate-200/50 dark:hover:bg-slate-800/50 transition-colors">
+                                  <span className="text-3xl mb-1">🖼️</span>
+                                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                                    انقر لاختيار غلاف الكورس من جهازك
+                                  </span>
+                                  <span className="text-[10px] text-slate-400 mt-1">
+                                    يدعم صيغ JPG و PNG بدقة عالية
+                                  </span>
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={async (e) => {
+                                      const file = e.target.files?.[0];
+                                      if (file) {
+                                        try {
+                                          const url = await fileToResizedDataUrl(file, 800);
+                                          setCourseSettings({ ...courseSettings, thumbnailUrl: url });
+                                          notify("success", "تم رفع صورة الغلاف بنجاح");
+                                        } catch {
+                                          notify("error", "تعذر معالجة الصورة");
+                                        }
+                                      }
+                                    }}
+                                  />
+                                </label>
+                              )}
+                            </div>
+
+                            {/* External URL Collapsible Toggle */}
+                            <div className="pt-1">
+                              <button
+                                type="button"
+                                onClick={() => setShowExternalThumbUrl(!showExternalThumbUrl)}
+                                className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 cursor-pointer"
+                              >
+                                <span>{showExternalThumbUrl ? "▲ إخفاء حقل الرابط الخارجي" : "▼ أو إدخال رابط خارجي للصورة"}</span>
+                              </button>
+
+                              {showExternalThumbUrl && (
+                                <div className="mt-2">
+                                  <input
+                                    type="url"
+                                    placeholder="https://images.unsplash.com/..."
+                                    value={courseSettings.thumbnailUrl.startsWith("data:") ? "" : courseSettings.thumbnailUrl}
+                                    onChange={(e) => setCourseSettings({ ...courseSettings, thumbnailUrl: e.target.value })}
+                                    dir="ltr"
+                                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-mono text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:text-white outline-none"
+                                  />
+                                </div>
+                              )}
+                            </div>
+
+                            <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                              💡 النسبة المثالية لغلاف الكورس هي <strong className="text-emerald-600 dark:text-emerald-400">16:9</strong> (1280×720 بكسل) لعرض جذاب على منصة الطالب وتطبيقات الموبايل.
+                            </p>
+                          </div>
                         </div>
                       </div>
 
-                      <div className="pt-2">
+                      {/* Full-Width Action Footer */}
+                      <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end">
                         <button
                           type="submit"
-                          className="px-6 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white dark:bg-emerald-700 dark:hover:bg-emerald-600 text-xs font-bold transition-all shadow-sm cursor-pointer"
+                          className="px-8 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-md shadow-emerald-600/20 cursor-pointer flex items-center gap-2"
                         >
-                          حفظ إعدادات الكورس
+                          <span>💾</span>
+                          <span>حفظ إعدادات الكورس</span>
                         </button>
                       </div>
                     </form>
                   </div>
                 )}
 
-                {/* ── PRICING TAB (Executive Overhaul) ── */}
+                {/* ── PRICING TAB (Executive 2-Column Suite Overhaul) ── */}
                 {courseTab === "pricing" && (
                   <div className="rounded-3xl border border-slate-200/90 bg-white p-6 shadow-sm dark:border-slate-800/90 dark:bg-slate-900/90 space-y-6">
                     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-4">
@@ -3182,151 +3250,202 @@ export default function TeacherDashboardPage() {
                       )}
                     </div>
 
-                    <form onSubmit={savePricingSettings} className="space-y-5 max-w-xl">
-                      {/* Segmented Pricing Toggle */}
+                    <form onSubmit={savePricingSettings} className="space-y-6">
+                      {/* Full-width Segmented Pricing Mode Selector */}
                       <div>
                         <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-2">
-                          نوع الكورس
+                          نوع الكورس ونظام التحصيل المالي
                         </label>
-                        <div className="grid grid-cols-2 gap-3 p-1 rounded-2xl bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-1.5 rounded-2xl bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
                           <button
                             type="button"
                             onClick={() => setPricingSettings({ ...pricingSettings, isPaid: false })}
-                            className={`py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                            className={`py-3.5 px-4 rounded-xl text-xs font-bold transition-all cursor-pointer flex flex-col items-center justify-center gap-1 ${
                               !pricingSettings.isPaid
                                 ? "bg-white text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 shadow-sm border border-slate-200/80 dark:border-emerald-800"
                                 : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                             }`}
                           >
-                            <span>🟢</span>
-                            <span>كورس مجاني بالكامل</span>
+                            <span className="flex items-center gap-1.5 text-sm">
+                              <span>🟢</span>
+                              <span>كورس مجاني بالكامل</span>
+                            </span>
+                            <span className="text-[10px] font-normal opacity-80">
+                              متاح للطلاب مجاناً بدون الحاجة لدفع اشتراك مالي
+                            </span>
                           </button>
 
                           <button
                             type="button"
                             onClick={() => setPricingSettings({ ...pricingSettings, isPaid: true })}
-                            className={`py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                            className={`py-3.5 px-4 rounded-xl text-xs font-bold transition-all cursor-pointer flex flex-col items-center justify-center gap-1 ${
                               pricingSettings.isPaid
                                 ? "bg-white text-blue-800 dark:bg-blue-950 dark:text-blue-300 shadow-sm border border-slate-200/80 dark:border-blue-800"
                                 : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                             }`}
                           >
-                            <span>💎</span>
-                            <span>كورس مدفوع باشتراك</span>
+                            <span className="flex items-center gap-1.5 text-sm">
+                              <span>💎</span>
+                              <span>كورس مدفوع باشتراك</span>
+                            </span>
+                            <span className="text-[10px] font-normal opacity-80">
+                              يتطلب دفع اشتراك مالي أو كود وصول مفعل للتسجيل
+                            </span>
                           </button>
                         </div>
                       </div>
 
-                      {/* Direct Install Toggle for Free Courses */}
-                      {!pricingSettings.isPaid && (
-                        <div className="p-4 rounded-2xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/50 dark:bg-emerald-950/20 flex items-center justify-between gap-4">
-                          <div>
-                            <p className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                              <span>زر "تثبيت الكورس المباشر" 📲</span>
-                            </p>
-                            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                              {pricingSettings.allowDirectInstall
-                                ? "مفعّل: يظهر للطالب زر تثبيت فوري بدون الحاجة لكود وصول"
-                                : "معطّل: يحتاج الطالب كود وصول للتسجيل في الكورس"}
-                            </p>
-                          </div>
+                      {/* 2-Column Balanced Pricing Configuration Grid */}
+                      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                        {/* Right Column: Base Pricing / Access Mode (6 Cols) */}
+                        <div className="lg:col-span-6 space-y-4">
+                          {!pricingSettings.isPaid ? (
+                            <div className="p-5 rounded-2xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/40 dark:bg-emerald-950/20 space-y-3">
+                              <div className="flex items-center justify-between gap-4">
+                                <div>
+                                  <p className="text-xs font-black text-slate-900 dark:text-white flex items-center gap-1.5">
+                                    <span>📲 تثبيت الكورس المباشر للطلاب</span>
+                                  </p>
+                                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                                    {pricingSettings.allowDirectInstall
+                                      ? "مفعّل: يظهر للطالب زر تثبيت فوري بنقرة واحدة بدون طلب أي كود."
+                                      : "معطّل: يحتاج الطالب إلى كود وصول للتسجيل حتى وإن كان الكورس مجانياً."}
+                                  </p>
+                                </div>
 
-                          <button
-                            type="button"
-                            onClick={() => setPricingSettings({ ...pricingSettings, allowDirectInstall: !pricingSettings.allowDirectInstall })}
-                            className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                              pricingSettings.allowDirectInstall
-                                ? "bg-emerald-600 text-white border-emerald-700"
-                                : "bg-slate-200 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700"
-                            }`}
-                          >
-                            {pricingSettings.allowDirectInstall ? "مفعّل ✓" : "معطّل"}
-                          </button>
-                        </div>
-                      )}
-
-                      {/* Paid Price Field */}
-                      {pricingSettings.isPaid && (
-                        <div>
-                          <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1.5">
-                            سعر الاشتراك في الكورس <span className="text-rose-500">*</span>
-                          </label>
-                          <div className="relative">
-                            <input
-                              type="number"
-                              min={0}
-                              step={0.01}
-                              value={pricingSettings.price}
-                              onChange={(e) => setPricingSettings({ ...pricingSettings, price: e.target.value })}
-                              placeholder="مثال: 150"
-                              className="w-full px-4 py-2.5 pl-14 rounded-xl border border-slate-200 bg-slate-50 text-xs font-mono font-bold text-slate-900 outline-none focus:border-emerald-500 focus:bg-white dark:border-slate-800 dark:bg-slate-950 dark:text-white transition-all"
-                              dir="ltr"
-                              required
-                            />
-                            <span className="absolute left-3 top-2.5 text-xs font-bold text-slate-400">
-                              ج.م
-                            </span>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Limited Time Discount Box */}
-                      <div className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40 space-y-3">
-                        <p className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                          <span>🏷️ عرض خصم ترويجي محدود المدة (اختياري)</span>
-                        </p>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <div>
-                            <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                              نسبة الخصم %
-                            </label>
-                            <input
-                              type="number"
-                              min={0}
-                              max={100}
-                              step={1}
-                              value={pricingSettings.discountPercent}
-                              onChange={(e) => setPricingSettings({ ...pricingSettings, discountPercent: e.target.value })}
-                              placeholder="مثال: 20"
-                              className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-mono text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:text-white outline-none"
-                              dir="ltr"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                              تاريخ ووقت انتهاء الخصم
-                            </label>
-                            <input
-                              type="datetime-local"
-                              value={pricingSettings.discountExpiresAt}
-                              onChange={(e) => setPricingSettings({ ...pricingSettings, discountExpiresAt: e.target.value })}
-                              className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-mono text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:text-white outline-none"
-                              dir="ltr"
-                            />
-                          </div>
+                                <button
+                                  type="button"
+                                  onClick={() => setPricingSettings({ ...pricingSettings, allowDirectInstall: !pricingSettings.allowDirectInstall })}
+                                  className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer shrink-0 ${
+                                    pricingSettings.allowDirectInstall
+                                      ? "bg-emerald-600 text-white border-emerald-700 shadow-sm"
+                                      : "bg-slate-200 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700"
+                                  }`}
+                                >
+                                  {pricingSettings.allowDirectInstall ? "مفعّل ✓" : "معطّل"}
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="p-5 rounded-2xl border border-blue-200 dark:border-blue-900/60 bg-blue-50/30 dark:bg-blue-950/20 space-y-3">
+                              <label className="block text-xs font-black text-slate-900 dark:text-white mb-1">
+                                سعر الاشتراك الرسمي في الكورس <span className="text-rose-500">*</span>
+                              </label>
+                              <div className="relative">
+                                <input
+                                  type="number"
+                                  min={0}
+                                  step={0.01}
+                                  value={pricingSettings.price}
+                                  onChange={(e) => setPricingSettings({ ...pricingSettings, price: e.target.value })}
+                                  placeholder="مثال: 150"
+                                  className="w-full px-4 py-3 pl-16 rounded-xl border border-slate-200 bg-white text-sm font-mono font-black text-slate-900 outline-none focus:border-blue-500 dark:border-slate-800 dark:bg-slate-900 dark:text-white transition-all shadow-xs"
+                                  dir="ltr"
+                                  required
+                                />
+                                <span className="absolute left-4 top-3 text-xs font-bold text-slate-400">
+                                  ج.م
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                                هذا هو السعر الأساسي الذي يدفعه الطالب عند شراء الكورس من المنصة أو بوابة الدفع.
+                              </p>
+                            </div>
+                          )}
                         </div>
 
-                        {pricingSettings.discountPercent && pricingSettings.isPaid && pricingSettings.price && (
-                          <div className="mt-2 p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-xs flex items-center justify-between">
-                            <span className="text-emerald-800 dark:text-emerald-300 font-bold">
-                              السعر بعد الخصم للطالب:
-                            </span>
-                            <span className="font-mono text-sm font-black text-emerald-700 dark:text-emerald-300">
-                              {(parseFloat(pricingSettings.price) * (1 - parseFloat(pricingSettings.discountPercent) / 100)).toFixed(2)} ج.م
-                            </span>
+                        {/* Left Column: Limited-Time Promotions & Discounts (6 Cols) */}
+                        <div className="lg:col-span-6 space-y-4">
+                          <div className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40 space-y-4">
+                            <div>
+                              <p className="text-xs font-black text-slate-900 dark:text-white flex items-center gap-1.5">
+                                <span>🏷️ عروض الخصم الترويجي المؤقت (اختياري)</span>
+                              </p>
+                              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                                خصم تشجيعي يظهر للطلاب مع عداد تنازلي حتى موعد الانتهاء.
+                              </p>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              <div>
+                                <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                                  نسبة الخصم %
+                                </label>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={100}
+                                  step={1}
+                                  value={pricingSettings.discountPercent}
+                                  onChange={(e) => setPricingSettings({ ...pricingSettings, discountPercent: e.target.value })}
+                                  placeholder="مثال: 20"
+                                  className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-mono text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:text-white outline-none"
+                                  dir="ltr"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                                  تاريخ ووقت انتهاء الخصم
+                                </label>
+                                <input
+                                  type="datetime-local"
+                                  value={pricingSettings.discountExpiresAt}
+                                  onChange={(e) => setPricingSettings({ ...pricingSettings, discountExpiresAt: e.target.value })}
+                                  className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-mono text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:text-white outline-none"
+                                  dir="ltr"
+                                />
+                              </div>
+                            </div>
+
+                            {/* Preset Discount Pills */}
+                            <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                              <span className="text-[10px] font-bold text-slate-400">نسب سريعة:</span>
+                              {[10, 20, 30, 50].map((pct) => (
+                                <button
+                                  key={pct}
+                                  type="button"
+                                  onClick={() => setPricingSettings({ ...pricingSettings, discountPercent: String(pct) })}
+                                  className="px-2.5 py-1 rounded-lg text-[10px] font-bold border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:border-emerald-500 transition-colors cursor-pointer"
+                                >
+                                  {pct}%
+                                </button>
+                              ))}
+                              {pricingSettings.discountPercent && (
+                                <button
+                                  type="button"
+                                  onClick={() => setPricingSettings({ ...pricingSettings, discountPercent: "", discountExpiresAt: "" })}
+                                  className="px-2.5 py-1 rounded-lg text-[10px] font-bold text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                                >
+                                  إلغاء الخصم
+                                </button>
+                              )}
+                            </div>
+
+                            {/* Dynamic Price Calculation Summary */}
+                            {pricingSettings.discountPercent && pricingSettings.isPaid && pricingSettings.price && (
+                              <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-xs flex items-center justify-between">
+                                <span className="text-emerald-800 dark:text-emerald-300 font-bold">
+                                  السعر بعد الخصم للطالب:
+                                </span>
+                                <span className="font-mono text-base font-black text-emerald-700 dark:text-emerald-300">
+                                  {(parseFloat(pricingSettings.price) * (1 - parseFloat(pricingSettings.discountPercent) / 100)).toFixed(2)} ج.م
+                                </span>
+                              </div>
+                            )}
                           </div>
-                        )}
+                        </div>
                       </div>
 
-                      <div className="pt-2">
+                      {/* Full-Width Action Footer */}
+                      <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end">
                         <button
                           type="submit"
                           disabled={savingPricing}
-                          className="px-6 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white dark:bg-emerald-700 dark:hover:bg-emerald-600 text-xs font-bold transition-all shadow-sm cursor-pointer disabled:opacity-50"
+                          className="px-8 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-md shadow-emerald-600/20 cursor-pointer disabled:opacity-50 flex items-center gap-2"
                         >
-                          {savingPricing ? "جارٍ الحفظ…" : "حفظ إعدادات التسعير"}
+                          <span>💾</span>
+                          <span>{savingPricing ? "جارٍ الحفظ…" : "حفظ إعدادات التسعير"}</span>
                         </button>
                       </div>
                     </form>

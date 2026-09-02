@@ -23,6 +23,14 @@ function delta(cur: number, prev: number) {
   if (prev <= 0) return cur > 0 ? 100 : 0;
   return Math.round(((cur - prev) / prev) * 100);
 }
+// ── 24-Hour Cache for Teacher Content Health Audit ───────────────────────────
+type HealthAuditItem = { kind: string; severity: "high" | "med" | "low"; title: string; detail: string; at: string | null };
+interface HealthAuditCacheEntry {
+  timestamp: number;
+  healthIssues: HealthAuditItem[];
+}
+const teacherHealthAuditCache = new Map<string, HealthAuditCacheEntry>();
+const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 
 export async function GET(req: NextRequest) {
   try {
@@ -268,7 +276,7 @@ export async function GET(req: NextRequest) {
     count: quizRows.filter((q) => q.score >= b.min && q.score < b.max).length,
   }));
 
-  // ── Issues feed ──────────────────────────────────────────────────────────────
+  // ── 24-Hour Course & Content Health Audit Cycle ─────────────────────────────
   type Issue = { kind: string; severity: "high" | "med" | "low"; title: string; detail: string; at: string | null };
   const issues: Issue[] = [];
 
@@ -312,29 +320,60 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  // Data-health warnings
-  for (const c of courses) {
-    if (!c.thumbnailUrl || !/^https?:\/\//i.test(c.thumbnailUrl)) {
-      issues.push({ kind: "health", severity: "med", title: "صورة الكورس مفقودة أو غير صالحة", detail: c.title, at: null });
+  // ── 24-Hour Health Audit Verification ──
+  const recheckAudit = req.nextUrl.searchParams.get("recheckAudit") === "true";
+  const cachedAudit = teacherHealthAuditCache.get(session.id);
+  const nowMs = Date.now();
+
+  let healthIssues: Issue[] = [];
+  let auditTimestamp = nowMs;
+
+  if (cachedAudit && !recheckAudit && nowMs - cachedAudit.timestamp < TWENTY_FOUR_HOURS_MS) {
+    // 24-hour cycle: Reuse cached health audit
+    healthIssues = cachedAudit.healthIssues;
+    auditTimestamp = cachedAudit.timestamp;
+  } else {
+    // Perform fresh 24-hour health audit
+    const newHealthIssues: Issue[] = [];
+    for (const c of courses) {
+      // Check valid thumbnail (accepts http, https, base64 data:image, and relative paths)
+      const hasValidThumb =
+        Boolean(c.thumbnailUrl) &&
+        (c.thumbnailUrl.startsWith("http://") ||
+         c.thumbnailUrl.startsWith("https://") ||
+         c.thumbnailUrl.startsWith("data:image/") ||
+         c.thumbnailUrl.startsWith("/"));
+      if (!hasValidThumb) {
+        newHealthIssues.push({ kind: "health", severity: "med", title: "صورة الكورس مفقودة أو غير صالحة", detail: c.title, at: null });
+      }
+      const allVideos = c.folders.flatMap((f) => f.videos);
+      const noDuration = allVideos.filter((v) => !v.durationMinutes).length;
+      if (allVideos.length > 0 && noDuration > 0) {
+        newHealthIssues.push({ kind: "health", severity: "low", title: "فيديوهات بدون مدة محددة (لا يظهر تقدّم الطالب)", detail: `${c.title} — ${noDuration} فيديو`, at: null });
+      }
+      const emptyFolders = c.folders.filter((f) => f.videos.length === 0).length;
+      if (emptyFolders > 0) {
+        newHealthIssues.push({ kind: "health", severity: "low", title: "محاضرات فارغة بدون محتوى", detail: `${c.title} — ${emptyFolders} محاضرة`, at: null });
+      }
     }
-    const allVideos = c.folders.flatMap((f) => f.videos);
-    const noDuration = allVideos.filter((v) => !v.durationMinutes).length;
-    if (allVideos.length > 0 && noDuration > 0) {
-      issues.push({ kind: "health", severity: "low", title: "فيديوهات بدون مدة محددة (لا يظهر تقدّم الطالب)", detail: `${c.title} — ${noDuration} فيديو`, at: null });
+    const zeroViewVideos = videoStats.filter((v) => v.views === 0).length;
+    if (zeroViewVideos > 0 && videoIds.length > 0) {
+      newHealthIssues.push({
+        kind: "health", severity: "low",
+        title: "فيديوهات لم يشاهدها أحد في هذه الفترة",
+        detail: `${zeroViewVideos} من ${videoIds.length} فيديو`, at: null,
+      });
     }
-    const emptyFolders = c.folders.filter((f) => f.videos.length === 0).length;
-    if (emptyFolders > 0) {
-      issues.push({ kind: "health", severity: "low", title: "محاضرات فارغة بدون محتوى", detail: `${c.title} — ${emptyFolders} محاضرة`, at: null });
-    }
-  }
-  const zeroViewVideos = videoStats.filter((v) => v.views === 0).length;
-  if (zeroViewVideos > 0 && videoIds.length > 0) {
-    issues.push({
-      kind: "health", severity: "low",
-      title: "فيديوهات لم يشاهدها أحد في هذه الفترة",
-      detail: `${zeroViewVideos} من ${videoIds.length} فيديو`, at: null,
+
+    teacherHealthAuditCache.set(session.id, {
+      timestamp: nowMs,
+      healthIssues: newHealthIssues,
     });
+    healthIssues = newHealthIssues;
+    auditTimestamp = nowMs;
   }
+
+  issues.push(...healthIssues);
 
   const sevRank = { high: 0, med: 1, low: 2 };
   issues.sort((a, b) => sevRank[a.severity] - sevRank[b.severity]);
@@ -350,6 +389,8 @@ export async function GET(req: NextRequest) {
     courseBreakdown,
     quizBuckets,
     issues: issues.slice(0, 12),
+    lastAuditAt: new Date(auditTimestamp).toISOString(),
+    nextAuditAt: new Date(auditTimestamp + TWENTY_FOUR_HOURS_MS).toISOString(),
     totals: { courses: courseIds.length, videos: videoIds.length },
   });
 } catch (error) {

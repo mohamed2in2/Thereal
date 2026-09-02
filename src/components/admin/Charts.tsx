@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 /**
  * Lightweight dependency-free SVG charts for the teacher analytics overview.
  * All render LTR internally (time flows left→right) inside a dir="ltr" wrapper,
@@ -19,7 +21,8 @@ function niceMax(n: number) {
 
 // ── Area + line: views (area) and enrollments (line) over time ────────────────
 export function ViewsAreaChart({ series }: { series: SeriesPoint[] }) {
-  const W = 760, H = 260, padL = 36, padR = 14, padT = 16, padB = 28;
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+  const W = 760, H = 260, padL = 42, padR = 20, padT = 24, padB = 36;
   const n = series.length;
   if (n === 0) return null;
 
@@ -33,51 +36,145 @@ export function ViewsAreaChart({ series }: { series: SeriesPoint[] }) {
     .join(" L ")} L ${x(n - 1).toFixed(1)},${(H - padB).toFixed(1)} Z`;
   const enrollLine = series.map((s, i) => `${x(i).toFixed(1)},${y(s.enrollments).toFixed(1)}`).join(" ");
 
-  const gridY = [0, 0.25, 0.5, 0.75, 1].map((f) => H - padB - f * (H - padT - padB));
-  const labelIdx = n <= 6 ? series.map((_, i) => i) : [0, Math.floor(n / 4), Math.floor(n / 2), Math.floor((3 * n) / 4), n - 1];
+  // Correct ascending Y grid (from bottom 0 to top maxV)
+  const fractions = [0, 0.25, 0.5, 0.75, 1];
+  const gridY = fractions.map((f) => ({
+    gy: H - padB - f * (H - padT - padB),
+    val: Math.round(f * maxV),
+  }));
+
+  const labelIdx = n <= 7 ? series.map((_, i) => i) : [0, Math.floor(n / 4), Math.floor(n / 2), Math.floor((3 * n) / 4), n - 1];
 
   return (
-    <div dir="ltr" className="w-full">
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img" aria-label="مخطط المشاهدات والاشتراكات عبر الزمن">
+    <div dir="ltr" className="w-full relative select-none">
+      {/* Top Legend Bar */}
+      <div className="flex items-center justify-between mb-3 px-1">
+        <div className="flex items-center gap-3">
+          <span className="inline-flex items-center gap-2 text-xs font-bold px-2.5 py-1 rounded-lg bg-sky-500/10 text-sky-400 border border-sky-500/20">
+            <span className="w-2.5 h-2.5 rounded-full bg-sky-400 shadow-[0_0_8px_rgba(56,189,248,0.8)]" />
+            <span>المشاهدات</span>
+          </span>
+          <span className="inline-flex items-center gap-2 text-xs font-bold px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
+            <span>الاشتراكات</span>
+          </span>
+        </div>
+
+        {hoveredIdx !== null && series[hoveredIdx] && (
+          <div className="text-xs font-bold font-mono px-3 py-1 rounded-lg bg-slate-800 text-white border border-slate-700 shadow-md">
+            <span>📅 {series[hoveredIdx].date}</span>
+            <span className="mx-2 text-slate-500">|</span>
+            <span className="text-sky-400">{series[hoveredIdx].views} مشاهدة</span>
+            <span className="mx-2 text-slate-500">|</span>
+            <span className="text-emerald-400">{series[hoveredIdx].enrollments} اشتراك</span>
+          </div>
+        )}
+      </div>
+
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto overflow-visible" role="img" aria-label="مخطط المشاهدات والاشتراكات عبر الزمن">
         <defs>
-          <linearGradient id="viewsFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={SKY} stopOpacity="0.28" />
-            <stop offset="100%" stopColor={SKY} stopOpacity="0" />
+          <linearGradient id="viewsFillGlow" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.45" />
+            <stop offset="60%" stopColor="#38bdf8" stopOpacity="0.12" />
+            <stop offset="100%" stopColor="#38bdf8" stopOpacity="0.0" />
           </linearGradient>
+          <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="3" result="blur" />
+            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+          </filter>
         </defs>
 
-        {/* gridlines + y labels */}
-        {gridY.map((gy, i) => (
+        {/* Horizontal gridlines + Correct Y labels (0 at bottom, maxV at top) */}
+        {gridY.map((g, i) => (
           <g key={i}>
-            <line x1={padL} y1={gy} x2={W - padR} y2={gy} stroke="var(--border)" strokeWidth="1" />
-            <text x={padL - 6} y={gy + 3} textAnchor="end" fontSize="9" fill="var(--ink-muted)">
-              {Math.round((1 - i / 4) * maxV)}
+            <line
+              x1={padL}
+              y1={g.gy}
+              x2={W - padR}
+              y2={g.gy}
+              stroke="rgba(148, 163, 184, 0.18)"
+              strokeDasharray={i === 0 ? undefined : "3 3"}
+              strokeWidth={i === 0 ? "1.5" : "1"}
+            />
+            <text
+              x={padL - 8}
+              y={g.gy + 4}
+              textAnchor="end"
+              fontSize="11"
+              fontWeight="700"
+              fill="#94a3b8"
+              className="font-mono"
+            >
+              {g.val}
             </text>
           </g>
         ))}
 
-        {/* views area + line */}
-        <path d={areaPath} fill="url(#viewsFill)" className="chart-draw" />
-        <polyline points={viewsLine} fill="none" stroke={SKY} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
-        {/* enrollments line (dashed) */}
-        <polyline points={enrollLine} fill="none" stroke={EMERALD} strokeWidth="2" strokeDasharray="4 4" strokeLinejoin="round" strokeLinecap="round" />
+        {/* Views Area Fill */}
+        <path d={areaPath} fill="url(#viewsFillGlow)" className="chart-draw" />
 
-        {/* x labels */}
+        {/* Views Line */}
+        <polyline
+          points={viewsLine}
+          fill="none"
+          stroke={SKY}
+          strokeWidth="3"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+
+        {/* Enrollments Line (Dashed) */}
+        <polyline
+          points={enrollLine}
+          fill="none"
+          stroke={EMERALD}
+          strokeWidth="2.5"
+          strokeDasharray="5 4"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+
+        {/* Data points for interactive inspection */}
+        {series.map((s, i) => {
+          const cx = x(i);
+          const cy = y(s.views);
+          const isHovered = hoveredIdx === i;
+          return (
+            <g
+              key={i}
+              className="cursor-pointer"
+              onMouseEnter={() => setHoveredIdx(i)}
+              onMouseLeave={() => setHoveredIdx(null)}
+            >
+              <circle
+                cx={cx}
+                cy={cy}
+                r={isHovered ? 6 : 3.5}
+                fill={isHovered ? "#ffffff" : SKY}
+                stroke="#0f172a"
+                strokeWidth="2"
+                className="transition-all duration-150"
+              />
+            </g>
+          );
+        })}
+
+        {/* X labels (Dates) */}
         {labelIdx.map((i) => (
-          <text key={i} x={x(i)} y={H - padB + 16} textAnchor="middle" fontSize="9" fill="var(--ink-muted)">
+          <text
+            key={i}
+            x={x(i)}
+            y={H - padB + 20}
+            textAnchor="middle"
+            fontSize="10"
+            fontWeight="600"
+            fill="#94a3b8"
+            className="font-mono"
+          >
             {series[i].date.slice(5)}
           </text>
         ))}
       </svg>
-
-      <div className="flex items-center gap-4 mt-2 px-1">
-        <span className="inline-flex items-center gap-1.5 text-[11px] text-[var(--ink-muted)]">
-          <span className="w-3 h-0.5 rounded-full" style={{ background: SKY }} /> المشاهدات
-        </span>
-        <span className="inline-flex items-center gap-1.5 text-[11px] text-[var(--ink-muted)]">
-          <span className="w-3 h-0.5 rounded-full" style={{ background: EMERALD }} /> الاشتراكات
-        </span>
-      </div>
 
       <style jsx>{`
         .chart-draw { animation: chartFade 0.6s ease-out both; }
