@@ -3002,211 +3002,333 @@ export default function TeacherDashboardPage() {
                   />
                 )}
 
-                {/* ── SETTINGS TAB ── */}
+                {/* ── SETTINGS TAB (Executive Overhaul) ── */}
                 {courseTab === "settings" && (
-                  <div className={cardPad}>
-                    <h3 className="font-bold text-[var(--ink)] mb-4 flex items-center gap-2"><IconSettings className="w-4 h-4 text-sky-500" /> إعدادات الكورس</h3>
-                    <form onSubmit={saveCourseSettings} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className={label}>عنوان الكورس</label>
-                        <input type="text" value={courseSettings.title} onChange={(e) => setCourseSettings({ ...courseSettings, title: e.target.value })} className={input} />
+                  <div className="rounded-3xl border border-slate-200/90 bg-white p-6 shadow-sm dark:border-slate-800/90 dark:bg-slate-900/90 space-y-6">
+                    <div className="border-b border-slate-100 dark:border-slate-800 pb-4">
+                      <h3 className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                        <IconSettings className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                        <span>إعدادات وهوية الكورس الأساسية</span>
+                      </h3>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                        تعديل العنوان، المادة، المرحلة التدريبية، والصورة المصغرة للكورس.
+                      </p>
+                    </div>
+
+                    <form onSubmit={saveCourseSettings} className="space-y-4 max-w-2xl">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1.5">
+                            عنوان الكورس <span className="text-rose-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={courseSettings.title}
+                            onChange={(e) => setCourseSettings({ ...courseSettings, title: e.target.value })}
+                            className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-medium text-slate-900 outline-none focus:border-emerald-500 focus:bg-white dark:border-slate-800 dark:bg-slate-950 dark:text-white transition-all"
+                            required
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1.5">
+                            المادة الأكاديمية
+                          </label>
+                          <input
+                            type="text"
+                            value={courseSettings.subject}
+                            onChange={(e) => setCourseSettings({ ...courseSettings, subject: e.target.value })}
+                            className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-medium text-slate-900 outline-none focus:border-emerald-500 focus:bg-white dark:border-slate-800 dark:bg-slate-950 dark:text-white transition-all"
+                          />
+                        </div>
                       </div>
+
                       <div>
-                        <label className={label}>المادة</label>
-                        <input type="text" value={courseSettings.subject} onChange={(e) => setCourseSettings({ ...courseSettings, subject: e.target.value })} className={input} />
-                      </div>
-                      <div className="md:col-span-2">
-                        <label className={label}>المرحلة التدريبية *</label>
-                        <select value={courseSettings.educationalStage} onChange={(e) => setCourseSettings({ ...courseSettings, educationalStage: e.target.value })} className={input}>
+                        <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1.5">
+                          المرحلة الدراسية والصف *
+                        </label>
+                        <select
+                          value={courseSettings.educationalStage}
+                          onChange={(e) => setCourseSettings({ ...courseSettings, educationalStage: e.target.value })}
+                          className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-medium text-slate-900 outline-none focus:border-emerald-500 focus:bg-white dark:border-slate-800 dark:bg-slate-950 dark:text-white transition-all cursor-pointer"
+                        >
                           <option value="">اختر المرحلة</option>
-                          <option value="sec_1">أولى بكالوريا (sec_1)</option>
-                          <option value="sec_2">ثانية بكالوريا (sec_2)</option>
+                          <option value="sec_1">أولى بكالوريا (الصف الأول الثانوي)</option>
+                          <option value="sec_2">ثانية بكالوريا (الصف الثاني الثانوي)</option>
+                          <option value="sec_3">ثالثة بكالوريا (الثانوية العامة)</option>
                         </select>
                       </div>
-                      <div className="md:col-span-2">
-                        <label className={label}>الصورة المصغرة (رابط أو رفع من الجهاز)</label>
+
+                      {/* Thumbnail section */}
+                      <div>
+                        <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1.5">
+                          الصورة المصغرة (Thumbnail)
+                        </label>
                         <div className="flex gap-2">
-                          <input type="text" value={courseSettings.thumbnailUrl} onChange={(e) => setCourseSettings({ ...courseSettings, thumbnailUrl: e.target.value })} placeholder="https://…" dir="ltr" className={`${input} font-mono flex-1`} />
-                          <label className={`${ghostBtn} cursor-pointer shrink-0`}>
-                            رفع صورة
-                            <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
-                              const file = e.target.files?.[0];
-                              if (file) {
-                                try {
-                                  const url = await fileToResizedDataUrl(file, 600);
-                                  setCourseSettings({ ...courseSettings, thumbnailUrl: url });
-                                } catch (err) {
-                                  notify("error", "تعذر معالجة الصورة");
+                          <input
+                            type="text"
+                            value={courseSettings.thumbnailUrl}
+                            onChange={(e) => setCourseSettings({ ...courseSettings, thumbnailUrl: e.target.value })}
+                            placeholder="https://... أو اختر رفع صورة من جهازك"
+                            dir="ltr"
+                            className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-mono text-slate-900 outline-none focus:border-emerald-500 focus:bg-white dark:border-slate-800 dark:bg-slate-950 dark:text-white transition-all"
+                          />
+                          <label className="px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-100 hover:bg-slate-200 dark:border-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 transition-all cursor-pointer flex items-center shrink-0">
+                            <span>رفع صورة</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  try {
+                                    const url = await fileToResizedDataUrl(file, 600);
+                                    setCourseSettings({ ...courseSettings, thumbnailUrl: url });
+                                    notify("success", "تم اختيار الصورة بنجاح");
+                                  } catch {
+                                    notify("error", "تعذر معالجة الصورة");
+                                  }
                                 }
-                              }
-                            }} />
+                              }}
+                            />
                           </label>
                         </div>
-                        {courseSettings.thumbnailUrl && courseSettings.thumbnailUrl.startsWith("data:image") && (
-                          <div className="mt-2 w-32 h-16 rounded overflow-hidden border border-[var(--border)]">
-                            <img src={courseSettings.thumbnailUrl} alt="Thumbnail preview" className="w-full h-full object-cover" />
+                        {courseSettings.thumbnailUrl && (
+                          <div className="mt-3 relative w-48 h-24 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm">
+                            <img
+                              src={courseSettings.thumbnailUrl}
+                              alt="Thumbnail preview"
+                              className="w-full h-full object-cover"
+                            />
                           </div>
                         )}
-                        <p className="mt-1.5 text-[11px] text-[var(--ink-muted)]">الأبعاد المثالية: 600×300 بكسل (نسبة 2:1)</p>
-                      </div>
-                      <div className="md:col-span-2">
-                        <label className={label}>وصف الكورس</label>
-                        <textarea rows={3} value={courseSettings.description} onChange={(e) => setCourseSettings({ ...courseSettings, description: e.target.value })} className={`${input} resize-none`} />
-                      </div>
-                      <div>
-                        <label className={label}>المشاهدات الافتراضية لكل طالب</label>
-                        <input type="number" min={1} max={99} value={courseSettings.maxWatchCount} onChange={(e) => setCourseSettings({ ...courseSettings, maxWatchCount: Number(e.target.value) || 3 })} className={input} dir="ltr" />
-                      </div>
-                      <div>
-                        <label className={label}>رابط صفحة الواجب المنزلي</label>
-                        <input type="url" value={courseSettings.homeworkUrl} onChange={(e) => setCourseSettings({ ...courseSettings, homeworkUrl: e.target.value })} placeholder="https://…" dir="ltr" className={`${input} font-mono`} />
-                            {/* YouTube live URL detection & validation badge */}
-                            {newVideo.videoProvider === "youtube" && newVideo.providerVideoId && (() => {
-                              const ytId = extractYouTubeVideoId(newVideo.providerVideoId);
-                              if (ytId) {
-                                return (
-                                  <div className="mt-2 p-2.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 flex items-center justify-between gap-2 text-xs">
-                                    <div className="flex items-center gap-1.5 font-bold">
-                                      <span className="text-emerald-400">✓</span>
-                                      <span>تم التعرف على الفيديو بنجاح! معرّف YouTube:</span>
-                                      <span className="font-mono bg-black/40 px-2 py-0.5 rounded text-white font-bold">{ytId}</span>
-                                    </div>
-                                    <a
-                                      href={`https://www.youtube.com/watch?v=${ytId}`}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-[11px] text-sky-400 hover:text-sky-300 underline font-bold shrink-0"
-                                    >
-                                      معاينة ↗
-                                    </a>
-                                  </div>
-                                );
-                              }
-                              if (newVideo.providerVideoId.length >= 3) {
-                                return (
-                                  <div className="mt-2 p-2 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-300 text-xs flex items-center gap-1.5">
-                                    <span>⚠️</span>
-                                    <span>الرجاء إدخال رابط يوتيوب صالح (مثل: https://youtu.be/... أو https://youtube.com/watch?v=...) أو معرّف الفيديو (10-12 حرف).</span>
-                                  </div>
-                                );
-                              }
-                              return null;
-                            })()}
                       </div>
 
-                      {/* Video access order */}
-                      <div className="md:col-span-2">
-                        <label className={label}>ترتيب مشاهدة الدروس</label>
-                        <div className="flex flex-col sm:flex-row gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setCourseSettings({ ...courseSettings, sequentialAccess: true })}
-                            className={`flex-1 text-right p-3 rounded-xl border-2 transition-all ${courseSettings.sequentialAccess ? "border-sky-500 bg-sky-500/10" : "border-[var(--border)] hover:border-[var(--ink-muted)]/40"}`}
-                          >
-                            <span className={`block text-sm font-bold ${courseSettings.sequentialAccess ? "text-sky-500 dark:text-sky-300" : "text-[var(--ink)]"}`}>🔒 إجباري بالترتيب</span>
-                            <span className="block text-[11px] text-[var(--ink-muted)] mt-0.5">يُقفل الدرس حتى إكمال الذي قبله</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setCourseSettings({ ...courseSettings, sequentialAccess: false })}
-                            className={`flex-1 text-right p-3 rounded-xl border-2 transition-all ${!courseSettings.sequentialAccess ? "border-sky-500 bg-sky-500/10" : "border-[var(--border)] hover:border-[var(--ink-muted)]/40"}`}
-                          >
-                            <span className={`block text-sm font-bold ${!courseSettings.sequentialAccess ? "text-sky-500 dark:text-sky-300" : "text-[var(--ink)]"}`}>🔓 مشاهدة حرة</span>
-                            <span className="block text-[11px] text-[var(--ink-muted)] mt-0.5">يستطيع الطالب فتح أي درس في أي وقت</span>
-                          </button>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1.5">
+                          وصف الكورس والأهداف التعليمية
+                        </label>
+                        <textarea
+                          rows={3}
+                          value={courseSettings.description}
+                          onChange={(e) => setCourseSettings({ ...courseSettings, description: e.target.value })}
+                          placeholder="اكتب نبذة عن محتويات الكورس وما سيتعلمه الطالب..."
+                          className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs text-slate-900 outline-none focus:border-emerald-500 focus:bg-white dark:border-slate-800 dark:bg-slate-950 dark:text-white transition-all resize-none font-medium"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1.5">
+                            المشاهدات الافتراضية لكل طالب
+                          </label>
+                          <input
+                            type="number"
+                            min={1}
+                            max={99}
+                            value={courseSettings.maxWatchCount}
+                            onChange={(e) => setCourseSettings({ ...courseSettings, maxWatchCount: Number(e.target.value) || 3 })}
+                            className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-mono text-slate-900 outline-none focus:border-emerald-500 focus:bg-white dark:border-slate-800 dark:bg-slate-950 dark:text-white transition-all"
+                            dir="ltr"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1.5">
+                            رابط صفحة الواجب المنزلي (اختياري)
+                          </label>
+                          <input
+                            type="url"
+                            value={courseSettings.homeworkUrl}
+                            onChange={(e) => setCourseSettings({ ...courseSettings, homeworkUrl: e.target.value })}
+                            placeholder="https://drive.google.com/..."
+                            dir="ltr"
+                            className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-mono text-slate-900 outline-none focus:border-emerald-500 focus:bg-white dark:border-slate-800 dark:bg-slate-950 dark:text-white transition-all"
+                          />
                         </div>
                       </div>
 
-                      <button type="submit" className={`${primaryBtn} md:col-span-2`}>حفظ الإعدادات</button>
+                      <div className="pt-2">
+                        <button
+                          type="submit"
+                          className="px-6 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white dark:bg-emerald-700 dark:hover:bg-emerald-600 text-xs font-bold transition-all shadow-sm cursor-pointer"
+                        >
+                          حفظ إعدادات الكورس
+                        </button>
+                      </div>
                     </form>
                   </div>
                 )}
 
-                {/* ── PRICING TAB ── */}
+                {/* ── PRICING TAB (Executive Overhaul) ── */}
                 {courseTab === "pricing" && (
-                  <div className={cardPad}>
-                    <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-                      <h3 className="font-bold text-[var(--ink)] flex items-center gap-2"><IconTag className="w-4 h-4 text-sky-500" /> تسعير الكورس</h3>
+                  <div className="rounded-3xl border border-slate-200/90 bg-white p-6 shadow-sm dark:border-slate-800/90 dark:bg-slate-900/90 space-y-6">
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-4">
+                      <div>
+                        <h3 className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                          <IconTag className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                          <span>تسعير الكورس ونظام الاشتراك</span>
+                        </h3>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                          حدد ما إذا كان الكورس مجانياً أو مدفوعاً وقيمة الاشتراك والعروض الترويجية.
+                        </p>
+                      </div>
+
                       {selectedCourse?.educationalStage && (
-                        <span className="px-3 py-1 rounded-full text-xs font-bold bg-sky-500/10 text-sky-500 border border-sky-500/20">
+                        <span className="px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700">
                           🎓 المرحلة: {selectedCourse.educationalStage === "sec_1" ? "أولى بكالوريا" : selectedCourse.educationalStage === "sec_2" ? "ثانية بكالوريا" : selectedCourse.educationalStage}
                         </span>
                       )}
                     </div>
-                    <form onSubmit={savePricingSettings} className="space-y-4 max-w-xl">
-                      <div className="flex items-center gap-3">
-                        <button type="button" onClick={() => setPricingSettings({ ...pricingSettings, isPaid: false })}
-                          className={`flex-1 py-2.5 rounded-xl text-sm font-bold border-2 transition-colors ${!pricingSettings.isPaid ? "bg-emerald-500 border-emerald-500 text-white" : "border-[var(--border)] text-[var(--ink-muted)] hover:border-[var(--ink-muted)]/40"}`}>
-                          مجاني
-                        </button>
-                        <button type="button" onClick={() => setPricingSettings({ ...pricingSettings, isPaid: true })}
-                          className={`flex-1 py-2.5 rounded-xl text-sm font-bold border-2 transition-colors ${pricingSettings.isPaid ? "bg-sky-500 border-sky-500 text-white" : "border-[var(--border)] text-[var(--ink-muted)] hover:border-[var(--ink-muted)]/40"}`}>
-                          مدفوع
-                        </button>
+
+                    <form onSubmit={savePricingSettings} className="space-y-5 max-w-xl">
+                      {/* Segmented Pricing Toggle */}
+                      <div>
+                        <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-2">
+                          نوع الكورس
+                        </label>
+                        <div className="grid grid-cols-2 gap-3 p-1 rounded-2xl bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
+                          <button
+                            type="button"
+                            onClick={() => setPricingSettings({ ...pricingSettings, isPaid: false })}
+                            className={`py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                              !pricingSettings.isPaid
+                                ? "bg-white text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 shadow-sm border border-slate-200/80 dark:border-emerald-800"
+                                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                            }`}
+                          >
+                            <span>🟢</span>
+                            <span>كورس مجاني بالكامل</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setPricingSettings({ ...pricingSettings, isPaid: true })}
+                            className={`py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                              pricingSettings.isPaid
+                                ? "bg-white text-blue-800 dark:bg-blue-950 dark:text-blue-300 shadow-sm border border-slate-200/80 dark:border-blue-800"
+                                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                            }`}
+                          >
+                            <span>💎</span>
+                            <span>كورس مدفوع باشتراك</span>
+                          </button>
+                        </div>
                       </div>
 
-                      {/* Install button toggle — free courses only */}
+                      {/* Direct Install Toggle for Free Courses */}
                       {!pricingSettings.isPaid && (
-                        <button
-                          type="button"
-                          onClick={() => setPricingSettings({ ...pricingSettings, allowDirectInstall: !pricingSettings.allowDirectInstall })}
-                          className="w-full flex items-center justify-between gap-3 rounded-xl border-2 px-4 py-3 text-sm font-bold transition-colors text-right"
-                          style={{
-                            borderColor: pricingSettings.allowDirectInstall ? "var(--brand)" : "var(--border)",
-                            background:  pricingSettings.allowDirectInstall ? "var(--brand-soft)" : "var(--surface-2)",
-                            color:       pricingSettings.allowDirectInstall ? "var(--brand)" : "var(--ink-2)",
-                          }}
-                        >
-                          <span
-                            className="w-10 h-6 rounded-full transition-colors flex items-center shrink-0"
-                            style={{ background: pricingSettings.allowDirectInstall ? "var(--brand)" : "var(--border)", padding: 2 }}
-                          >
-                            <span
-                              className="w-4 h-4 bg-white rounded-full shadow transition-transform"
-                              style={{ transform: pricingSettings.allowDirectInstall ? "translateX(-16px)" : "translateX(0)" }}
-                            />
-                          </span>
-                          <div className="flex-1 text-right">
-                            <div>تفعيل زر "تثبيت الكورس" 📲</div>
-                            <div className="text-xs font-normal mt-0.5" style={{ color: "var(--ink-3)" }}>
+                        <div className="p-4 rounded-2xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/50 dark:bg-emerald-950/20 flex items-center justify-between gap-4">
+                          <div>
+                            <p className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                              <span>زر "تثبيت الكورس المباشر" 📲</span>
+                            </p>
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                               {pricingSettings.allowDirectInstall
-                                ? "الطلاب يرون زر تثبيت مباشر بدون كود"
-                                : "الطلاب يحتاجون كود وصول للتسجيل"}
-                            </div>
+                                ? "مفعّل: يظهر للطالب زر تثبيت فوري بدون الحاجة لكود وصول"
+                                : "معطّل: يحتاج الطالب كود وصول للتسجيل في الكورس"}
+                            </p>
                           </div>
-                        </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setPricingSettings({ ...pricingSettings, allowDirectInstall: !pricingSettings.allowDirectInstall })}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                              pricingSettings.allowDirectInstall
+                                ? "bg-emerald-600 text-white border-emerald-700"
+                                : "bg-slate-200 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700"
+                            }`}
+                          >
+                            {pricingSettings.allowDirectInstall ? "مفعّل ✓" : "معطّل"}
+                          </button>
+                        </div>
                       )}
 
+                      {/* Paid Price Field */}
                       {pricingSettings.isPaid && (
                         <div>
-                          <label className={label}>السعر الأصلي (جنيه) *</label>
-                          <input type="number" min={0} step={0.01} value={pricingSettings.price} onChange={(e) => setPricingSettings({ ...pricingSettings, price: e.target.value })} placeholder="مثال: 150" className={input} dir="ltr" />
+                          <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1.5">
+                            سعر الاشتراك في الكورس <span className="text-rose-500">*</span>
+                          </label>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              min={0}
+                              step={0.01}
+                              value={pricingSettings.price}
+                              onChange={(e) => setPricingSettings({ ...pricingSettings, price: e.target.value })}
+                              placeholder="مثال: 150"
+                              className="w-full px-4 py-2.5 pl-14 rounded-xl border border-slate-200 bg-slate-50 text-xs font-mono font-bold text-slate-900 outline-none focus:border-emerald-500 focus:bg-white dark:border-slate-800 dark:bg-slate-950 dark:text-white transition-all"
+                              dir="ltr"
+                              required
+                            />
+                            <span className="absolute left-3 top-2.5 text-xs font-bold text-slate-400">
+                              ج.م
+                            </span>
+                          </div>
                         </div>
                       )}
 
-                      <div className="rounded-xl border border-[var(--border)] bg-[var(--bg)] p-4 space-y-3">
-                        <p className="text-xs font-bold text-[var(--ink)]">خصم محدود المدة (اختياري)</p>
+                      {/* Limited Time Discount Box */}
+                      <div className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40 space-y-3">
+                        <p className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                          <span>🏷️ عرض خصم ترويجي محدود المدة (اختياري)</span>
+                        </p>
+
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div>
-                            <label className={label}>نسبة الخصم %</label>
-                            <input type="number" min={0} max={100} step={1} value={pricingSettings.discountPercent} onChange={(e) => setPricingSettings({ ...pricingSettings, discountPercent: e.target.value })} placeholder="مثال: 20" className={input} dir="ltr" />
+                            <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                              نسبة الخصم %
+                            </label>
+                            <input
+                              type="number"
+                              min={0}
+                              max={100}
+                              step={1}
+                              value={pricingSettings.discountPercent}
+                              onChange={(e) => setPricingSettings({ ...pricingSettings, discountPercent: e.target.value })}
+                              placeholder="مثال: 20"
+                              className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-mono text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:text-white outline-none"
+                              dir="ltr"
+                            />
                           </div>
+
                           <div>
-                            <label className={label}>تاريخ انتهاء العرض</label>
-                            <input type="datetime-local" value={pricingSettings.discountExpiresAt} onChange={(e) => setPricingSettings({ ...pricingSettings, discountExpiresAt: e.target.value })} className={input} dir="ltr" />
+                            <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                              تاريخ ووقت انتهاء الخصم
+                            </label>
+                            <input
+                              type="datetime-local"
+                              value={pricingSettings.discountExpiresAt}
+                              onChange={(e) => setPricingSettings({ ...pricingSettings, discountExpiresAt: e.target.value })}
+                              className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-mono text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:text-white outline-none"
+                              dir="ltr"
+                            />
                           </div>
                         </div>
+
                         {pricingSettings.discountPercent && pricingSettings.isPaid && pricingSettings.price && (
-                          <p className="text-xs text-[var(--ink-muted)]">السعر بعد الخصم: <strong className="text-emerald-500">{(parseFloat(pricingSettings.price) * (1 - parseFloat(pricingSettings.discountPercent) / 100)).toFixed(2)} جنيه</strong></p>
-                        )}
-                        {pricingSettings.discountPercent && !pricingSettings.isPaid && (
-                          <p className="text-xs text-amber-500">الخصم يُطبق فقط على الكورسات المدفوعة.</p>
+                          <div className="mt-2 p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-xs flex items-center justify-between">
+                            <span className="text-emerald-800 dark:text-emerald-300 font-bold">
+                              السعر بعد الخصم للطالب:
+                            </span>
+                            <span className="font-mono text-sm font-black text-emerald-700 dark:text-emerald-300">
+                              {(parseFloat(pricingSettings.price) * (1 - parseFloat(pricingSettings.discountPercent) / 100)).toFixed(2)} ج.م
+                            </span>
+                          </div>
                         )}
                       </div>
 
-                      <button type="submit" disabled={savingPricing} className={`${primaryBtn} w-full`}>
-                        {savingPricing ? "جارٍ الحفظ…" : "حفظ إعدادات التسعير"}
-                      </button>
+                      <div className="pt-2">
+                        <button
+                          type="submit"
+                          disabled={savingPricing}
+                          className="px-6 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white dark:bg-emerald-700 dark:hover:bg-emerald-600 text-xs font-bold transition-all shadow-sm cursor-pointer disabled:opacity-50"
+                        >
+                          {savingPricing ? "جارٍ الحفظ…" : "حفظ إعدادات التسعير"}
+                        </button>
+                      </div>
                     </form>
                   </div>
                 )}

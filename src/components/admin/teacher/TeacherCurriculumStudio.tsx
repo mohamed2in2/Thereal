@@ -142,6 +142,7 @@ export function TeacherCurriculumStudio({
   // Create Folder State
   const [newFolderName, setNewFolderName] = useState("");
   const [newFolderColor, setNewFolderColor] = useState("blue");
+  const [showCreateColorPicker, setShowCreateColorPicker] = useState(false);
   const [newFolderPublishAt, setNewFolderPublishAt] = useState("");
   const [creatingFolder, setCreatingFolder] = useState(false);
 
@@ -351,24 +352,6 @@ export function TeacherCurriculumStudio({
               className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-medium text-slate-900 outline-none focus:border-emerald-500 focus:bg-white dark:border-slate-800 dark:bg-slate-950 dark:text-white transition-all"
             />
 
-            {/* Folder Color Selector Swatches */}
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-950 shrink-0">
-              <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 me-1">اللون:</span>
-              {FOLDER_COLORS.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => setNewFolderColor(c.id)}
-                  title={c.label}
-                  className={`w-6 h-6 rounded-full transition-all cursor-pointer flex items-center justify-center ${c.dotClass} ${
-                    newFolderColor === c.id
-                      ? "ring-2 ring-offset-2 ring-slate-900 dark:ring-white scale-110 shadow-xs"
-                      : "opacity-60 hover:opacity-100"
-                  }`}
-                />
-              ))}
-            </div>
-
             <button
               type="submit"
               disabled={creatingFolder || !newFolderName.trim()}
@@ -379,25 +362,58 @@ export function TeacherCurriculumStudio({
             </button>
           </div>
 
-          <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
-            <Calendar className="w-3.5 h-3.5 text-slate-400" />
-            <span>موعد فتح المحاضرة (اختياري):</span>
-            <input
-              type="datetime-local"
-              value={newFolderPublishAt}
-              onChange={(e) => setNewFolderPublishAt(e.target.value)}
-              dir="ltr"
-              className="px-3 py-1 rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-950 text-[11px] font-mono outline-none"
-            />
-            {newFolderPublishAt && (
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-1 text-[11px] text-slate-500 dark:text-slate-400">
+            <div className="flex items-center gap-2">
+              <Calendar className="w-3.5 h-3.5 text-slate-400" />
+              <span>موعد الفتح المجدول (اختياري):</span>
+              <input
+                type="datetime-local"
+                value={newFolderPublishAt}
+                onChange={(e) => setNewFolderPublishAt(e.target.value)}
+                dir="ltr"
+                className="px-3 py-1 rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-950 text-[11px] font-mono outline-none"
+              />
+              {newFolderPublishAt && (
+                <button
+                  type="button"
+                  onClick={() => setNewFolderPublishAt("")}
+                  className="text-rose-500 hover:underline font-bold text-[10px]"
+                >
+                  مسح الموعد
+                </button>
+              )}
+            </div>
+
+            {/* Optional Folder Color Picker (ده خيار مش اجباري) */}
+            <div className="relative">
               <button
                 type="button"
-                onClick={() => setNewFolderPublishAt("")}
-                className="text-rose-500 hover:underline font-bold text-[10px]"
+                onClick={() => setShowCreateColorPicker(!showCreateColorPicker)}
+                className="px-3 py-1 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 hover:bg-slate-100 dark:bg-slate-950 dark:hover:bg-slate-800 text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2 transition-all cursor-pointer shadow-xs"
               >
-                مسح الموعد
+                <span className={`w-2.5 h-2.5 rounded-full ${getFolderColorDef(newFolderColor).dotClass}`} />
+                <span>تخصيص لون (اختياري)</span>
               </button>
-            )}
+
+              {showCreateColorPicker && (
+                <div className="absolute left-0 bottom-full mb-1.5 p-2 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl z-20 flex items-center gap-1.5 animate-in fade-in">
+                  {FOLDER_COLORS.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => {
+                        setNewFolderColor(c.id);
+                        setShowCreateColorPicker(false);
+                      }}
+                      title={c.label}
+                      className={`w-6 h-6 rounded-full transition-all cursor-pointer ${c.dotClass} ${
+                        newFolderColor === c.id ? "ring-2 ring-slate-900 dark:ring-white scale-110 shadow-xs" : "opacity-60 hover:opacity-100"
+                      }`}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </form>
       </div>

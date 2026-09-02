@@ -7,8 +7,19 @@ import {
   IconClipboard,
   IconFile,
   IconFolder,
-  IconShield,
 } from "@/components/admin/AdminIcons";
+import {
+  Unlock,
+  GitFork,
+  Sliders,
+  CheckCircle2,
+  RefreshCw,
+  Save,
+  ArrowDown,
+  ArrowUp,
+  Lock,
+  Layers,
+} from "lucide-react";
 
 interface ContentItem {
   id: string;
@@ -40,8 +51,8 @@ interface ContentFlowManagerProps {
   courseTitle?: string;
 }
 
-export function ContentFlowManager({ courseId, courseTitle }: ContentFlowManagerProps) {
-  const { success: toastSuccess, error: toastError, info: toastInfo } = useToast();
+export function ContentFlowManager({ courseId }: ContentFlowManagerProps) {
+  const { success: toastSuccess, error: toastError } = useToast();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -52,8 +63,7 @@ export function ContentFlowManager({ courseId, courseTitle }: ContentFlowManager
   const [prerequisites, setPrerequisites] = useState<PrerequisiteEdge[]>([]);
   const [flowMode, setFlowMode] = useState<"free" | "per_folder" | "course" | "custom">("per_folder");
 
-  const loadData = useCallback(async (isInitial = true) => {
-    if (isInitial) setLoading(true);
+  const loadData = useCallback(async () => {
     try {
       const res = await fetch(`/api/admin/courses/${courseId}/prerequisites`);
       if (res.ok) {
@@ -68,7 +78,7 @@ export function ContentFlowManager({ courseId, courseTitle }: ContentFlowManager
           } else {
             setFlowMode("per_folder");
           }
-          if (isInitial) setLoading(false);
+          setLoading(false);
           return;
         }
       }
@@ -84,140 +94,91 @@ export function ContentFlowManager({ courseId, courseTitle }: ContentFlowManager
       }
     } catch (err) {
       console.error("Error loading flow data:", err);
-      if (isInitial) toastError("تعذر تحميل مسار المحتوى");
+      toastError("تعذر تحميل مسار المحتوى");
     } finally {
-      if (isInitial) setLoading(false);
+      setLoading(false);
     }
   }, [courseId, toastError]);
 
   useEffect(() => {
-    loadData(true);
-  }, [loadData]);
+    let ignore = false;
+    fetch(`/api/admin/courses/${courseId}/prerequisites`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (ignore || !data) return;
+        if (data.items && data.items.length > 0) {
+          setItems(data.items);
+          setFolders(data.folders || []);
+          setPrerequisites(data.prerequisites || []);
+          if (!data.sequentialAccess && (!data.prerequisites || data.prerequisites.length === 0)) {
+            setFlowMode("free");
+          } else {
+            setFlowMode("per_folder");
+          }
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!ignore) setLoading(false);
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [courseId]);
 
   // Group items by folderId
   const itemsByFolder = useMemo(() => {
     const grouped: Record<string, { name: string; items: ContentItem[] }> = {};
 
-    // Initialize with known folders
     folders.forEach((f) => {
       grouped[f.id] = { name: f.name, items: [] };
     });
 
-    // Place items in order
     items.forEach((item) => {
-      const fid = item.folderId || "unknown";
+      const fid = item.folderId || "unassigned";
       if (!grouped[fid]) {
-        grouped[fid] = { name: item.folderName || "عام", items: [] };
+        grouped[fid] = { name: item.folderName || "عناصر عامة", items: [] };
       }
       grouped[fid].items.push(item);
     });
 
     return grouped;
-  }, [items, folders]);
+  }, [folders, items]);
 
-  // Re-sync all content from course folders
   const handleSync = async () => {
     setSyncing(true);
     try {
       const res = await fetch(`/api/admin/courses/${courseId}/prerequisites/sync`, {
         method: "POST",
       });
-      const data = await res.json();
       if (res.ok) {
+        const data = await res.json();
         setItems(data.items || []);
         setPrerequisites(data.prerequisites || []);
-        toastSuccess(`تمت مزامنة ${data.count || 0} عنصر محتوى بنجاح`);
+        toastSuccess("تمت مزامنة محتوى الكورس وتحديث الشجرة بنجاح! 🔄");
+        await loadData();
       } else {
-        toastError(data.error || "فشلت المزامنة");
+        toastError("تعذر مزامنة المحتوى");
       }
     } catch {
-      toastError("خطأ في الاتصال بالسيرفر");
+      toastError("حدث خطأ أثناء المزامنة");
     } finally {
       setSyncing(false);
     }
   };
 
-  // Move item up within its folder
-  const moveItemUpInFolder = (folderId: string, itemIndex: number) => {
-    if (itemIndex === 0) return;
-    const folderItems = itemsByFolder[folderId]?.items;
-    if (!folderItems) return;
-
-    const targetItem = folderItems[itemIndex];
-    const prevItem = folderItems[itemIndex - 1];
-
-    const globalIdx1 = items.findIndex((i) => i.id === targetItem.id);
-    const globalIdx2 = items.findIndex((i) => i.id === prevItem.id);
-
-    if (globalIdx1 !== -1 && globalIdx2 !== -1) {
-      const newItems = [...items];
-      const temp = newItems[globalIdx1];
-      newItems[globalIdx1] = newItems[globalIdx2];
-      newItems[globalIdx2] = temp;
-      setItems(newItems);
-
-      // If in per_folder mode, update prerequisites to match new local order
-      if (flowMode === "per_folder") {
-        updateFolderChainPrereqs(folderId, newItems);
-      }
-    }
+  const handleDisableAllLocks = () => {
+    setFlowMode("free");
+    setPrerequisites([]);
+    toastSuccess("تم ضبط الكورس كـ «مشاهدة حرة» بالكامل! 🔓");
   };
 
-  // Move item down within its folder
-  const moveItemDownInFolder = (folderId: string, itemIndex: number) => {
-    const folderItems = itemsByFolder[folderId]?.items;
-    if (!folderItems || itemIndex >= folderItems.length - 1) return;
-
-    const targetItem = folderItems[itemIndex];
-    const nextItem = folderItems[itemIndex + 1];
-
-    const globalIdx1 = items.findIndex((i) => i.id === targetItem.id);
-    const globalIdx2 = items.findIndex((i) => i.id === nextItem.id);
-
-    if (globalIdx1 !== -1 && globalIdx2 !== -1) {
-      const newItems = [...items];
-      const temp = newItems[globalIdx1];
-      newItems[globalIdx1] = newItems[globalIdx2];
-      newItems[globalIdx2] = temp;
-      setItems(newItems);
-
-      // If in per_folder mode, update prerequisites to match new local order
-      if (flowMode === "per_folder") {
-        updateFolderChainPrereqs(folderId, newItems);
-      }
-    }
-  };
-
-  // Helper to re-generate prerequisites for a folder given new item array
-  const updateFolderChainPrereqs = (folderId: string, currentItems: ContentItem[]) => {
-    const folderItems = currentItems.filter((i) => (i.folderId || "unknown") === folderId);
-    const folderItemIds = new Set(folderItems.map((i) => i.id));
-    const otherPrereqs = prerequisites.filter((p) => !folderItemIds.has(p.targetContentId));
-
-    const newFolderPrereqs: PrerequisiteEdge[] = [];
-    for (let i = 1; i < folderItems.length; i++) {
-      const prev = folderItems[i - 1];
-      const curr = folderItems[i];
-      newFolderPrereqs.push({
-        targetContentId: curr.id,
-        prerequisiteContentId: prev.id,
-        prerequisiteTitle: prev.title,
-        prerequisiteType: prev.type,
-        requiredStatus: "COMPLETED",
-      });
-    }
-
-    setPrerequisites([...otherPrereqs, ...newFolderPrereqs]);
-  };
-
-  // Auto-chain sequential per folder
   const handleAutoChainPerFolder = () => {
     const newPrereqs: PrerequisiteEdge[] = [];
-
-    Object.values(itemsByFolder).forEach((f) => {
-      for (let i = 1; i < f.items.length; i++) {
-        const prev = f.items[i - 1];
-        const curr = f.items[i];
+    Object.values(itemsByFolder).forEach((folder) => {
+      for (let i = 1; i < folder.items.length; i++) {
+        const prev = folder.items[i - 1];
+        const curr = folder.items[i];
         newPrereqs.push({
           targetContentId: curr.id,
           prerequisiteContentId: prev.id,
@@ -227,28 +188,11 @@ export function ContentFlowManager({ courseId, courseTitle }: ContentFlowManager
         });
       }
     });
-
     setPrerequisites(newPrereqs);
     setFlowMode("per_folder");
-    toastInfo("تم تطبيق القفل التتابعي داخل كل مجلد — اضغط حفظ للتأكيد");
+    toastSuccess("تم تطبيق التتابع التلقائي داخل كل مجلد! ⚡");
   };
 
-  // Disable all locks & make free
-  const handleDisableAllLocks = () => {
-    setPrerequisites([]);
-    setFlowMode("free");
-    toastInfo("تم اختيار وضع المشاهدة الحرة — اضغط حفظ للتأكيد 🔓");
-  };
-
-  // Clear single folder locks
-  const handleClearFolderLocks = (folderId: string) => {
-    const folderItemIds = new Set(itemsByFolder[folderId]?.items.map((i) => i.id) || []);
-    const filtered = prerequisites.filter((p) => !folderItemIds.has(p.targetContentId));
-    setPrerequisites(filtered);
-    toastInfo("تم إلغاء أقفال عناصر هذا المجلد");
-  };
-
-  // Auto-chain single folder
   const handleAutoChainFolder = (folderId: string) => {
     const folderItems = itemsByFolder[folderId]?.items || [];
     if (folderItems.length <= 1) return;
@@ -269,10 +213,39 @@ export function ContentFlowManager({ courseId, courseTitle }: ContentFlowManager
     }
 
     setPrerequisites(filtered);
-    toastSuccess(`تم تطبيق الترتيب التتابعي للمجلد (${itemsByFolder[folderId]?.name})`);
+    toastSuccess(`تم تطبيق التتابع للمحاضرة (${itemsByFolder[folderId]?.name})`);
   };
 
-  // Set custom prerequisite for single item
+  const handleClearFolderLocks = (folderId: string) => {
+    const folderItems = itemsByFolder[folderId]?.items || [];
+    const folderItemIds = new Set(folderItems.map((i) => i.id));
+    const filtered = prerequisites.filter((p) => !folderItemIds.has(p.targetContentId));
+    setPrerequisites(filtered);
+    toastSuccess(`تم فك أقفال المحاضرة (${itemsByFolder[folderId]?.name})`);
+  };
+
+  const moveItemUpInFolder = (folderId: string, idx: number) => {
+    if (idx <= 0) return;
+    const folderItems = [...(itemsByFolder[folderId]?.items || [])];
+    const temp = folderItems[idx];
+    folderItems[idx] = folderItems[idx - 1];
+    folderItems[idx - 1] = temp;
+
+    const remainingItems = items.filter((i) => (i.folderId || "unassigned") !== folderId);
+    setItems([...remainingItems, ...folderItems]);
+  };
+
+  const moveItemDownInFolder = (folderId: string, idx: number) => {
+    const folderItems = [...(itemsByFolder[folderId]?.items || [])];
+    if (idx >= folderItems.length - 1) return;
+    const temp = folderItems[idx];
+    folderItems[idx] = folderItems[idx + 1];
+    folderItems[idx + 1] = temp;
+
+    const remainingItems = items.filter((i) => (i.folderId || "unassigned") !== folderId);
+    setItems([...remainingItems, ...folderItems]);
+  };
+
   const setPrerequisiteForItem = (targetId: string, prerequisiteId: string) => {
     const filtered = prerequisites.filter((p) => p.targetContentId !== targetId);
     if (prerequisiteId && prerequisiteId !== "NONE") {
@@ -288,11 +261,10 @@ export function ContentFlowManager({ courseId, courseTitle }: ContentFlowManager
     setPrerequisites(filtered);
   };
 
-  // Save current graph
   const handleSave = async () => {
     setSaving(true);
     try {
-      let bodyData: any = {
+      const bodyData: Record<string, unknown> = {
         mode: flowMode,
         sequentialAccess: flowMode !== "free",
       };
@@ -319,7 +291,7 @@ export function ContentFlowManager({ courseId, courseTitle }: ContentFlowManager
 
       const data = await res.json();
       if (res.ok) {
-        toastSuccess(data.message || "تم حفظ الترتيب وأقفال المحتوى بنجاح! 💾");
+        toastSuccess(data.message || "تم حفظ إعدادات مسار المحتوى بنجاح! 💾");
         if (data.prerequisites) {
           setPrerequisites(data.prerequisites);
         }
@@ -340,41 +312,35 @@ export function ContentFlowManager({ courseId, courseTitle }: ContentFlowManager
         return {
           icon: <IconVideo className="w-3.5 h-3.5" />,
           label: type === "SOLUTION_VIDEO" ? "فيديو حل" : "فيديو شرح",
-          color: "text-sky-500 bg-sky-500/10 border-sky-500/20",
+          color: "text-blue-600 bg-blue-50 dark:bg-blue-950/50 border-blue-200 dark:border-blue-800",
         };
       case "HOMEWORK":
         return {
           icon: <IconClipboard className="w-3.5 h-3.5" />,
-          label: "واجب منزلي",
-          color: "text-amber-500 bg-amber-500/10 border-amber-500/20",
+          label: "واجب",
+          color: "text-amber-600 bg-amber-50 dark:bg-amber-950/50 border-amber-200 dark:border-amber-800",
         };
       case "QUIZ":
       case "EXAM":
         return {
-          icon: <IconShield className="w-3.5 h-3.5" />,
-          label: type === "EXAM" ? "امتحان شامل" : "اختبار",
-          color: "text-purple-500 bg-purple-500/10 border-purple-500/20",
-        };
-      case "PDF":
-        return {
           icon: <IconFile className="w-3.5 h-3.5" />,
-          label: "ملف / ملحق",
-          color: "text-emerald-500 bg-emerald-500/10 border-emerald-500/20",
+          label: type === "EXAM" ? "امتحان شامل" : "اختبار سريع",
+          color: "text-rose-600 bg-rose-50 dark:bg-rose-950/50 border-rose-200 dark:border-rose-800",
         };
       default:
         return {
           icon: <IconFile className="w-3.5 h-3.5" />,
-          label: type,
-          color: "text-[var(--ink-muted)] bg-gray-500/10 border-gray-500/20",
+          label: "ملف / ملحق",
+          color: "text-slate-600 bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700",
         };
     }
   };
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center p-12 space-y-4">
-        <div className="w-10 h-10 border-4 border-sky-500 border-t-transparent rounded-full animate-spin" />
-        <p className="text-sm font-bold text-[var(--ink-muted)]">جاري تحميل مسار المحتوى والمجلدات...</p>
+      <div className="rounded-3xl border border-slate-200/90 bg-white p-12 text-center dark:border-slate-800/90 dark:bg-slate-900/90">
+        <div className="w-8 h-8 mx-auto mb-3 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+        <p className="text-xs font-bold text-slate-600 dark:text-slate-400">جارٍ قراءة خريطة المحتوى...</p>
       </div>
     );
   }
@@ -383,181 +349,225 @@ export function ContentFlowManager({ courseId, courseTitle }: ContentFlowManager
 
   return (
     <div className="space-y-6 text-right" dir="rtl">
-      {/* Top Header Card */}
-      <div className="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-6 shadow-sm">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* ── Top Header & Actions ── */}
+      <div className="rounded-3xl border border-slate-200/90 bg-white p-6 shadow-sm dark:border-slate-800/90 dark:bg-slate-900/90 space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
           <div>
-            <h2 className="text-xl font-black text-[var(--ink)] flex items-center gap-2">
+            <h2 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
+              <Layers className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
               <span>مسار وفتح المحتوى وشروط التتابع</span>
-              <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-sky-500/15 text-sky-600 dark:text-sky-400">
-                {items.length} عنصر · {folderEntries.length} مجلد/محاضرة
+              <span className="text-[10px] px-2.5 py-0.5 rounded-full font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                {items.length} عنصر · {folderEntries.length} محاضرة
               </span>
             </h2>
-            <p className="text-xs text-[var(--ink-muted)] mt-1">
-              تحكم في فتح المحتوى لكل مجلد على حدة أو اجعل الكورس حراً بالكامل للبدء من أي مكان.
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              حدد أسلوب فتح المحتوى للطلاب بنقرة واحدة عبر البطاقات البصرية أدناه.
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={handleSync}
               disabled={syncing}
-              className="px-3 py-2 text-xs font-bold rounded-xl border border-[var(--border)] text-[var(--ink)] hover:bg-[var(--bg)] transition-colors flex items-center gap-1.5"
+              className="px-3 py-2 text-xs font-bold rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 dark:border-slate-800 dark:bg-slate-950 dark:hover:bg-slate-800 dark:text-slate-300 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
             >
-              <span>{syncing ? "جاري المزامنة..." : "🔄 مزامنة المحتوى"}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleDisableAllLocks}
-              className={`px-3 py-2 text-xs font-bold rounded-xl border transition-colors ${
-                flowMode === "free"
-                  ? "bg-emerald-500/15 text-emerald-600 border-emerald-500/30"
-                  : "text-emerald-600 hover:bg-emerald-500/10 border-emerald-500/20"
-              }`}
-            >
-              🔓 جعل الكورس حراً بالكامل
+              <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} />
+              <span>{syncing ? "جارٍ المزامنة..." : "مزامنة المحتوى"}</span>
             </button>
 
             <button
               type="button"
               onClick={handleSave}
               disabled={saving}
-              className="px-5 py-2 text-xs font-black rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 text-white shadow-md shadow-sky-500/20 transition-all flex items-center gap-2"
+              className="px-5 py-2 text-xs font-black rounded-xl bg-slate-900 hover:bg-slate-800 text-white dark:bg-emerald-700 dark:hover:bg-emerald-600 transition-all flex items-center gap-1.5 cursor-pointer shadow-sm disabled:opacity-50"
             >
-              {saving ? "جاري الحفظ..." : "💾 حفظ المسار والتغييرات"}
+              <Save className="w-3.5 h-3.5" />
+              <span>{saving ? "جارٍ الحفظ..." : "حفظ التغييرات"}</span>
             </button>
           </div>
         </div>
 
-        {/* Global Policy Selector */}
-        <div className="mt-6 pt-5 border-t border-[var(--border)] grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {/* Policy 1: Free Start Anywhere */}
+        {/* ── Visual 3-Card Selection (اعتمد على التصاميم بدون نصوص معقدة) ── */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+          {/* Card 1: Free Open Access */}
           <div
-            onClick={() => setFlowMode("free")}
-            className={`cursor-pointer p-4 rounded-xl border-2 transition-all ${
+            onClick={handleDisableAllLocks}
+            className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex flex-col justify-between gap-3 ${
               flowMode === "free"
-                ? "border-emerald-500 bg-emerald-500/10"
-                : "border-[var(--border)] hover:border-[var(--ink-muted)]/30"
+                ? "border-emerald-600 bg-emerald-50/50 dark:border-emerald-500 dark:bg-emerald-950/30 shadow-xs ring-1 ring-emerald-500/30"
+                : "border-slate-200 bg-slate-50/70 hover:bg-slate-100 dark:border-slate-800 dark:bg-slate-950/40 dark:hover:bg-slate-800/40"
             }`}
           >
-            <div className="flex items-center gap-3">
-              <span className="text-2xl">🔓</span>
-              <div>
-                <h4 className="text-sm font-black text-[var(--ink)]">
-                  مشاهدة حرة بالكامل (Free)
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-emerald-600 shadow-xs">
+                  <Unlock className="w-4 h-4" />
+                </div>
+                <h4 className="text-xs font-black text-slate-900 dark:text-white">
+                  وصول حر ومباشر (Free)
                 </h4>
-                <p className="text-xs text-[var(--ink-muted)] mt-0.5">
-                  لا توجد أي أقفال. الطالب حر في فتح أي درس أو واجب والبدء من أي مكان.
-                </p>
               </div>
+
+              {flowMode === "free" && (
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              )}
             </div>
+
+            {/* Visual Mini Flow */}
+            <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center gap-2 text-[11px] font-bold">
+              <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                درس 1 🔓
+              </span>
+              <span className="text-slate-400">·</span>
+              <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                درس 2 🔓
+              </span>
+              <span className="text-slate-400">·</span>
+              <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                اختبار 🔓
+              </span>
+            </div>
+
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+              بدون أقفال — يختار الطالب أي درس بحرية كاملة.
+            </p>
           </div>
 
-          {/* Policy 2: Per-Folder Sequential */}
+          {/* Card 2: Sequential Per Folder */}
           <div
-            onClick={() => {
-              setFlowMode("per_folder");
-              handleAutoChainPerFolder();
-            }}
-            className={`cursor-pointer p-4 rounded-xl border-2 transition-all ${
+            onClick={handleAutoChainPerFolder}
+            className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex flex-col justify-between gap-3 ${
               flowMode === "per_folder"
-                ? "border-sky-500 bg-sky-500/10"
-                : "border-[var(--border)] hover:border-[var(--ink-muted)]/30"
+                ? "border-blue-600 bg-blue-50/50 dark:border-blue-500 dark:bg-blue-950/30 shadow-xs ring-1 ring-blue-500/30"
+                : "border-slate-200 bg-slate-50/70 hover:bg-slate-100 dark:border-slate-800 dark:bg-slate-950/40 dark:hover:bg-slate-800/40"
             }`}
           >
-            <div className="flex items-center gap-3">
-              <span className="text-2xl">📂</span>
-              <div>
-                <h4 className="text-sm font-black text-[var(--ink)]">
-                  تتابع داخل كل مجلد (Per Folder)
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-blue-600 shadow-xs">
+                  <GitFork className="w-4 h-4" />
+                </div>
+                <h4 className="text-xs font-black text-slate-900 dark:text-white">
+                  تتابع منظم داخل المحاضرة
                 </h4>
-                <p className="text-xs text-[var(--ink-muted)] mt-0.5">
-                  الطالب يبدأ من أي مجلد يعجبه، وداخل المجلد يتدرج (فيديو ← واجب ← امتحان).
-                </p>
               </div>
+
+              {flowMode === "per_folder" && (
+                <CheckCircle2 className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+              )}
             </div>
+
+            {/* Visual Mini Flow */}
+            <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center gap-1 text-[11px] font-bold">
+              <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                درس 1 ✅
+              </span>
+              <span className="text-slate-400">➔</span>
+              <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                درس 2 🔒
+              </span>
+              <span className="text-slate-400">➔</span>
+              <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                اختبار 🔒
+              </span>
+            </div>
+
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+              يُفتح كل درس بعد إتمام الطالب للدرس الذي يسبقه مباشرة.
+            </p>
           </div>
 
-          {/* Policy 3: Custom Dependencies */}
+          {/* Card 3: Custom Rules (No Purple, clean Amber/Gold) */}
           <div
             onClick={() => setFlowMode("custom")}
-            className={`cursor-pointer p-4 rounded-xl border-2 transition-all ${
+            className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex flex-col justify-between gap-3 ${
               flowMode === "custom"
-                ? "border-purple-500 bg-purple-500/10"
-                : "border-[var(--border)] hover:border-[var(--ink-muted)]/30"
+                ? "border-amber-600 bg-amber-50/50 dark:border-amber-500 dark:bg-amber-950/30 shadow-xs ring-1 ring-amber-500/30"
+                : "border-slate-200 bg-slate-50/70 hover:bg-slate-100 dark:border-slate-800 dark:bg-slate-950/40 dark:hover:bg-slate-800/40"
             }`}
           >
-            <div className="flex items-center gap-3">
-              <span className="text-2xl">⚙️</span>
-              <div>
-                <h4 className="text-sm font-black text-[var(--ink)]">
-                  تخصيص يدوي مخصص (Custom)
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-amber-600 shadow-xs">
+                  <Sliders className="w-4 h-4" />
+                </div>
+                <h4 className="text-xs font-black text-slate-900 dark:text-white">
+                  شروط وقواعد مخصصة (Custom)
                 </h4>
-                <p className="text-xs text-[var(--ink-muted)] mt-0.5">
-                  حدد شروط فتح دقيقة لكل عنصر على حدة من أي مجلد آخر.
-                </p>
               </div>
+
+              {flowMode === "custom" && (
+                <CheckCircle2 className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+              )}
             </div>
+
+            {/* Visual Mini Flow */}
+            <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center gap-1.5 text-[11px] font-bold">
+              <span className="px-2.5 py-0.5 rounded-md bg-amber-50 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                ⚙️ تخصيص شرط كل عنصر
+              </span>
+            </div>
+
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+              تحديد متطلب مخصص لكل عنصر على حدة حسب رغبتك.
+            </p>
           </div>
         </div>
       </div>
 
-      {/* Folders List with Self-Contained Items */}
+      {/* ── Content Folders Tree ── */}
       {folderEntries.length === 0 ? (
-        <div className="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-12 text-center">
-          <p className="text-lg font-bold text-[var(--ink)]">لا يوجد محتوى أو مجلدات في هذا الكورس بعد</p>
-          <p className="text-xs text-[var(--ink-muted)] mt-1">
-            قم بإضافة محاضرات وفيديوهات أو واجبات أولاً، ثم اضغط على "مزامنة المحتوى".
+        <div className="rounded-3xl border border-slate-200/90 bg-white p-12 text-center dark:border-slate-800/90 dark:bg-slate-900/90 space-y-3">
+          <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto text-xl">
+            📁
+          </div>
+          <h3 className="text-xs font-bold text-slate-800 dark:text-slate-200">
+            لا توجد محاضرات في هذا الكورس بعد
+          </h3>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
+            أضف محاضرات وفيديوهات أولاً من «استوديو الكورسات»، ثم عد هنا لترتيب شروط الفتح.
           </p>
-          <button
-            type="button"
-            onClick={handleSync}
-            className="mt-4 px-4 py-2 text-xs font-bold rounded-xl bg-sky-500 text-white"
-          >
-            🔄 مزامنة المحتوى الآن
-          </button>
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-4">
           {folderEntries.map(([folderId, folderData]) => {
             return (
               <div
                 key={folderId}
-                className="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-5 shadow-sm space-y-4"
+                className="rounded-3xl border border-slate-200/90 bg-white p-5 shadow-sm dark:border-slate-800/90 dark:bg-slate-900/90 space-y-3.5"
               >
                 {/* Folder Header */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[var(--border)]">
-                  <div className="flex items-center gap-2.5">
-                    <span className="w-8 h-8 rounded-xl bg-sky-500/15 text-sky-600 dark:text-sky-400 flex items-center justify-center font-bold">
-                      <IconFolder className="w-4 h-4" />
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-3 border-b border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center gap-2">
+                    <span className="w-7 h-7 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center font-bold">
+                      <IconFolder className="w-3.5 h-3.5" />
                     </span>
                     <div>
-                      <h3 className="text-base font-black text-[var(--ink)]">
+                      <h3 className="text-xs font-black text-slate-900 dark:text-white">
                         {folderData.name}
                       </h3>
-                      <p className="text-[11px] text-[var(--ink-muted)]">
-                        {folderData.items.length} عنصر داخل هذا المجلد
+                      <p className="text-[10.5px] text-slate-500 dark:text-slate-400">
+                        {folderData.items.length} عنصر
                       </p>
                     </div>
                   </div>
 
                   {flowMode !== "free" && (
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5">
                       <button
                         type="button"
                         onClick={() => handleAutoChainFolder(folderId)}
-                        className="px-2.5 py-1.5 text-xs font-bold rounded-lg bg-sky-500/10 text-sky-600 hover:bg-sky-500/20 border border-sky-500/20 transition-colors"
+                        className="px-2.5 py-1 text-[11px] font-bold rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-all cursor-pointer"
                       >
-                        ⚡ تتابع تلقائي للمجلد
+                        ⚡ تتابع تلقائي
                       </button>
                       <button
                         type="button"
                         onClick={() => handleClearFolderLocks(folderId)}
-                        className="px-2.5 py-1.5 text-xs font-bold rounded-lg text-[var(--ink-muted)] hover:text-red-500 border border-[var(--border)] transition-colors"
+                        className="px-2.5 py-1 text-[11px] font-bold rounded-xl text-slate-500 hover:text-rose-500 dark:hover:text-rose-400 transition-all cursor-pointer"
                       >
-                        🔓 فتح حر للمجلد
+                        🔓 فتح حر
                       </button>
                     </div>
                   )}
@@ -565,17 +575,16 @@ export function ContentFlowManager({ courseId, courseTitle }: ContentFlowManager
 
                 {/* Items Inside Folder */}
                 {folderData.items.length === 0 ? (
-                  <p className="text-xs text-[var(--ink-muted)] py-4 text-center">
-                    لا يوجد محتوى مضاف داخل هذه المحاضرة.
+                  <p className="text-xs text-slate-400 py-3 text-center">
+                    لا يوجد محتوى في هذه المحاضرة.
                   </p>
                 ) : (
-                  <div className="space-y-2.5">
+                  <div className="space-y-2">
                     {folderData.items.map((item, itemIdx) => {
                       const typeInfo = getTypeBadge(item.type);
                       const isFirstInFolder = itemIdx === 0;
                       const isLastInFolder = itemIdx === folderData.items.length - 1;
 
-                      // Check current prerequisite
                       const currentPrereq =
                         flowMode === "free"
                           ? null
@@ -594,62 +603,61 @@ export function ContentFlowManager({ courseId, courseTitle }: ContentFlowManager
                       return (
                         <div
                           key={item.id}
-                          className="bg-[var(--bg)] border border-[var(--border)] rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-colors hover:border-sky-500/30"
+                          className="bg-slate-50/70 dark:bg-slate-950/40 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 transition-all"
                         >
                           {/* Item Identity */}
-                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                            <span className="w-6 h-6 rounded-lg bg-[var(--card)] border border-[var(--border)] flex items-center justify-center text-[11px] font-black text-[var(--ink-muted)] shrink-0">
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            <span className="w-5 h-5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-[10px] font-bold text-slate-500 shrink-0">
                               {itemIdx + 1}
                             </span>
 
                             <div
-                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold border shrink-0 ${typeInfo.color}`}
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10.5px] font-bold border shrink-0 ${typeInfo.color}`}
                             >
                               {typeInfo.icon}
                               <span>{typeInfo.label}</span>
                             </div>
 
-                            <p className="text-xs font-bold text-[var(--ink)] truncate">
+                            <p className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">
                               {item.title}
                             </p>
                           </div>
 
                           {/* Item Prerequisite Status & Controls */}
-                          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+                          <div className="flex items-center gap-2 shrink-0">
                             {flowMode === "free" ? (
-                              <span className="text-[11px] font-bold text-emerald-600 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
-                                🔓 مفتوح للجميع
+                              <span className="text-[10.5px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 px-2.5 py-0.5 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                                🔓 حر ومباشر
                               </span>
                             ) : flowMode === "per_folder" ? (
-                              <div className="text-[11px]">
+                              <div>
                                 {isFirstInFolder ? (
-                                  <span className="font-bold text-emerald-600 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
-                                    🔓 بداية المجلد (مفتوح تلقائياً)
+                                  <span className="text-[10.5px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 px-2.5 py-0.5 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                                    🔓 بداية المحاضرة
                                   </span>
                                 ) : (
-                                  <span className="font-bold text-amber-600 bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/20">
-                                    🔒 يتطلب: {folderData.items[itemIdx - 1]?.title.slice(0, 20)}...
+                                  <span className="text-[10.5px] font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2.5 py-0.5 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center gap-1">
+                                    <Lock className="w-3 h-3 text-slate-400" />
+                                    <span>يتطلب إنهاء السابق</span>
                                   </span>
                                 )}
                               </div>
                             ) : (
                               <div className="flex items-center gap-1.5">
-                                <span className="text-[11px] font-bold text-[var(--ink-muted)]">
-                                  يتطلب:
-                                </span>
+                                <span className="text-[10.5px] text-slate-400">يتطلب:</span>
                                 <select
                                   value={currentPrereq?.id || "NONE"}
                                   onChange={(e) =>
                                     setPrerequisiteForItem(item.id, e.target.value)
                                   }
-                                  className="text-[11px] font-bold bg-[var(--card)] border border-[var(--border)] text-[var(--ink)] rounded-lg px-2 py-1 outline-none focus:border-sky-500"
+                                  className="text-[11px] font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-white rounded-lg px-2 py-1 outline-none"
                                 >
                                   <option value="NONE">🔓 مفتوح</option>
                                   {items
                                     .filter((other) => other.id !== item.id)
                                     .map((other) => (
                                       <option key={other.id} value={other.id}>
-                                        🔒 {other.title.slice(0, 25)} ({other.folderName})
+                                        🔒 {other.title.slice(0, 20)} ({other.folderName})
                                       </option>
                                     ))}
                                 </select>
@@ -657,24 +665,24 @@ export function ContentFlowManager({ courseId, courseTitle }: ContentFlowManager
                             )}
 
                             {/* Up / Down within this folder */}
-                            <div className="flex items-center gap-0.5 bg-[var(--card)] p-0.5 rounded-lg border border-[var(--border)]">
+                            <div className="flex items-center gap-0.5 bg-white dark:bg-slate-900 p-0.5 rounded-lg border border-slate-200 dark:border-slate-800">
                               <button
                                 type="button"
                                 onClick={() => moveItemUpInFolder(folderId, itemIdx)}
                                 disabled={isFirstInFolder}
                                 title="تحريك لأعلى"
-                                className="p-1 rounded text-xs hover:bg-[var(--bg)] disabled:opacity-30 disabled:cursor-not-allowed"
+                                className="p-1 rounded text-slate-500 hover:text-slate-900 dark:hover:text-white disabled:opacity-30 cursor-pointer"
                               >
-                                ⬆️
+                                <ArrowUp className="w-3 h-3" />
                               </button>
                               <button
                                 type="button"
                                 onClick={() => moveItemDownInFolder(folderId, itemIdx)}
                                 disabled={isLastInFolder}
                                 title="تحريك لأسفل"
-                                className="p-1 rounded text-xs hover:bg-[var(--bg)] disabled:opacity-30 disabled:cursor-not-allowed"
+                                className="p-1 rounded text-slate-500 hover:text-slate-900 dark:hover:text-white disabled:opacity-30 cursor-pointer"
                               >
-                                ⬇️
+                                <ArrowDown className="w-3 h-3" />
                               </button>
                             </div>
                           </div>
