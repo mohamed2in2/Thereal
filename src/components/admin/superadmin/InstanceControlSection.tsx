@@ -37,7 +37,7 @@ interface ActivityLogItem {
   targetId: string;
   targetName: string;
   createdAt: string;
-  meta?: Record<string, any> | null;
+  meta?: Record<string, unknown> | null;
 }
 
 interface LiveLogStudent {
@@ -53,9 +53,9 @@ interface LiveLogStudent {
   points: number;
 }
 
-const card = "rounded-2xl border border-gray-700 bg-gray-800 p-5";
+const card = "rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm dark:border-slate-800/90 dark:bg-slate-900/90 transition-all";
 const input =
-  "w-full rounded-lg border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-sky-500";
+  "w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs text-slate-900 outline-none focus:border-slate-400 focus:bg-white dark:border-slate-800 dark:bg-slate-950 dark:text-white transition-all";
 
 export function InstanceControlSection() {
   const { success: toastSuccess, error: toastError } = useToast();
@@ -378,12 +378,17 @@ export function InstanceControlSection() {
 
   // Initial load & Polling interval
   useEffect(() => {
-    void fetchLiveLogs();
-    if (!autoRefreshLive) return;
-    const timer = setInterval(() => {
-      void fetchLiveLogs();
-    }, 10000);
-    return () => clearInterval(timer);
+    let isMounted = true;
+    const poll = () => {
+      if (isMounted) void fetchLiveLogs();
+    };
+    const timer = setTimeout(poll, 0);
+    const interval = autoRefreshLive ? setInterval(poll, 10000) : null;
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+      if (interval) clearInterval(interval);
+    };
   }, [fetchLiveLogs, autoRefreshLive]);
 
   return (
@@ -403,18 +408,17 @@ export function InstanceControlSection() {
       </div>
 
       {/* ── Direct Student Access (Owner High Security) ── */}
-      <div className="rounded-2xl border border-amber-500/30 bg-gradient-to-b from-gray-800 to-gray-850 p-5 shadow-lg relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-2xl pointer-events-none" />
+      <div className={card}>
         <div className="flex items-center justify-between mb-3">
           <div>
             <div className="flex items-center gap-2">
               <span className="text-xl">🔐</span>
-              <h3 className="font-bold text-white text-base">الدخول المباشر لحساب طالب (Owner Super-Access)</h3>
-              <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-bold text-amber-300 border border-amber-500/30">
+              <h3 className="font-bold text-slate-900 dark:text-white text-base">الدخول المباشر لحساب طالب (Owner Super-Access)</h3>
+              <span className="rounded-full bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 px-2.5 py-0.5 text-[10px] font-bold border border-amber-200 dark:border-amber-800/40">
                 خاص بالمالك فقط
               </span>
             </div>
-            <p className="text-xs text-gray-400 mt-1">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
               ابحث برقم هاتف أي طالب لمعاينة المنصة بعينيه مباشرة وحل مشكلاته الفنية والتعليمية.
             </p>
           </div>
@@ -524,7 +528,7 @@ export function InstanceControlSection() {
       </div>
 
       {/* ── Real-Time Live Stream & Activity Log ── */}
-      <div className="rounded-2xl border border-sky-500/30 bg-gradient-to-b from-gray-800 to-gray-850 p-5 shadow-lg relative overflow-hidden">
+      <div className={card}>
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
           <div className="flex items-center gap-2.5">
             <span className="relative flex h-3 w-3">
@@ -533,12 +537,12 @@ export function InstanceControlSection() {
             </span>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="font-bold text-white text-base">سجل الأنشطة وتسجيل الطلاب المباشر (Live Stream)</h3>
-                <span className="rounded-full bg-sky-500/20 px-2 py-0.5 text-[10px] font-bold text-sky-300 border border-sky-500/30">
+                <h3 className="font-bold text-slate-900 dark:text-white text-base">سجل الأنشطة وتسجيل الطلاب المباشر (Live Stream)</h3>
+                <span className="rounded-full bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300 px-2.5 py-0.5 text-[10px] font-bold border border-sky-200 dark:border-sky-800/40">
                   إجمالي الطلاب: {totalStudentsCount}
                 </span>
               </div>
-              <p className="text-xs text-gray-400 mt-0.5">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 تتبع لحظي بالوقت والتاريخ لحسابات الطلاب المنشأة وحذف الكورسات والعمليات الحية.
               </p>
             </div>

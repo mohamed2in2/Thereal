@@ -280,3 +280,91 @@ html.dark .hero-grid {
   pointer-events: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
+
+/* ─── Classic Admin Shell: Global Light Mode Surface Adapter ───────────────── */
+html:not(.dark) .classic-admin-surface {
+  color: #0f172a;
+}
+
+/* Transform legacy dark cards into clean, smooth white cards with subtle borders */
+html:not(.dark) .classic-admin-surface .bg-gray-800,
+html:not(.dark) .classic-admin-surface .bg-gray-850,
+html:not(.dark) .classic-admin-surface .bg-slate-900:not(button):not(span.rounded-full):not([class*="text-white"]),
+html:not(.dark) .classic-admin-surface [class*="bg-gradient-to-b from-gray-800"],
+html:not(.dark) .classic-admin-surface [class*="bg-gradient-to-br from-gray-800"] {
+  background-color: #ffffff !important;
+  background-image: none !important;
+  border-color: #e2e8f0 !important;
+  color: #0f172a !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04) !important;
+}
+
+/* Transform sub-card wells and list containers into soft clean surfaces */
+html:not(.dark) .classic-admin-surface .bg-gray-900,
+html:not(.dark) .classic-admin-surface .bg-gray-900\/60,
+html:not(.dark) .classic-admin-surface .bg-gray-900\/80,
+html:not(.dark) .classic-admin-surface .bg-gray-900\/40,
+html:not(.dark) .classic-admin-surface .bg-slate-950 {
+  background-color: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
+/* Transform input fields, textareas, and selects to clean light mode inputs */
+html:not(.dark) .classic-admin-surface input.bg-gray-900,
+html:not(.dark) .classic-admin-surface textarea.bg-gray-900,
+html:not(.dark) .classic-admin-surface select.bg-gray-900,
+html:not(.dark) .classic-admin-surface input.bg-slate-950,
+html:not(.dark) .classic-admin-surface textarea.bg-slate-950,
+html:not(.dark) .classic-admin-surface select.bg-slate-950 {
+  background-color: #f8fafc !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+html:not(.dark) .classic-admin-surface input.bg-gray-900:focus,
+html:not(.dark) .classic-admin-surface textarea.bg-gray-900:focus,
+html:not(.dark) .classic-admin-surface select.bg-gray-900:focus,
+html:not(.dark) .classic-admin-surface input.bg-slate-950:focus,
+html:not(.dark) .classic-admin-surface textarea.bg-slate-950:focus,
+html:not(.dark) .classic-admin-surface select.bg-slate-950:focus {
+  background-color: #ffffff !important;
+  border-color: #94a3b8 !important;
+}
+
+/* Transform hardcoded text colors for high readability in light mode */
+html:not(.dark) .classic-admin-surface h2.text-white,
+html:not(.dark) .classic-admin-surface h3.text-white,
+html:not(.dark) .classic-admin-surface h4.text-white,
+html:not(.dark) .classic-admin-surface strong.text-white,
+html:not(.dark) .classic-admin-surface div.text-white,
+html:not(.dark) .classic-admin-surface p.text-white,
+html:not(.dark) .classic-admin-surface span.text-white:not(button span):not([class*="bg-"]) {
+  color: #0f172a !important;
+}
+
+html:not(.dark) .classic-admin-surface .text-gray-400,
+html:not(.dark) .classic-admin-surface .text-gray-300,
+html:not(.dark) .classic-admin-surface .text-slate-400 {
+  color: #475569 !important;
+}
+
+html:not(.dark) .classic-admin-surface .text-gray-200 {
+  color: #1e293b !important;
+}
+
+/* Soft borders */
+html:not(.dark) .classic-admin-surface .border-gray-700,
+html:not(.dark) .classic-admin-surface .border-gray-600,
+html:not(.dark) .classic-admin-surface .border-gray-700\/50,
+html:not(.dark) .classic-admin-surface .border-gray-700\/60,
+html:not(.dark) .classic-admin-surface .border-gray-700\/80,
+html:not(.dark) .classic-admin-surface .border-slate-800 {
+  border-color: #e2e8f0 !important;
+}
+
+html:not(.dark) .classic-admin-surface .bg-gray-700 {
+  background-color: #f1f5f9 !important;
+  color: #334155 !important;
+}
+

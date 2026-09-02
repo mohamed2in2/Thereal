@@ -1,6 +1,7 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useToast } from "@/components/ui/Toast";
+import { FileText, Save, RotateCcw, Lock } from "lucide-react";
 
 export function SiteTextSection() {
   const { success: toastSuccess, error: toastError } = useToast();
@@ -11,32 +12,35 @@ export function SiteTextSection() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const load = useCallback(async () => {
-    try {
-      const res = await fetch("/api/admin/superadmin/site-text", { credentials: "include" });
-      const json = await res.json();
-      if (!res.ok) {
-        toastError(json.error ?? "تعذر تحميل النصوص");
-        return;
-      }
-      setValues(json.text ?? {});
-      setDefaults(json.defaults ?? {});
-      setLabels(json.labels ?? {});
-    } catch {
-      toastError("تعذر الاتصال بالخادم");
-    } finally {
-      setLoading(false);
-    }
-  }, [toastError]);
-
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void load();
-  }, [load]);
+    let isMounted = true;
+    const loadData = async () => {
+      try {
+        const res = await fetch("/api/admin/superadmin/site-text", { credentials: "include" });
+        const json = await res.json();
+        if (!isMounted) return;
+        if (!res.ok) {
+          toastError(json.error ?? "تعذر تحميل النصوص");
+          return;
+        }
+        setValues(json.text ?? {});
+        setDefaults(json.defaults ?? {});
+        setLabels(json.labels ?? {});
+      } catch {
+        if (isMounted) toastError("تعذر الاتصال بالخادم");
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+    void loadData();
+    return () => {
+      isMounted = false;
+    };
+  }, [toastError]);
 
   const save = async () => {
     if (!actionPassword) {
-      toastError("أدخل كلمة مرور المشرف");
+      toastError("أدخل كلمة مرور المشرف لتأكيد الحفظ");
       return;
     }
     setSaving(true);
@@ -53,7 +57,8 @@ export function SiteTextSection() {
         return;
       }
       setValues(json.text ?? values);
-      toastSuccess("تم حفظ نصوص الموقع — قد تستغرق التحديث دقيقة على الموقع");
+      toastSuccess("تم حفظ نصوص الموقع بنجاح — قد تستغرق التحديث دقيقة على الموقع");
+      setActionPassword("");
     } catch {
       toastError("تعذر الاتصال بالخادم");
     } finally {
@@ -64,67 +69,98 @@ export function SiteTextSection() {
   const keys = Object.keys(labels);
 
   return (
-    <div className="max-w-2xl space-y-5" dir="rtl">
-      <div className="rounded-2xl border border-gray-700 bg-gray-800 p-5">
-        <h2 className="font-bold text-white">نصوص الموقع</h2>
-        <p className="text-xs text-gray-400">
-          عدّل النصوص الظاهرة للزوّار (العنوان التعريفي، بيانات التواصل، دعوة التسجيل) دون لمس الكود.
-        </p>
+    <div className="max-w-4xl space-y-6" dir="rtl">
+      {/* Header Info Card (Clean White / Pure Dark) */}
+      <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm dark:border-slate-800/90 dark:bg-slate-900/90 transition-all">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200">
+            <FileText className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className="text-lg font-black text-slate-900 dark:text-white">نصوص وواجهات الموقع العامة</h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              تعديل مباشر لجميع النصوص والبيانات الظاهرة للزوّار والطلاب (العنوان الرئيسي، وسائل التواصل، روابط الدعم) دون لمس الكود.
+            </p>
+          </div>
+        </div>
       </div>
 
       {loading ? (
-        <div className="py-10 text-center text-gray-500">جارٍ التحميل...</div>
+        <div className="py-16 text-center text-slate-500 flex flex-col items-center gap-2">
+          <div className="w-6 h-6 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
+          <span className="text-xs font-bold">جارٍ تحميل نصوص الموقع...</span>
+        </div>
       ) : (
-        <>
+        <div className="space-y-4">
           {keys.map((k) => {
             const isShort = k === "contact_email" || k === "contact_phone" || k === "contact_heading";
             return (
-              <div key={k} className="rounded-xl border border-gray-700 bg-gray-800 p-4">
-                <label className="mb-1 block text-sm font-semibold text-gray-200">{labels[k]}</label>
+              <div
+                key={k}
+                className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm dark:border-slate-800/90 dark:bg-slate-900/90 transition-all"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-200">
+                    {labels[k]}
+                  </label>
+                  {defaults[k] !== undefined && values[k] !== defaults[k] && (
+                    <button
+                      type="button"
+                      onClick={() => setValues({ ...values, [k]: defaults[k] })}
+                      className="text-[11px] font-bold text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 flex items-center gap-1 transition-colors cursor-pointer"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      <span>استعادة الافتراضي</span>
+                    </button>
+                  )}
+                </div>
+
                 {isShort ? (
                   <input
                     value={values[k] ?? ""}
                     onChange={(e) => setValues({ ...values, [k]: e.target.value })}
-                    className="w-full rounded-lg border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-medium text-slate-900 outline-none focus:border-slate-400 focus:bg-white dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:focus:border-slate-700 transition-all"
                   />
                 ) : (
                   <textarea
                     value={values[k] ?? ""}
                     onChange={(e) => setValues({ ...values, [k]: e.target.value })}
                     rows={2}
-                    className="w-full resize-none rounded-lg border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                    className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-medium text-slate-900 outline-none focus:border-slate-400 focus:bg-white dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:focus:border-slate-700 transition-all"
                   />
-                )}
-                {defaults[k] !== undefined && values[k] !== defaults[k] && (
-                  <button
-                    onClick={() => setValues({ ...values, [k]: defaults[k] })}
-                    className="mt-1 text-[11px] text-gray-500 hover:text-gray-300"
-                  >
-                    استعادة الافتراضي
-                  </button>
                 )}
               </div>
             );
           })}
 
-          <div className="rounded-xl border border-gray-700 bg-gray-800 p-4">
-            <label className="mb-1 block text-xs text-gray-400">كلمة مرور المشرف</label>
-            <input
-              type="password"
-              value={actionPassword}
-              onChange={(e) => setActionPassword(e.target.value)}
-              placeholder="••••••••"
-              className="w-full rounded-lg border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
-            />
-            <button
-              onClick={save}
-              disabled={saving}
-              className="mt-3 rounded-lg bg-sky-600 px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-sky-700 disabled:opacity-50"
-            >
-              {saving ? "جارٍ الحفظ..." : "حفظ التغييرات"}
-            </button>
+          {/* Confirmation & Save Card */}
+          <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm dark:border-slate-800/90 dark:bg-slate-900/90 transition-all">
+            <div className="flex items-center gap-2 mb-3">
+              <Lock className="w-4 h-4 text-slate-500" />
+              <label className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                كلمة مرور المشرف العام لتأكيد الحفظ
+              </label>
+            </div>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+              <input
+                type="password"
+                value={actionPassword}
+                onChange={(e) => setActionPassword(e.target.value)}
+                placeholder="أدخل كلمة مرور المشرف للتأكيد..."
+                className="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-medium text-slate-900 outline-none focus:border-slate-400 focus:bg-white dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:focus:border-slate-700 transition-all"
+              />
+              <button
+                type="button"
+                onClick={save}
+                disabled={saving}
+                className="px-6 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white dark:bg-slate-800 dark:hover:bg-slate-700 text-xs font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer shadow-sm shrink-0"
+              >
+                <Save className="w-4 h-4" />
+                <span>{saving ? "جارٍ الحفظ..." : "حفظ التغييرات"}</span>
+              </button>
+            </div>
           </div>
-        </>
+        </div>
       )}
     </div>
   );

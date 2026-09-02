@@ -28,6 +28,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { DarkModeToggle } from "@/components/ui/DarkModeToggle";
+import { AdminActionPasswordBar } from "@/components/admin/AdminActionPasswordBar";
 
 export interface NavSection {
   id: string;
@@ -167,27 +168,67 @@ export function ClassicAdminShell({
     }
   };
 
+  // 50% / 50% chance: Native Dark Green ("emerald") or Native Blue ("blue")
+  const [accentTheme, setAccentTheme] = useState<"emerald" | "blue">(() => {
+    if (typeof window === "undefined") return "emerald";
+    try {
+      const stored = localStorage.getItem("admin_accent_mode");
+      if (stored === "emerald" || stored === "blue") return stored;
+      const chosen: "emerald" | "blue" = Math.random() < 0.5 ? "emerald" : "blue";
+      localStorage.setItem("admin_accent_mode", chosen);
+      return chosen;
+    } catch {
+      return "emerald";
+    }
+  });
+
+  const toggleAccent = () => {
+    const next = accentTheme === "emerald" ? "blue" : "emerald";
+    setAccentTheme(next);
+    try {
+      localStorage.setItem("admin_accent_mode", next);
+    } catch {
+      /* ignore */
+    }
+  };
+
   const selectedMobileHub = hubs.find((h) => h.id === mobileActiveHub);
 
   return (
     <div
       dir="rtl"
-      className="min-h-screen bg-[#f8fafc] text-slate-900 dark:bg-slate-950 dark:text-slate-100 flex flex-col font-sans transition-colors duration-200 selection:bg-slate-900 selection:text-white dark:selection:bg-amber-500/20 dark:selection:text-amber-300"
+      className={`min-h-screen bg-[#f8fafc] text-slate-900 dark:bg-slate-950 dark:text-slate-100 flex flex-col font-sans transition-colors duration-200 ${
+        accentTheme === "emerald"
+          ? "selection:bg-emerald-500/20 selection:text-emerald-900 dark:selection:text-emerald-300"
+          : "selection:bg-blue-500/20 selection:text-blue-900 dark:selection:text-blue-300"
+      }`}
     >
       {/* ── Top Executive Header (Clean White / Pure Dark) ── */}
       <header className="sticky top-0 z-40 bg-white text-slate-900 border-b border-slate-200 shadow-sm dark:bg-slate-900 dark:text-white dark:border-slate-800 px-4 sm:px-8 py-3.5">
         <div className="flex items-center justify-between gap-4 w-full max-w-[1720px] mx-auto">
           {/* Brand & Identity */}
           <div className="flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-xl bg-slate-900 text-white dark:bg-slate-800 border border-slate-800 dark:border-slate-700 flex items-center justify-center shadow-md">
-              <span className="font-black text-lg font-serif text-amber-400">C</span>
+            <div
+              className={`w-10 h-10 rounded-xl border flex items-center justify-center shadow-md transition-colors ${
+                accentTheme === "emerald"
+                  ? "bg-emerald-950 text-emerald-400 border-emerald-800 dark:bg-emerald-950 dark:border-emerald-700"
+                  : "bg-slate-900 text-blue-400 border-blue-900 dark:bg-blue-950 dark:border-blue-700"
+              }`}
+            >
+              <span className="font-black text-lg font-serif">C</span>
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-base sm:text-lg font-black text-slate-900 dark:text-white tracking-wide">
                   {headerTitle}
                 </h1>
-                <span className="hidden sm:inline-flex px-2.5 py-0.5 rounded-md text-xs font-bold bg-slate-100 text-slate-800 border border-slate-200 dark:bg-slate-800 dark:text-amber-300 dark:border-slate-700">
+                <span
+                  className={`hidden sm:inline-flex px-2.5 py-0.5 rounded-md text-xs font-bold border transition-colors ${
+                    accentTheme === "emerald"
+                      ? "bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800/60"
+                      : "bg-blue-50 text-blue-800 border-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800/60"
+                  }`}
+                >
                   {role === "superadmin" ? "المشرف العام" : role === "teacher" ? "لوحة المعلم" : role}
                 </span>
               </div>
@@ -199,6 +240,30 @@ export function ClassicAdminShell({
 
           {/* Header Quick Actions */}
           <div className="flex items-center gap-2.5">
+            {/* 50%/50% Accent Switcher (Native Dark Green / Native Blue) */}
+            <button
+              onClick={toggleAccent}
+              type="button"
+              title={
+                accentTheme === "emerald"
+                  ? "النمط الحالي: أخضر داكن ملكي (اضغط للتبديل إلى الأزرق)"
+                  : "النمط الحالي: أزرق داكن ملكي (اضغط للتبديل إلى الأخضر)"
+              }
+              className={`px-2.5 py-1.5 rounded-xl border text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm ${
+                accentTheme === "emerald"
+                  ? "bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800"
+                  : "bg-blue-50 text-blue-800 border-blue-300 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800"
+              }`}
+            >
+              <span>{accentTheme === "emerald" ? "🟢" : "🔵"}</span>
+              <span className="hidden md:inline font-mono text-[11px]">
+                {accentTheme === "emerald" ? "أخضر داكن" : "أزرق داكن"}
+              </span>
+            </button>
+
+            {/* Custom Banana Security Key Action Password Button */}
+            <AdminActionPasswordBar />
+
             {onOpenMoneyControl && (
               <button
                 onClick={onOpenMoneyControl}
@@ -216,7 +281,15 @@ export function ClassicAdminShell({
                 title="تحديث البيانات"
                 className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 dark:border-slate-700 flex items-center justify-center transition-all disabled:opacity-50 cursor-pointer shadow-sm"
               >
-                <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin text-slate-900 dark:text-amber-400" : ""}`} />
+                <RefreshCw
+                  className={`w-4 h-4 ${
+                    refreshing
+                      ? accentTheme === "emerald"
+                        ? "animate-spin text-emerald-600 dark:text-emerald-400"
+                        : "animate-spin text-blue-600 dark:text-blue-400"
+                      : ""
+                  }`}
+                />
               </button>
             )}
 
@@ -289,7 +362,9 @@ export function ClassicAdminShell({
                               onClick={() => setActiveSection(section.id)}
                               className={`w-full px-3 py-2 rounded-lg text-xs font-medium flex items-center justify-between transition-all cursor-pointer ${
                                 isActive
-                                  ? "bg-slate-900 text-white font-bold shadow-sm dark:bg-[#c5a880]/15 dark:text-[#c5a880] dark:border dark:border-[#c5a880]/30"
+                                  ? accentTheme === "emerald"
+                                    ? "bg-emerald-800 text-white font-bold shadow-sm dark:bg-emerald-950/70 dark:text-emerald-300 dark:border dark:border-emerald-800/70"
+                                    : "bg-blue-800 text-white font-bold shadow-sm dark:bg-blue-950/70 dark:text-blue-300 dark:border dark:border-blue-800/70"
                                   : "text-slate-700 hover:bg-slate-200/60 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800/50 dark:hover:text-white"
                               }`}
                             >
@@ -326,7 +401,7 @@ export function ClassicAdminShell({
         </aside>
 
         {/* ── Main Dynamic Content Area ── */}
-        <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 space-y-6">
+        <main className="classic-admin-surface flex-1 min-w-0 p-4 sm:p-6 lg:p-8 space-y-6">
           {children}
         </main>
       </div>
@@ -412,7 +487,9 @@ export function ClassicAdminShell({
                     }}
                     className={`w-full p-3.5 rounded-2xl flex items-center justify-between text-right text-xs font-bold transition-all cursor-pointer ${
                       isActive
-                        ? "bg-slate-900 text-white shadow-sm dark:bg-[#c5a880]/15 dark:text-[#c5a880] dark:border dark:border-[#c5a880]/40"
+                        ? accentTheme === "emerald"
+                          ? "bg-emerald-800 text-white shadow-sm dark:bg-emerald-950/80 dark:text-emerald-300 dark:border dark:border-emerald-800/60"
+                          : "bg-blue-800 text-white shadow-sm dark:bg-blue-950/80 dark:text-blue-300 dark:border dark:border-blue-800/60"
                         : "bg-slate-50 hover:bg-slate-100 text-slate-800 border border-slate-200 dark:bg-slate-900/80 dark:hover:bg-slate-800/80 dark:text-slate-200 dark:border-slate-800/80"
                     }`}
                   >
@@ -420,7 +497,7 @@ export function ClassicAdminShell({
                       <div
                         className={`p-2 rounded-xl ${
                           isActive
-                            ? "bg-white/20 text-white dark:bg-[#c5a880]/20 dark:text-[#c5a880]"
+                            ? "bg-white/20 text-white"
                             : "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-400"
                         }`}
                       >
