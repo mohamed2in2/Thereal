@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect, react-hooks/refs */
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, useRef } from "react";
@@ -39,6 +40,7 @@ type HomeworkItem = {
 type FolderItem = {
   id: string;
   name: string;
+  color?: string | null;
   publishAt?: string | null;
   videos: VideoItem[];
   materials: MaterialItem[];
@@ -68,7 +70,7 @@ type PlayerState = {
   durationMinutes: number;
   startSeconds?: number;
   watchSessionId?: string;
-  drm?: any;
+  drm?: unknown;
 };
 
 type QuestionItem = {
@@ -250,7 +252,7 @@ export default function CourseLearningPage() {
   const [countdown, setCountdown] = useState("");
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [completing, setCompleting] = useState(false);
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(() => Date.now());
 
   // Watch modal
   const [modalVideo, setModalVideo] = useState<{ id: string; title: string } | null>(null);
@@ -740,7 +742,17 @@ export default function CourseLearningPage() {
                       aria-expanded={isOpen}
                       className="w-full flex items-center justify-between gap-2 px-4 py-2.5 text-right hover:bg-[var(--border)] transition-colors group"
                     >
-                      <span className="text-[11px] font-bold text-[var(--ink)] truncate flex-1">{folder.name}</span>
+                      <div className="flex items-center gap-2 truncate flex-1">
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${
+                          folder.color === "emerald" ? "bg-emerald-500" :
+                          folder.color === "amber" ? "bg-amber-500" :
+                          folder.color === "rose" ? "bg-rose-500" :
+                          folder.color === "cyan" ? "bg-cyan-500" :
+                          folder.color === "slate" ? "bg-slate-500" :
+                          "bg-blue-500"
+                        }`} />
+                        <span className="text-[11px] font-bold text-[var(--ink)] truncate">{folder.name}</span>
+                      </div>
                       <div className="flex items-center gap-2 shrink-0">
                         <span className="text-[10px] text-[var(--ink-muted)]">{folderWatched}/{folder.videos.length}</span>
                         <IconChevron className="w-3 h-3 text-[var(--ink-muted)]" open={isOpen} />

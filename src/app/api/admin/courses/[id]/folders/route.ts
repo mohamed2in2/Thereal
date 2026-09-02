@@ -38,13 +38,48 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
   if (!session || session.role !== "teacher") return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
   const { id: courseId } = await params;
-  const { name, publishAt } = (await req.json()) as { name?: string; publishAt?: string | null };
+  const { name, publishAt, color } = (await req.json()) as { name?: string; publishAt?: string | null; color?: string };
   if (!name) return NextResponse.json({ error: "اسم المحاضرة مطلوب" }, { status: 400 });
   const count = await prisma.folder.count({ where: { courseId } });
   const folder = await prisma.folder.create({
-    data: { name, courseId, order: count, publishAt: parsePublishAt(publishAt) ?? null },
+    data: { name, courseId, order: count, color: color || "blue", publishAt: parsePublishAt(publishAt) ?? null },
   });
   return NextResponse.json({ folder }, { status: 201 });
+}
+
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const session = await getSession();
+  if (!session || session.role !== "teacher") return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
+  const { id: courseId } = await params;
+  const body = (await req.json()) as {
+    folderId?: string;
+    name?: string;
+    color?: string;
+    order?: number;
+    publishAt?: string | null;
+    price?: number;
+    isPurchasable?: boolean;
+  };
+  const { folderId, name, color, order, publishAt, price, isPurchasable } = body;
+  if (!folderId) return NextResponse.json({ error: "معرف المحاضرة مطلوب" }, { status: 400 });
+
+  const existing = await prisma.folder.findFirst({
+    where: { id: folderId, course: { id: courseId, teacherId: session.id } },
+  });
+  if (!existing) return NextResponse.json({ error: "المحاضرة غير موجودة أو غير مصرح بتعديلها" }, { status: 404 });
+
+  const updated = await prisma.folder.update({
+    where: { id: folderId },
+    data: {
+      ...(name ? { name } : {}),
+      ...(color ? { color } : {}),
+      ...(typeof order === "number" ? { order } : {}),
+      ...(typeof price === "number" ? { price } : {}),
+      ...(typeof isPurchasable === "boolean" ? { isPurchasable } : {}),
+      ...(publishAt !== undefined ? { publishAt: parsePublishAt(publishAt) ?? null } : {}),
+    },
+  });
+  return NextResponse.json({ success: true, folder: updated });
 }
 
 export async function DELETE(

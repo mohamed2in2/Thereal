@@ -1,9 +1,10 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, react/no-unescaped-entities */
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { AdminSidebar } from "@/components/admin/AdminSidebar";
-import { DarkModeToggle } from "@/components/ui/DarkModeToggle";
+import { ClassicAdminShell } from "@/components/admin/ClassicAdminShell";
+import { TeacherCurriculumStudio } from "@/components/admin/teacher/TeacherCurriculumStudio";
 import { useToast } from "@/components/ui/Toast";
 import { TeacherRequests } from "@/components/admin/TeacherRequests";
 import { TeacherFeedback } from "@/components/admin/TeacherFeedback";
@@ -14,7 +15,7 @@ import { TeacherPublicProfile } from "@/components/admin/TeacherPublicProfile";
 import { TeacherExamDashboard } from "@/components/admin/TeacherExamDashboard";
 import { EDUCATIONAL_STAGES, SUBJECTS } from "@/types";
 import {
-  IconMenu, IconPlus, IconTrash, IconFolder, IconVideo, IconFile, IconLink,
+  IconPlus, IconTrash, IconFolder, IconVideo, IconFile, IconLink,
   IconClipboard, IconChevronLeft, IconSettings, IconTag, IconBook, IconUsers,
   IconKey, IconShield, IconClock, IconEye,
 } from "@/components/admin/AdminIcons";
@@ -146,7 +147,6 @@ export default function TeacherDashboardPage() {
   const router = useRouter();
   const { success: toastSuccess, error: toastError } = useToast();
   const [activeSection, setActiveSection] = useState("dashboard");
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [courseTab, setCourseTab] = useState<"content" | "flow" | "settings" | "pricing">("content");
   const [courses, setCourses] = useState<Course[]>([]);
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
@@ -1520,47 +1520,37 @@ export default function TeacherDashboardPage() {
       : SECTION_TITLES[activeSection] ?? "لوحة التحكم";
 
   return (
-    <div className="flex min-h-screen bg-[var(--bg)] text-[var(--ink)]">
-      <AdminSidebar
-        role="teacher"
-        activeSection={activeSection}
-        setActiveSection={(s) => { setActiveSection(s); if (s !== "courses") setSelectedCourse(null); }}
-        onLogout={handleLogout}
-        mobileOpen={sidebarOpen}
-        onMobileOpenChange={setSidebarOpen}
-      />
-
-      <div className="flex-1 min-w-0 flex flex-col">
-        {/* Header */}
-        <header className="sticky top-0 z-[var(--z-sticky)] bg-[var(--surface)] lg:bg-[var(--surface)]/85 lg:backdrop-blur-xl border-b border-[var(--border)] px-4 sm:px-6 py-3 flex items-center gap-3">
-          <button
-            onClick={() => setSidebarOpen(true)}
-            aria-label="فتح القائمة"
-            className="lg:hidden w-9 h-9 rounded-lg flex items-center justify-center text-[var(--ink)] hover:bg-[var(--border)] transition-colors shrink-0"
-          >
-            <IconMenu className="w-5 h-5" />
-          </button>
-
-          <div className="min-w-0 flex-1 flex items-center gap-2">
-            {activeSection === "courses" && selectedCourse && (
-              <button
-                onClick={() => setSelectedCourse(null)}
-                aria-label="رجوع للكورسات"
-                className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-[var(--ink-muted)] hover:text-[var(--ink)] hover:bg-[var(--border)] transition-colors"
-              >
-                <IconChevronLeft className="w-5 h-5 rtl:rotate-180" />
-              </button>
-            )}
-            <h1 className="text-base sm:text-lg font-black text-[var(--ink)] truncate">{headerTitle}</h1>
+    <ClassicAdminShell
+      role="teacher"
+      activeSection={activeSection}
+      setActiveSection={(s) => {
+        setActiveSection(s);
+        if (s !== "courses") setSelectedCourse(null);
+      }}
+      onLogout={handleLogout}
+      headerTitle={headerTitle}
+      headerSubtitle="استوديو المعلم الأكاديمي — منصة Code-UP"
+      onRefresh={() => {
+        fetchCourses();
+      }}
+      refreshing={loading}
+    >
+      <div className="space-y-6">
+        {activeSection === "courses" && selectedCourse && (
+          <div className="flex items-center justify-between p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs mb-4">
+            <button
+              onClick={() => setSelectedCourse(null)}
+              aria-label="رجوع للكورسات"
+              className="px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+            >
+              <IconChevronLeft className="w-4 h-4 rtl:rotate-180" />
+              <span>العودة لجميع الكورسات</span>
+            </button>
+            <h2 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white truncate">
+              {selectedCourse.title}
+            </h2>
           </div>
-
-          <span className="hidden sm:inline-flex items-center gap-1.5 text-xs font-bold bg-sky-500/12 text-sky-500 dark:text-sky-300 px-3 py-1.5 rounded-full">
-            <IconShield className="w-3.5 h-3.5" /> مدرس
-          </span>
-          <DarkModeToggle />
-        </header>
-
-        <main className="flex-1 p-4 sm:p-6 max-w-6xl w-full mx-auto">
+        )}
           {/* ════════ DASHBOARD (analytics overview) ════════ */}
           {activeSection === "dashboard" && (
             <TeacherOverview
@@ -1666,8 +1656,19 @@ export default function TeacherDashboardPage() {
                   ))}
                 </div>
 
-                {/* ── CONTENT TAB ── */}
+                {/* ── CONTENT TAB (Enterprise Curriculum Studio) ── */}
                 {courseTab === "content" && (
+                  <TeacherCurriculumStudio
+                    courseId={selectedCourse.id}
+                    courseTitle={selectedCourse.title}
+                    folders={folders}
+                    onRefreshFolders={async () => {
+                      await fetchFolders();
+                    }}
+                  />
+                )}
+
+                {false && courseTab === "content" && (
                   <div className="space-y-5">
                     {/* Add folder */}
                     <div className={cardPad}>
@@ -3591,8 +3592,7 @@ export default function TeacherDashboardPage() {
           {activeSection === "review" && (
             <LiveReviewPanel notify={notify} />
           )}
-        </main>
-      </div>
+        </div>
 
       <ConfirmDialog
         open={!!confirmState}
@@ -3774,7 +3774,7 @@ export default function TeacherDashboardPage() {
           </div>
         </div>
       )}
-    </div>
+    </ClassicAdminShell>
   );
 }
 

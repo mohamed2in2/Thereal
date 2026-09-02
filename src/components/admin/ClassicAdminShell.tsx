@@ -88,8 +88,8 @@ export function ClassicAdminShell({
     setOpenHubs((prev) => ({ ...prev, [hubId]: !prev[hubId] }));
   };
 
-  // Define Category Hubs for SuperAdmin (Clean Classic Organization)
-  const hubs: NavHub[] = [
+  // Define Category Hubs for SuperAdmin
+  const superadminHubs: NavHub[] = [
     {
       id: "main",
       title: "المركز الرئيسي والرقابة",
@@ -150,8 +150,60 @@ export function ClassicAdminShell({
     },
   ];
 
-  // Mobile Bottom Navigation Anchors (5 direct thumb-accessible hubs)
-  const mobileAnchors = [
+  // Define Category Hubs for Teacher (Enterprise Studio Architecture)
+  const teacherHubs: NavHub[] = [
+    {
+      id: "academic",
+      title: "المركز الأكاديمي والتحليلات",
+      icon: <LayoutDashboard className="w-4 h-4" />,
+      sections: [
+        { id: "dashboard", label: "مؤشرات الأداء والتحليلات", icon: <LayoutDashboard className="w-3.5 h-3.5" /> },
+        { id: "my-page", label: "الملف التعريفي العام للمعلم", icon: <Eye className="w-3.5 h-3.5" /> },
+      ],
+    },
+    {
+      id: "curriculum",
+      title: "استوديو الكورسات والمحاضرات",
+      icon: <Video className="w-4 h-4" />,
+      sections: [
+        { id: "courses", label: "إدارة الكورسات والمحاضرات", badge: "Studio", badgeVariant: "bronze", icon: <Layers className="w-3.5 h-3.5" /> },
+        { id: "create-course", label: "إنشاء كورس ومسار جديد", icon: <UserPlus className="w-3.5 h-3.5" /> },
+      ],
+    },
+    {
+      id: "assessment",
+      title: "التقييم والأنشطة الأكاديمية",
+      icon: <Award className="w-4 h-4" />,
+      sections: [
+        { id: "homework", label: "إدارة الواجبات والملفات", icon: <FileText className="w-3.5 h-3.5" /> },
+        { id: "review", label: "مركز تصحيح الإجابات المباشر", badge: "Live", badgeVariant: "warning", icon: <Activity className="w-3.5 h-3.5" /> },
+        { id: "quiz-results", label: "سجل ونتائج الاختبارات", icon: <Award className="w-3.5 h-3.5" /> },
+        { id: "in-video-responses", label: "إجابات أسئلة الفيديو التفاعلية", icon: <Activity className="w-3.5 h-3.5" /> },
+      ],
+    },
+    {
+      id: "students",
+      title: "الطلاب والاشتراكات والوصول",
+      icon: <Users className="w-4 h-4" />,
+      sections: [
+        { id: "teacher-subscriptions", label: "حجوزات واشتراكات الطلاب", icon: <Wallet className="w-3.5 h-3.5" /> },
+        { id: "codes", label: "توليد أكواد الوصول الذكية", icon: <KeyRound className="w-3.5 h-3.5" /> },
+        { id: "referred-students", label: "الطلاب المُحالون والإحالات", icon: <Users className="w-3.5 h-3.5" /> },
+        { id: "requests", label: "طلبات زيادة المشاهدات", icon: <Eye className="w-3.5 h-3.5" /> },
+        { id: "feedback", label: "ملاحظات وتقييمات الطلاب", icon: <FileText className="w-3.5 h-3.5" /> },
+      ],
+    },
+  ];
+
+  const hubs = role === "teacher" ? teacherHubs : superadminHubs;
+
+  // Mobile Bottom Navigation Anchors
+  const mobileAnchors = role === "teacher" ? [
+    { hubId: "academic", label: "الرئيسية", directId: "dashboard", icon: <LayoutDashboard className="w-5 h-5" /> },
+    { hubId: "curriculum", label: "الكورسات", directId: "courses", icon: <Video className="w-5 h-5" /> },
+    { hubId: "assessment", label: "التقييم", icon: <Award className="w-5 h-5" /> },
+    { hubId: "students", label: "الطلاب", icon: <Users className="w-5 h-5" /> },
+  ] : [
     { hubId: "main", label: "الرئيسية", icon: <LayoutDashboard className="w-5 h-5" /> },
     { hubId: "users", label: "المستخدمين", icon: <Users className="w-5 h-5" /> },
     { hubId: "finance", label: "المالية", icon: <Wallet className="w-5 h-5" /> },

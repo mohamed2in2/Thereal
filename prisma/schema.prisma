@@ -292,6 +292,7 @@ model Folder {
   name               String
   order              Int              @default(0)
   courseId           String
+  color              String?          @default("blue")
   // Scheduled unlock: null = available now; a future date locks the whole folder
   // (and all its videos) until then. Honored in every student content read path.
   publishAt          DateTime?
