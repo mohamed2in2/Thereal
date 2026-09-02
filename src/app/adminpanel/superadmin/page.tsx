@@ -1,8 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { AdminSidebar } from "@/components/admin/AdminSidebar";
-import { DarkModeToggle } from "@/components/ui/DarkModeToggle";
+import { ClassicAdminShell } from "@/components/admin/ClassicAdminShell";
 import { useToast } from "@/components/ui/Toast";
 import { StudentsSection } from "@/components/admin/superadmin/StudentsSection";
 import { TeachersSection } from "@/components/admin/superadmin/TeachersSection";
@@ -24,43 +23,16 @@ import { PlansSection } from "@/components/admin/superadmin/PlansSection";
 import { WhatsAppSection } from "@/components/admin/WhatsAppSection";
 import { SecuritySection } from "@/components/admin/SecuritySection";
 import { VdoCipherSection } from "@/components/admin/superadmin/VdoCipherSection";
-import { IconMenu, IconTrash } from "@/components/admin/AdminIcons";
+import { IconTrash } from "@/components/admin/AdminIcons";
 import dynamic from "next/dynamic";
 
-// Lazy-load AI sections to keep main bundle lean
-const AIOverview = dynamic(() => import("@/components/admin/superadmin/ai/AIOverview"), { ssr: false });
-const AILiveMonitor = dynamic(() => import("@/components/admin/superadmin/ai/AILiveMonitor"), { ssr: false });
-const AIRequests = dynamic(() => import("@/components/admin/superadmin/ai/AIRequests"), { ssr: false });
-const AIPlayground = dynamic(() => import("@/components/admin/superadmin/ai/AIPlayground"), { ssr: false });
-const AIProviders = dynamic(() => import("@/components/admin/superadmin/ai/AIProviders"), { ssr: false });
-const AIGeminiPool = dynamic(() => import("@/components/admin/superadmin/ai/AIGeminiPool"), { ssr: false });
-const AIBudgetCenter = dynamic(() => import("@/components/admin/superadmin/ai/AIBudgetCenter"), { ssr: false });
-const AIPromptLibrary = dynamic(() => import("@/components/admin/superadmin/ai/AIPromptLibrary"), { ssr: false });
-const AIKnowledgeBase = dynamic(() => import("@/components/admin/superadmin/ai/AIKnowledgeBase"), { ssr: false });
-const AIEducationalActions = dynamic(() => import("@/components/admin/superadmin/ai/AIEducationalActions"), { ssr: false });
-const AITools = dynamic(() => import("@/components/admin/superadmin/ai/AITools"), { ssr: false });
-const AIMemoryManager = dynamic(() => import("@/components/admin/superadmin/ai/AIMemoryManager"), { ssr: false });
-const AIStudentAnalytics = dynamic(() => import("@/components/admin/superadmin/ai/AIStudentAnalytics"), { ssr: false });
-const AITeacherAnalytics = dynamic(() => import("@/components/admin/superadmin/ai/AITeacherAnalytics"), { ssr: false });
-const AIParentAnalytics = dynamic(() => import("@/components/admin/superadmin/ai/AIParentAnalytics"), { ssr: false });
-const AIProviderAnalytics = dynamic(() => import("@/components/admin/superadmin/ai/AIProviderAnalytics"), { ssr: false });
-const AICostAnalytics = dynamic(() => import("@/components/admin/superadmin/ai/AICostAnalytics"), { ssr: false });
-const AICacheAnalytics = dynamic(() => import("@/components/admin/superadmin/ai/AICacheAnalytics"), { ssr: false });
-const AIAlertsCenter = dynamic(() => import("@/components/admin/superadmin/ai/AIAlertsCenter"), { ssr: false });
-const AIAuditLogs = dynamic(() => import("@/components/admin/superadmin/ai/AIAuditLogs"), { ssr: false });
-const AIFeatureFlags = dynamic(() => import("@/components/admin/superadmin/ai/AIFeatureFlags"), { ssr: false });
-const AISettings = dynamic(() => import("@/components/admin/superadmin/ai/AISettings"), { ssr: false });
-const AISystemHealth = dynamic(() => import("@/components/admin/superadmin/ai/AISystemHealth"), { ssr: false });
+import { UnifiedAIStudio } from "@/components/admin/superadmin/ai/UnifiedAIStudio";
 const TestersSection = dynamic(
   () => import("@/components/admin/superadmin/TestersSection").then((m) => m.TestersSection),
   { ssr: false }
 );
 
-const ROLE_LABEL: Record<string, string> = {
-  superadmin: "المشرف العام",
-  admin: "مشرف",
-  staff: "موظف",
-};
+
 
 async function readJson<T>(res: Response): Promise<T | null> {
   const text = await res.text();
@@ -171,49 +143,6 @@ interface Teacher {
 }
 
 
-const SECTION_TITLES: Record<string, string> = {
-  overview: "نظرة عامة",
-  whatsapp: "خدمة WhatsApp (Baileys)",
-  plans: "الخطط الدراسية",
-  students: "إدارة المتعلمين",
-  teachers: "إدارة المعلمين",
-  "teacher-referrals": "برامج إحالة المعلمين",
-  create: "إنشاء حساب مدرس",
-  "daily-exams": "امتحانات لوحة الشرف",
-  "leaderboard-prizes": "جوائز لوحة الشرف اليومية (24 ساعة)",
-  "staff-accounts": "المشرفون والموظفون",
-  "vdocipher-accounts": "باقات VdoCipher ومجمع الباندويث (Bandwidth Pool)",
-  "site-text": "نصوص الموقع",
-  "advanced-settings": "الإعدادات المتقدمة",
-  errors: "مراقبة الأخطاء والتحذيرات",
-  "danger-zone": "منطقة الخطر — حذف جماعي",
-  instance: "Instance — لوحة المالك",
-  // AI Section
-  "ai-overview": "AI — نظرة عامة",
-  "ai-live": "AI — المراقبة الحية",
-  "ai-requests": "AI — الطلبات",
-  "ai-playground": "AI — ساحة التجربة",
-  "ai-providers": "AI — مزودي الخدمة",
-  "ai-gemini-pool": "AI — Gemini Pool",
-  "ai-budget": "AI — مركز الميزانية",
-  "ai-prompts": "AI — مكتبة البرومبت",
-  "ai-knowledge": "AI — قاعدة المعرفة",
-  "ai-actions": "AI — الأوامر التعليمية",
-  "ai-tools": "AI — الأدوات",
-  "ai-memory": "AI — إدارة الذاكرة",
-  "ai-student-analytics": "AI — تحليلات الطلاب",
-  "ai-teacher-analytics": "AI — تحليلات المعلمين",
-  "ai-parent-analytics": "AI — تحليلات الأهالي",
-  "ai-provider-analytics": "AI — تحليلات المزودين",
-  "ai-cost-analytics": "AI — تحليلات التكلفة",
-  "ai-cache-analytics": "AI — تحليلات الكاش",
-  "ai-alerts": "AI — مركز التنبيهات",
-  "ai-audit": "AI — سجلات التدقيق",
-  "ai-feature-flags": "AI — أعلام الميزات",
-  "ai-settings": "AI — الإعدادات",
-  "ai-health": "AI — صحة النظام",
-};
-
 export default function SuperadminPage() {
   const router = useRouter();
   const { success: toastSuccess, error: toastError } = useToast();
@@ -222,7 +151,6 @@ export default function SuperadminPage() {
   const [creating, setCreating] = useState(false);
   const [newTeacher, setNewTeacher] = useState({ name: "", password: "" });
   const [activeSection, setActiveSection] = useState("overview");
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [deleteTargetTeacher, setDeleteTargetTeacher] = useState<Teacher | null>(null);
   const [userRole, setUserRole] = useState<"superadmin" | "admin" | "staff">("superadmin");
   const [isOwner, setIsOwner] = useState(false);
@@ -232,6 +160,38 @@ export default function SuperadminPage() {
   const [isMoneyControlOpen, setIsMoneyControlOpen] = useState(false);
   const [isBrutalRefreshing, setIsBrutalRefreshing] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [enteringTeacherId, setEnteringTeacherId] = useState<string | null>(null);
+
+  const handleEnterTeacherPanel = async (teacherId: string, teacherName: string) => {
+    if (!window.confirm(`هل تريد الدخول إلى لوحة تحكم المعلم "${teacherName}" الآن؟`)) {
+      return;
+    }
+    setEnteringTeacherId(teacherId);
+    try {
+      const res = await fetch("/api/admin/superadmin/impersonate", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "teacher",
+          teacherId,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        toastSuccess(`تم تسجيل الدخول كمعلم (${teacherName}) بنجاح! جاري التوجيه...`);
+        if (typeof window !== "undefined") {
+          window.location.assign(data.redirectUrl || "/adminpanel/teacher");
+        }
+      } else {
+        toastError(data?.error || "تعذر الدخول إلى لوحة المعلم");
+        setEnteringTeacherId(null);
+      }
+    } catch {
+      toastError("حدث خطأ أثناء الاتصال بالخادم");
+      setEnteringTeacherId(null);
+    }
+  };
 
   const fetchTeachers = async () => {
     const res = await fetch(`/api/admin/teachers?_t=${Date.now()}`, { credentials: "include" });
@@ -354,72 +314,21 @@ export default function SuperadminPage() {
   };
 
   return (
-    <div className="flex min-h-screen" style={{ background: "var(--bg)", color: "var(--ink)" }}>
-      <AdminSidebar
-        role={userRole}
-        activeSection={activeSection}
-        setActiveSection={setActiveSection}
-        onLogout={handleLogout}
-        isOwner={isOwner}
-        mobileOpen={sidebarOpen}
-        onMobileOpenChange={setSidebarOpen}
-      />
-
-      <div className="flex-1 min-w-0 overflow-auto">
-        {/* Header */}
-        <div
-          className="sticky top-0 z-10 lg:backdrop-blur-xl px-4 sm:px-6 py-3.5 flex items-center gap-3"
-          style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }}
-        >
-          <button
-            onClick={() => setSidebarOpen(true)}
-            aria-label="فتح القائمة"
-            className="lg:hidden w-9 h-9 rounded-lg flex items-center justify-center hover:bg-[var(--border)] transition-colors shrink-0"
-            style={{ color: "var(--ink-2)" }}
-          >
-            <IconMenu className="w-5 h-5" />
-          </button>
-          <h1
-            className="text-base sm:text-xl font-black truncate flex-1"
-            style={{ color: "var(--ink)", fontFamily: "var(--font-head)" }}
-          >
-            {SECTION_TITLES[activeSection] ?? activeSection}
-          </h1>
-          <button
-            onClick={handleBrutalRefresh}
-            disabled={isBrutalRefreshing}
-            title="تحديث شامل: فحص مباشر لبوابات الدفع (Shake-Out / Fawry / محافظ) ومزامنة أحدث الاشتراكات والأموال وقاعدة البيانات فورياً"
-            className="px-3.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer shadow-sm hover:scale-[1.03] active:scale-[0.98] disabled:opacity-60 text-white shrink-0"
-            style={{
-              background: isBrutalRefreshing
-                ? "linear-gradient(135deg, #059669 0%, #047857 100%)"
-                : "linear-gradient(135deg, #10b981 0%, #0d9488 50%, #0284c7 100%)",
-              border: "1px solid rgba(255, 255, 255, 0.2)",
-              boxShadow: "0 2px 10px rgba(16, 185, 129, 0.25)",
-            }}
-          >
-            <span className={`text-sm inline-block ${isBrutalRefreshing ? "animate-spin" : ""}`}>
-              ⚡
-            </span>
-            <span className="hidden sm:inline">
-              {isBrutalRefreshing ? "جارٍ الفحص والمزامنة..." : "تحديث شامل (Brutal Refresh)"}
-            </span>
-            <span className="sm:hidden">
-              {isBrutalRefreshing ? "تحديث..." : "تحديث ⚡"}
-            </span>
-          </button>
-          <span
-            className="hidden sm:inline-flex text-xs px-3 py-1.5 rounded-full font-bold"
-            style={{ background: "var(--gold-soft)", color: "var(--gold-2)" }}
-          >
-            {ROLE_LABEL[userRole]}
-          </span>
-          <DarkModeToggle />
-        </div>
-
-        <div className="p-6">
-          {activeSection === "overview" && (
-            <div dir="rtl" className="space-y-6">
+    <ClassicAdminShell
+      role={userRole}
+      activeSection={activeSection}
+      setActiveSection={setActiveSection}
+      onLogout={handleLogout}
+      isOwner={isOwner}
+      headerTitle="لوحة التحكم التنفيذية"
+      headerSubtitle="المشرف العام — منصة Code-UP"
+      onRefresh={handleBrutalRefresh}
+      refreshing={isBrutalRefreshing}
+      onOpenMoneyControl={() => setIsMoneyControlOpen(true)}
+    >
+      <div className="space-y-6">
+        {activeSection === "overview" && (
+          <div dir="rtl" className="space-y-6">
               {/* KPI Cards (Including Money Control & Platform Profit) */}
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                 {[
@@ -606,6 +515,18 @@ export default function SuperadminPage() {
                             </div>
                             <div className="shrink-0 flex items-center gap-2">
                               <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleEnterTeacherPanel(t.id, t.name);
+                                }}
+                                disabled={enteringTeacherId === t.id}
+                                className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border border-sky-500/30 bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 hover:text-sky-300 shadow-sm"
+                                title={`دخول لوحة تحكم المعلم (${t.name})`}
+                              >
+                                <span>{enteringTeacherId === t.id ? "⏳" : "🚪"}</span>
+                                <span className="hidden sm:inline">{enteringTeacherId === t.id ? "جارٍ الدخول..." : "لوحة المعلم"}</span>
+                              </button>
+                              <button
                                 onClick={(e) => { e.stopPropagation(); setDeleteTargetTeacher({ id: t.id, name: t.name }); }}
                                 className="w-8 h-8 flex items-center justify-center rounded-lg transition-colors cursor-pointer border-none bg-transparent"
                                 style={{ color: "var(--danger)" }}
@@ -626,6 +547,25 @@ export default function SuperadminPage() {
                           {/* Expanded Sections (Reservations + Courses) */}
                           {isExpanded && (
                             <div className="p-4 space-y-4" style={{ background: "var(--bg)", borderTop: "1px solid var(--border)" }}>
+                              {/* Quick Enter Banner for Teacher */}
+                              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-sky-500/10 border border-sky-500/20">
+                                <div className="flex items-center gap-2.5">
+                                  <span className="text-xl">👨‍🏫</span>
+                                  <div>
+                                    <h4 className="text-xs font-bold text-[var(--ink)]">لوحة تحكم المعلم: {t.name}</h4>
+                                    <p className="text-[11px] text-[var(--ink-muted)] mt-0.5">الدخول كالمعلم لإدارة الكورسات، الفيديوهات، باقات الحجز، وأكواد الاشتراكات.</p>
+                                  </div>
+                                </div>
+                                <button
+                                  onClick={() => handleEnterTeacherPanel(t.id, t.name)}
+                                  disabled={enteringTeacherId === t.id}
+                                  className="w-full sm:w-auto px-4 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer shrink-0"
+                                >
+                                  <span>{enteringTeacherId === t.id ? "⏳" : "🚪"}</span>
+                                  <span>{enteringTeacherId === t.id ? "جارٍ الدخول..." : "دخول لوحة المعلم الآن ←"}</span>
+                                </button>
+                              </div>
+
                               {/* 1. Real TeacherPanel Subscriptions */}
                               <div className="rounded-xl overflow-hidden border border-[var(--border)]" style={{ background: "var(--surface)" }}>
                                 <div className="p-3 bg-[var(--surface-2)] border-b border-[var(--border)] flex items-center justify-between">
@@ -700,7 +640,7 @@ export default function SuperadminPage() {
                                                   </div>
                                                 ) : isWallet ? (
                                                   <span
-                                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-black bg-purple-500/15 text-purple-300 border border-purple-500/30"
+                                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-black bg-amber-500/15 text-amber-300 border border-amber-500/30"
                                                     title="خصم مباشر من رصيد المحفظة"
                                                   >
                                                     <span>👛</span>
@@ -913,30 +853,10 @@ export default function SuperadminPage() {
             </AccessGate>
           )}
 
-          {/* ── AI Section Pages ── */}
-          {activeSection === "ai-overview" && <AIOverview />}
-          {activeSection === "ai-live" && <AILiveMonitor />}
-          {activeSection === "ai-requests" && <AIRequests />}
-          {activeSection === "ai-playground" && <AIPlayground />}
-          {activeSection === "ai-providers" && <AIProviders />}
-          {activeSection === "ai-gemini-pool" && <AIGeminiPool />}
-          {activeSection === "ai-budget" && <AIBudgetCenter />}
-          {activeSection === "ai-prompts" && <AIPromptLibrary />}
-          {activeSection === "ai-knowledge" && <AIKnowledgeBase />}
-          {activeSection === "ai-actions" && <AIEducationalActions />}
-          {activeSection === "ai-tools" && <AITools />}
-          {activeSection === "ai-memory" && <AIMemoryManager />}
-          {activeSection === "ai-student-analytics" && <AIStudentAnalytics />}
-          {activeSection === "ai-teacher-analytics" && <AITeacherAnalytics />}
-          {activeSection === "ai-parent-analytics" && <AIParentAnalytics />}
-          {activeSection === "ai-provider-analytics" && <AIProviderAnalytics />}
-          {activeSection === "ai-cost-analytics" && <AICostAnalytics />}
-          {activeSection === "ai-cache-analytics" && <AICacheAnalytics />}
-          {activeSection === "ai-alerts" && <AIAlertsCenter />}
-          {activeSection === "ai-audit" && <AIAuditLogs />}
-          {activeSection === "ai-feature-flags" && <AIFeatureFlags />}
-          {activeSection === "ai-settings" && <AISettings />}
-          {activeSection === "ai-health" && <AISystemHealth />}
+          {/* ── Unified AI Studio Hub ── */}
+          {(activeSection === "ai-studio" || activeSection.startsWith("ai-")) && (
+            <UnifiedAIStudio />
+          )}
 
           {deleteTargetTeacher && (
             <ConfirmActionModal
@@ -956,31 +876,6 @@ export default function SuperadminPage() {
           {activeSection === "teacher-referrals" && <SuperadminReferredStudentsSection />}
 
           {activeSection === "deleted-teachers" && <DeletedTeachersSection userRole={userRole} />}
-
-          {/* ════════ AI SECTIONS ════════ */}
-          {(activeSection === "ai-overview" || activeSection === "ai-control") && <AIOverview />}
-          {activeSection === "ai-live" && <AILiveMonitor />}
-          {activeSection === "ai-requests" && <AIRequests />}
-          {activeSection === "ai-playground" && <AIPlayground />}
-          {activeSection === "ai-providers" && <AIProviders />}
-          {activeSection === "ai-gemini-pool" && <AIGeminiPool />}
-          {activeSection === "ai-budget" && <AIBudgetCenter />}
-          {activeSection === "ai-prompts" && <AIPromptLibrary />}
-          {activeSection === "ai-knowledge" && <AIKnowledgeBase />}
-          {activeSection === "ai-actions" && <AIEducationalActions />}
-          {activeSection === "ai-tools" && <AITools />}
-          {activeSection === "ai-memory" && <AIMemoryManager />}
-          {activeSection === "ai-student-analytics" && <AIStudentAnalytics />}
-          {activeSection === "ai-teacher-analytics" && <AITeacherAnalytics />}
-          {activeSection === "ai-parent-analytics" && <AIParentAnalytics />}
-          {activeSection === "ai-provider-analytics" && <AIProviderAnalytics />}
-          {activeSection === "ai-cost-analytics" && <AICostAnalytics />}
-          {activeSection === "ai-cache-analytics" && <AICacheAnalytics />}
-          {activeSection === "ai-alerts" && <AIAlertsCenter />}
-          {activeSection === "ai-audit" && <AIAuditLogs />}
-          {activeSection === "ai-feature-flags" && <AIFeatureFlags />}
-          {activeSection === "ai-settings" && <AISettings />}
-          {activeSection === "ai-health" && <AISystemHealth />}
 
           {activeSection === "create" && (
             <div className="max-w-md">
@@ -1031,7 +926,6 @@ export default function SuperadminPage() {
               </form>
             </div>
           )}
-        </div>
 
         {/* Money Control & Expenses Manager Modal */}
         <MoneyControlModal
@@ -1040,7 +934,7 @@ export default function SuperadminPage() {
           onUpdated={fetchOverview}
         />
       </div>
-    </div>
+    </ClassicAdminShell>
   );
 }
 

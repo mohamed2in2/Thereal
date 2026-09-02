@@ -125,6 +125,18 @@ export async function POST(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
 
+  const clientIp = req.headers.get("x-forwarded-for")?.split(",")[0] || "127.0.0.1";
+  const { AccessCodeGuard } = await import("@/services/security/AccessCodeGuard");
+
+  const rateCheck = await AccessCodeGuard.verifyRateLimit(clientIp, session.id);
+  if (!rateCheck.allowed) {
+    await AccessCodeGuard.logAttempt({ ip: clientIp, userId: session.id, codeAttempted: "money_code_rate_limited", success: false });
+    return NextResponse.json(
+      { error: `تم تجاوز عدد محاولات الكود المسموح بها. يرجى الانتظار ${rateCheck.lockTimeSeconds} ثانية قبل المحاولة مجدداً.` },
+      { status: 429 }
+    );
+  }
+
   const { code } = await req.json() as { code?: string };
   if (!code?.trim()) return NextResponse.json({ error: "الكود مطلوب" }, { status: 400 });
 
@@ -172,6 +184,8 @@ export async function POST(req: NextRequest) {
       return moneyCode.amount;
     });
 
+    await AccessCodeGuard.logAttempt({ ip: clientIp, userId: session.id, codeAttempted: normalized, success: true });
+
     const { ReferralService } = await import("@/services/referral/ReferralService");
     void ReferralService.qualifyAndRewardReferral(session.id, `code:${normalized}`).catch(() => {});
 
@@ -181,6 +195,8 @@ export async function POST(req: NextRequest) {
       message: `تم إضافة ${creditedAmount} جنيه إلى رصيدك!`,
     });
   } catch (error: any) {
+    await AccessCodeGuard.logAttempt({ ip: clientIp, userId: session.id, codeAttempted: normalized, success: false });
+
     if (error.message === "NOT_FOUND") {
       return NextResponse.json({ error: "الكود غير صحيح" }, { status: 404 });
     }

@@ -122,11 +122,19 @@ export async function POST(req: NextRequest) {
     // Stage pricing override if applicable
     const targetStage = educationalStage || student.educationalStage;
     let stageConfig: any = null;
-    if (profile?.stagePricing && targetStage) {
+    if (profile?.stagePricing) {
       try {
         const parsed = JSON.parse(profile.stagePricing);
-        if (parsed && parsed[targetStage]) {
-          stageConfig = parsed[targetStage];
+        const stageKey =
+          targetStage && parsed[targetStage]
+            ? targetStage
+            : parsed["sec_1"]
+            ? "sec_1"
+            : parsed["sec_2"]
+            ? "sec_2"
+            : Object.keys(parsed)[0];
+        if (stageKey && parsed[stageKey]) {
+          stageConfig = parsed[stageKey];
           const keyMap: Record<string, string> = {
             monthly: "priceMonthly",
             termly: "priceTermly",

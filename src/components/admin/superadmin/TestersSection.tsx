@@ -319,11 +319,11 @@ export function TestersSection() {
   return (
     <div className="space-y-6">
       {/* Header Banner */}
-      <div className="bg-gradient-to-r from-purple-900/40 via-indigo-900/40 to-slate-900/60 border border-purple-500/20 rounded-2xl p-6 relative overflow-hidden backdrop-blur-md">
+      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 border border-slate-700/60 rounded-2xl p-6 relative overflow-hidden backdrop-blur-md">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-3">
-              <span className="p-2.5 rounded-xl bg-purple-500/20 text-purple-300 border border-purple-500/30">
+              <span className="p-2.5 rounded-xl bg-slate-700/50 text-slate-200 border border-slate-600/50">
                 <ShieldAlert className="w-6 h-6" />
               </span>
               <div>
@@ -342,7 +342,7 @@ export function TestersSection() {
 
           <button
             onClick={openCreateModal}
-            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-sm font-semibold rounded-xl transition-all shadow-lg shadow-purple-900/30 shrink-0"
+            className="flex items-center gap-2 px-5 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white text-sm font-semibold rounded-xl transition-all shadow-md shrink-0"
           >
             <Plus className="w-4 h-4" />
             إنشاء حساب فاحص
@@ -350,7 +350,7 @@ export function TestersSection() {
         </div>
 
         {/* Feature Highlights Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6 pt-4 border-t border-purple-500/20 text-xs">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6 pt-4 border-t border-slate-700/60 text-xs">
           <div className="flex items-center gap-2 text-gray-300">
             <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
             <span>غير مرئي لجميع المعلمين 100%</span>
@@ -361,17 +361,17 @@ export function TestersSection() {
           </div>
           <div className="flex items-center gap-2 text-gray-300">
             <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span>تجاوز الدفع بملكية نظيفة</span>
+            <span>تخطي بوابات الدفع بأمان</span>
           </div>
           <div className="flex items-center gap-2 text-gray-300">
             <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span>تشخيص مخصص لمحرك الذكاء الاصطناعي</span>
+            <span>سجلات وتجارب معزولة</span>
           </div>
         </div>
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="flex items-center justify-between gap-4 bg-gray-800/80 p-3 rounded-2xl border border-gray-700/80">
+      {/* Control Bar */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="relative flex-1 max-w-md">
           <Search className="w-4 h-4 absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
@@ -379,7 +379,7 @@ export function TestersSection() {
             placeholder="بحث برقم الهاتف، الاسم، أو الملاحظات..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pr-10 pl-4 py-2 bg-gray-900/80 border border-gray-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+            className="w-full pr-10 pl-4 py-2 bg-gray-900/80 border border-gray-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-slate-500/50"
           />
         </div>
 
@@ -388,7 +388,7 @@ export function TestersSection() {
           title="تحديث البيانات"
           className="p-2.5 bg-gray-900 border border-gray-700 rounded-xl text-gray-300 hover:text-white hover:border-gray-600 transition-colors"
         >
-          <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin text-purple-400" : ""}`} />
+          <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin text-slate-300" : ""}`} />
         </button>
       </div>
 
@@ -396,7 +396,7 @@ export function TestersSection() {
       <div className="bg-gray-800 rounded-2xl border border-gray-700 overflow-hidden shadow-xl">
         {loading ? (
           <div className="p-12 text-center text-gray-400 flex flex-col items-center gap-3">
-            <RefreshCw className="w-6 h-6 animate-spin text-purple-400" />
+            <RefreshCw className="w-6 h-6 animate-spin text-slate-300" />
             <p>جارٍ تحميل حسابات الفحص...</p>
           </div>
         ) : filteredTesters.length === 0 ? (
@@ -409,7 +409,7 @@ export function TestersSection() {
             {!searchQuery && (
               <button
                 onClick={openCreateModal}
-                className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-xl transition-colors"
+                className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white text-sm font-medium rounded-xl transition-colors"
               >
                 <Plus className="w-4 h-4" />
                 إنشاء أول حساب فاحص
@@ -422,7 +422,7 @@ export function TestersSection() {
               <div key={tester.id} className="p-5 hover:bg-gray-750/50 transition-colors flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
                 {/* Account Details */}
                 <div className="flex items-start gap-4 min-w-0">
-                  <div className="w-12 h-12 rounded-xl bg-purple-600/20 border border-purple-500/30 flex items-center justify-center text-purple-300 font-bold text-lg shrink-0">
+                  <div className="w-12 h-12 rounded-xl bg-slate-700/50 border border-slate-600/50 flex items-center justify-center text-slate-200 font-bold text-lg shrink-0">
                     QA
                   </div>
 

@@ -46,11 +46,11 @@ export async function GET() {
         },
       });
     } else {
-      // Ensure defaults for missing base prices
+      // Ensure defaults only for newly initialized profiles without any pricing configuration
       const updates: Record<string, any> = {};
-      if (profile.priceMonthly == null) updates.priceMonthly = 180;
-      if (profile.priceTermly == null) updates.priceTermly = 750;
-      if (profile.priceYearly == null) updates.priceYearly = 1200;
+      if (profile.priceMonthly == null && !profile.stagePricing) updates.priceMonthly = 180;
+      if (profile.priceTermly == null && !profile.stagePricing) updates.priceTermly = 750;
+      if (profile.priceYearly == null && !profile.stagePricing) updates.priceYearly = 1200;
       if (profile.enableLanguagesTrack == null) updates.enableLanguagesTrack = true;
       if (profile.priceLanguagesMonthly == null) updates.priceLanguagesMonthly = 0;
       if (profile.priceLanguagesTermly == null) updates.priceLanguagesTermly = 0;
@@ -96,6 +96,25 @@ export async function PUT(req: NextRequest) {
       if (k in body) data[k] = body[k];
     }
     if (typeof body.isPublished === "boolean") data.isPublished = body.isPublished;
+
+    // Synchronize root price columns from stagePricing if not explicitly provided
+    if (typeof body.stagePricing === "string" && body.stagePricing.trim()) {
+      try {
+        const parsedMap = JSON.parse(body.stagePricing);
+        const firstStage = parsedMap["sec_1"] || parsedMap["sec_2"] || Object.values(parsedMap)[0];
+        if (firstStage && typeof firstStage === "object") {
+          if (typeof firstStage.priceMonthly === "number" && !("priceMonthly" in body)) {
+            data.priceMonthly = firstStage.priceMonthly;
+          }
+          if (typeof firstStage.priceTermly === "number" && !("priceTermly" in body)) {
+            data.priceTermly = firstStage.priceTermly;
+          }
+          if (typeof firstStage.priceYearly === "number" && !("priceYearly" in body)) {
+            data.priceYearly = firstStage.priceYearly;
+          }
+        }
+      } catch {}
+    }
 
     if (typeof body.slug === "string" && body.slug.trim()) {
       const s = slugify(body.slug);

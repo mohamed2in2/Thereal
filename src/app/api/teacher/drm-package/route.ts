@@ -5,6 +5,7 @@ import path from "path";
 import crypto from "crypto";
 import { spawnSync } from "child_process";
 import { prisma } from "@/lib/prisma";
+import { verifyDrmPassword } from "@/lib/admin-auth";
 
 const UPLOADS_DIR = path.resolve(process.cwd(), "uploads", "videos");
 const DRM_OUTPUT_DIR = path.resolve(process.cwd(), "uploads", "drm");
@@ -44,6 +45,11 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json().catch(() => ({}));
+    const drmPassword = String(body.drmPassword || body.password || "").trim();
+    if (!verifyDrmPassword(drmPassword)) {
+      return NextResponse.json({ error: "كلمة مرور حماية DRM غير صحيحة أو مطلوبة للتشفير" }, { status: 403 });
+    }
+
     const rawVideoId = String(body.videoId || body.assetId || "").trim();
     if (!rawVideoId) {
       return NextResponse.json({ error: "معرّف الفيديو (videoId) مطلوب للتشفير" }, { status: 400 });

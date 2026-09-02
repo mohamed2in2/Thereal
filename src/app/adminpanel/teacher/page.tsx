@@ -577,10 +577,11 @@ export default function TeacherDashboardPage() {
         if (newVideo.videoProvider === "axinom") {
           setNativeStatus("جاري تشفير الفيديو عتادياً بنظام CENC Widevine + PlayReady...");
           try {
+            const currentDrmPass = drmVerifiedPassword || (typeof window !== "undefined" ? sessionStorage.getItem("drm_verified_pass") || "" : "");
             const packRes = await fetch("/api/teacher/drm-package", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ videoId: uploadedVideoId }),
+              body: JSON.stringify({ videoId: uploadedVideoId, drmPassword: currentDrmPass }),
             });
             const packData = await packRes.json();
             if (packRes.ok && packData.success && packData.assetId) {

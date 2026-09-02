@@ -32,6 +32,36 @@ export function TeachersSection({ userRole = "superadmin" }: { userRole?: string
   const [editName, setEditName] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [togglingPromo, setTogglingPromo] = useState<string | null>(null);
+  const [enteringTeacherId, setEnteringTeacherId] = useState<string | null>(null);
+
+  const handleEnterTeacherPanel = async (teacherId: string, teacherName: string) => {
+    if (!window.confirm(`هل تريد الدخول إلى لوحة تحكم المعلم "${teacherName}" الآن؟`)) {
+      return;
+    }
+    setEnteringTeacherId(teacherId);
+    try {
+      const res = await fetch("/api/admin/superadmin/impersonate", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "teacher",
+          teacherId,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        toastSuccess(`تم تسجيل الدخول كمعلم (${teacherName}) بنجاح! جاري التوجيه...`);
+        window.location.href = data.redirectUrl || "/adminpanel/teacher";
+      } else {
+        toastError(data.error || "تعذر الدخول إلى لوحة المعلم");
+        setEnteringTeacherId(null);
+      }
+    } catch {
+      toastError("حدث خطأ أثناء الاتصال بالخادم");
+      setEnteringTeacherId(null);
+    }
+  };
 
   const togglePromoProgram = async (t: Teacher) => {
     setTogglingPromo(t.id);
@@ -174,6 +204,15 @@ export function TeachersSection({ userRole = "superadmin" }: { userRole?: string
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => handleEnterTeacherPanel(t.id, t.name)}
+                      disabled={enteringTeacherId === t.id}
+                      className="px-3 py-1.5 text-xs bg-sky-500/15 hover:bg-sky-500/25 text-sky-400 hover:text-sky-300 border border-sky-500/30 rounded-lg transition-colors font-bold flex items-center gap-1.5 cursor-pointer shadow-sm"
+                      title={`دخول لوحة تحكم المعلم (${t.name})`}
+                    >
+                      <span>{enteringTeacherId === t.id ? "⏳" : "🚪"}</span>
+                      <span>{enteringTeacherId === t.id ? "جارٍ الدخول..." : "لوحة المعلم"}</span>
+                    </button>
                     {userRole === "superadmin" && (
                       <button
                         onClick={() => togglePromoProgram(t)}

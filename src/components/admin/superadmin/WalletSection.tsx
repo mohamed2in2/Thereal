@@ -52,6 +52,7 @@ export function WalletSection() {
   const [count,     setCount]     = useState("1");
   const [prefix,    setPrefix]    = useState("CODEUP");
   const [expiresAt, setExpiresAt] = useState("");
+  const [moneyActionPassword, setMoneyActionPassword] = useState("");
   const [generating, setGenerating] = useState(false);
   const [generated,  setGenerated]  = useState<string[]>([]);
   const [allCodes,   setAllCodes]   = useState<MoneyCode[]>([]);
@@ -108,12 +109,19 @@ export function WalletSection() {
     const cnt = parseInt(count);
     if (!amt || amt <= 0) return toastError("أدخل مبلغاً صحيحاً");
     if (!cnt || cnt < 1 || cnt > 100) return toastError("العدد يجب بين 1 و 100");
+    if (!moneyActionPassword.trim()) return toastError("أدخل كلمة مرور إجراءات المشرف أولاً");
 
     setGenerating(true);
     const res = await fetch("/api/admin/money-codes", {
       method: "POST", credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ amount: amt, count: cnt, prefix: prefix.trim() || "CODEUP", expiresAt: expiresAt || undefined }),
+      body: JSON.stringify({
+        amount: amt,
+        count: cnt,
+        prefix: prefix.trim() || "CODEUP",
+        expiresAt: expiresAt || undefined,
+        actionPassword: moneyActionPassword.trim()
+      }),
     });
     const data = await res.json().catch(() => ({}));
     setGenerating(false);
@@ -411,6 +419,11 @@ export function WalletSection() {
                 <label className="block text-sm font-semibold mb-2" style={{ color: "var(--ink-2)" }}>تاريخ الانتهاء (اختياري)</label>
                 <input type="datetime-local" value={expiresAt} onChange={e => setExpiresAt(e.target.value)}
                   dir="ltr" className={input} style={inputStyle} />
+              </div>
+              <div style={{ gridColumn: "1 / -1" }}>
+                <label className="block text-sm font-semibold mb-2" style={{ color: "var(--ink-2)" }}>كلمة مرور إجراءات المشرف *</label>
+                <input type="password" required value={moneyActionPassword} onChange={e => setMoneyActionPassword(e.target.value)}
+                  placeholder="أدخل كلمة مرور إجراءات المشرف" dir="ltr" className={input} style={inputStyle} />
               </div>
               <div style={{ gridColumn: "1 / -1" }}>
                 <button type="submit" disabled={generating}

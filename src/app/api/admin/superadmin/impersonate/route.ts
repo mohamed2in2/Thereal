@@ -4,23 +4,24 @@ import { prisma } from "@/lib/prisma";
 import { verifyRoleActionPassword, logAdminAction } from "@/lib/admin-auth";
 import { normalizeEgyptPhone } from "@/lib/phone";
 
-async function requireOwner() {
+async function requireSuperadmin() {
   const session = await getSession();
-  if (!session || session.role !== "superadmin" || !session.isOwner) return null;
+  if (!session || session.role !== "superadmin") return null;
   return session;
 }
 
 export async function POST(req: NextRequest) {
-  const session = await requireOwner();
+  const session = await requireSuperadmin();
   if (!session) {
-    return NextResponse.json({ error: "غير مصرح — مخصص للمالك فقط" }, { status: 403 });
+    return NextResponse.json({ error: "غير مصرح — مخصص للمشرفين فقط" }, { status: 403 });
   }
 
   try {
     const body = (await req.json().catch(() => ({}))) as {
-      action?: "search" | "impersonate" | "login";
+      action?: "search" | "impersonate" | "login" | "teacher" | "teacher_impersonate";
       phone?: string;
       studentId?: string;
+      teacherId?: string;
       actionPassword?: string;
     };
 
@@ -164,10 +165,78 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // ── 3. Impersonate / Enter Teacher Account ──
+    if (action === "teacher" || action === "teacher_impersonate" || body.teacherId) {
+      if (!body.actionPassword) {
+        return NextResponse.json(
+          { error: "أدخل كلمة مرور إجراءات المشرف أولاً" },
+          { status: 400 }
+        );
+      }
+      if (!verifyRoleActionPassword(session.role, body.actionPassword)) {
+        return NextResponse.json(
+          { error: "كلمة مرور المشرف غير صحيحة" },
+          { status: 401 }
+        );
+      }
+
+      const teacherIdInput = (body.teacherId ?? "").trim();
+      if (!teacherIdInput) {
+        return NextResponse.json({ error: "معرف المعلم مطلوب" }, { status: 400 });
+      }
+
+      const teacher = await prisma.user.findFirst({
+        where: { id: teacherIdInput, role: "teacher", isDeleted: false },
+      });
+
+      if (!teacher) {
+        return NextResponse.json({ error: "حساب المعلم غير موجود أو تم حذفه" }, { status: 404 });
+      }
+
+      // Generate a legitimate session token for this teacher
+      const token = await signToken({
+        id: teacher.id,
+        email: teacher.email,
+        name: teacher.name,
+        role: "teacher",
+        accountMode: teacher.accountMode || "NORMAL",
+        isOwner: false,
+        tokenVersion: teacher.tokenVersion,
+      });
+
+      // Set cookie in browser
+      await setAuthCookie(token);
+
+      // Log the impersonation action in the activity log
+      await logAdminAction({
+        adminId: session.id,
+        adminName: session.name,
+        action: "TEACHER_IMPERSONATE" as any,
+        targetType: "teacher",
+        targetId: teacher.id,
+        targetName: `${teacher.name} (${teacher.email})`,
+        metadata: {
+          adminEmail: session.email,
+          teacherEmail: teacher.email,
+          timestamp: new Date().toISOString(),
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        redirectUrl: "/adminpanel/teacher",
+        teacher: {
+          id: teacher.id,
+          name: teacher.name,
+          email: teacher.email,
+        },
+      });
+    }
+
     return NextResponse.json({ error: "إجراء غير معروف" }, { status: 400 });
   } catch (error) {
     console.error("Impersonation error:", error);
     const detail = error instanceof Error ? error.message : "خطأ غير متوقع";
-    return NextResponse.json({ error: `تعذر الدخول لحساب الطالب: ${detail}` }, { status: 500 });
+    return NextResponse.json({ error: `تعذر الدخول للحساب: ${detail}` }, { status: 500 });
   }
 }

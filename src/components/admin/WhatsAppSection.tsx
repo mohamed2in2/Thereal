@@ -371,7 +371,7 @@ export function WhatsAppSection() {
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-10 h-10 rounded-xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-xl">
+                    <div className="w-10 h-10 rounded-xl bg-sky-500/15 border border-sky-500/30 flex items-center justify-center text-xl">
                       🔁
                     </div>
                     <div>
@@ -381,7 +381,7 @@ export function WhatsAppSection() {
                   </div>
                   <span className={`text-xs px-2.5 py-1 rounded-full font-bold border flex items-center gap-1.5 ${
                     fallbackBaileys?.connected
-                      ? "bg-purple-500/15 border-purple-500/30 text-purple-400"
+                      ? "bg-sky-500/15 border-sky-500/30 text-sky-400"
                       : fallbackBaileys?.state === "PAIRING"
                       ? "bg-amber-500/15 border-amber-500/30 text-amber-400"
                       : "bg-slate-800 border-slate-700 text-slate-400"
@@ -391,8 +391,8 @@ export function WhatsAppSection() {
                 </div>
 
                 {/* Fallback Explanatory Info */}
-                <div className="bg-purple-500/5 p-3 rounded-xl border border-purple-500/20 text-xs space-y-1.5 text-slate-300">
-                  <p className="text-[11px] leading-relaxed text-purple-200">
+                <div className="bg-sky-500/5 p-3 rounded-xl border border-sky-500/20 text-xs space-y-1.5 text-slate-300">
+                  <p className="text-[11px] leading-relaxed text-sky-200">
                     💡 يمكنك إضافة رقم واتساب ثانٍ ليعمل كـ Fallback تلقائي. إذا انقطع الرقم الأساسي، يتم الإرسال فوراً من هذا الرقم بدون توقف الخدمة.
                   </p>
                 </div>
@@ -402,15 +402,15 @@ export function WhatsAppSection() {
                   <div className="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800 space-y-2.5">
                     {fallbackBaileys?.state === "PAIRING" && fallbackBaileys?.qrCodeDataUrl ? (
                       <>
-                        <div className="flex items-center gap-1.5 text-xs font-bold text-purple-400">
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-sky-400">
                           <span className="relative flex h-2 w-2">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75" />
-                            <span className="relative inline-flex rounded-full h-2 w-2 bg-purple-500" />
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75" />
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-sky-500" />
                           </span>
                           📱 QR الرقم الاحتياطي جاهز — امسح الآن
                         </div>
                         <div className="flex justify-center">
-                          <div className="bg-white p-2 rounded-xl shadow-lg shadow-purple-500/10">
+                          <div className="bg-white p-2 rounded-xl shadow-lg shadow-sky-500/10">
                             <img
                               src={fallbackBaileys.qrCodeDataUrl}
                               alt="WhatsApp Fallback QR Code"
@@ -424,12 +424,12 @@ export function WhatsAppSection() {
                       </>
                     ) : fallbackBaileys?.state === "CONNECTING" ? (
                       <div className="flex items-center justify-center gap-2 py-4">
-                        <div className="w-5 h-5 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
-                        <span className="text-xs font-bold text-purple-400">⏳ جاري الاتصال بالرقم الاحتياطي...</span>
+                        <div className="w-5 h-5 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
+                        <span className="text-xs font-bold text-sky-400">⏳ جاري الاتصال بالرقم الاحتياطي...</span>
                       </div>
                     ) : (
                       <div className="flex flex-col items-center gap-2 py-3 text-center">
-                        <div className="w-10 h-10 rounded-full bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-lg">
+                        <div className="w-10 h-10 rounded-full bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-lg">
                           ➕
                         </div>
                         <p className="text-xs font-bold text-slate-300">الرقم الاحتياطي غير مفعّل</p>
@@ -441,10 +441,10 @@ export function WhatsAppSection() {
 
                 {/* Connected User Info for Fallback */}
                 {fallbackBaileys?.connected && fallbackBaileys?.user && (
-                  <div className="bg-purple-500/10 p-2.5 rounded-xl border border-purple-500/30 flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center text-base">🔁</div>
+                  <div className="bg-sky-500/10 p-2.5 rounded-xl border border-sky-500/30 flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-full bg-sky-500/20 flex items-center justify-center text-base">🔁</div>
                     <div className="overflow-hidden">
-                      <p className="text-xs font-bold text-purple-400">متصل (الرقم الاحتياطي)</p>
+                      <p className="text-xs font-bold text-sky-400">متصل (الرقم الاحتياطي)</p>
                       <p className="text-[11px] text-slate-300 font-mono dir-ltr truncate">
                         {fallbackBaileys.user.phone || fallbackBaileys.user.name || fallbackBaileys.user.jid}
                       </p>
@@ -457,7 +457,7 @@ export function WhatsAppSection() {
               <div className="flex items-center gap-2 pt-2 border-t border-slate-800/80">
                 <button
                   onClick={() => handleAction("fallback-reconnect")}
-                  className="flex-1 py-2 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 text-xs font-bold border border-purple-500/30 transition-all cursor-pointer flex items-center justify-center gap-1"
+                  className="flex-1 py-2 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 text-xs font-bold border border-sky-500/30 transition-all cursor-pointer flex items-center justify-center gap-1"
                 >
                   🔄 {fallbackBaileys?.connected ? "إعادة اتصال الاحتياطي" : "ربط رقم احتياطي (QR)"}
                 </button>
@@ -524,7 +524,7 @@ export function WhatsAppSection() {
                   </div>
                   <div className="bg-slate-950/60 p-2 rounded-xl border border-slate-800/80 text-center">
                     <p className="text-[10px] text-slate-400">Marketing</p>
-                    <p className="text-sm font-bold text-purple-400 mt-0.5">{daily?.officialApi?.marketingCount || 0}</p>
+                    <p className="text-sm font-bold text-sky-400 mt-0.5">{daily?.officialApi?.marketingCount || 0}</p>
                   </div>
                 </div>
 

@@ -43,7 +43,7 @@ export function VideoGuard({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ type, videoId, details }),
         });
-      } catch (e) {
+      } catch {
         // Silent catch for security endpoint errors
       }
 
@@ -69,32 +69,42 @@ export function VideoGuard({
   // 1. DevTools Detection Mechanisms
   useEffect(() => {
     if (disabled) return;
-    let checkInterval: NodeJS.Timeout;
 
     const checkDevTools = () => {
-      // Threshold check for DevTools dock
-      const widthThreshold = window.outerWidth - window.innerWidth > 160;
-      const heightThreshold = window.outerHeight - window.innerHeight > 160;
+      // Tablets and mobile devices (like Ministry tablets, iPads, Android) DO NOT have dockable DevTools.
+      // Furthermore, window.outerHeight includes Android system bars (status bar + navigation bar + browser tabs),
+      // making outerHeight - innerHeight easily exceed 160px naturally without any DevTools open.
+      const isTouchOrMobile =
+        typeof window !== "undefined" &&
+        (navigator.maxTouchPoints > 0 ||
+          /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
+
+      if (isTouchOrMobile) {
+        return;
+      }
+
+      // Threshold check for DevTools dock (Desktop only, generous threshold for browser sidebars)
+      const widthThreshold = window.outerWidth - window.innerWidth > 240;
+      const heightThreshold = window.outerHeight - window.innerHeight > 240;
 
       if (widthThreshold || heightThreshold) {
         triggerViolationModal("DEVTOOLS", "DevTools window size threshold exceeded");
         return;
       }
 
-      // Timing Trap via Debugger
+      // Timing Trap via Debugger (Desktop only, safe threshold for CPU stalls)
       const startTime = Date.now();
-      // eslint-disable-next-line no-debugger
       debugger;
       const endTime = Date.now();
 
-      if (endTime - startTime > 120) {
+      if (endTime - startTime > 200) {
         triggerViolationModal("DEVTOOLS", "Debugger breakpoint triggered");
       }
     };
 
-    checkInterval = setInterval(checkDevTools, 1500);
+    const checkInterval = setInterval(checkDevTools, 1500);
     return () => clearInterval(checkInterval);
-  }, [triggerViolationModal]);
+  }, [triggerViolationModal, disabled]);
 
   // Helper to pause all video playback immediately upon focus loss or capture attempt
   const pauseAllVideos = useCallback(() => {
@@ -182,11 +192,14 @@ export function VideoGuard({
     };
   }, [triggerViolationModal, pauseAllVideos, disabled]);
 
-  // 3. Right Click Context Menu Blocker
+  // 3. Right Click Context Menu Blocker (ignore touch devices to prevent long-press false positives)
   const handleContextMenu = (e: React.MouseEvent) => {
     if (disabled) return;
     e.preventDefault();
-    void reportViolation("CONTEXT_MENU", "Right click attempted");
+    const isTouch = typeof navigator !== "undefined" && navigator.maxTouchPoints > 0;
+    if (!isTouch) {
+      void reportViolation("CONTEXT_MENU", "Right click attempted");
+    }
   };
 
   // 4. Tab Visibility Monitoring (Pause and protect when tab is genuinely backgrounded)

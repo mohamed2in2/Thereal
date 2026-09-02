@@ -89,9 +89,9 @@ export function TeacherPublicProfile() {
     const stageConfig = parsedMap[stage] || {};
     return {
       bookingEnabled: typeof stageConfig.bookingEnabled === "boolean" ? stageConfig.bookingEnabled : true,
-      priceMonthly: typeof stageConfig.priceMonthly === "number" ? stageConfig.priceMonthly : 180,
-      priceTermly: typeof stageConfig.priceTermly === "number" ? stageConfig.priceTermly : 750,
-      priceYearly: typeof stageConfig.priceYearly === "number" ? stageConfig.priceYearly : 1200,
+      priceMonthly: typeof stageConfig.priceMonthly === "number" ? stageConfig.priceMonthly : (p?.priceMonthly ?? null),
+      priceTermly: typeof stageConfig.priceTermly === "number" ? stageConfig.priceTermly : (p?.priceTermly ?? null),
+      priceYearly: typeof stageConfig.priceYearly === "number" ? stageConfig.priceYearly : (p?.priceYearly ?? null),
       priceLanguagesMonthly: typeof stageConfig.priceLanguagesMonthly === "number" ? stageConfig.priceLanguagesMonthly : (p?.priceLanguagesMonthly ?? 0),
       priceLanguagesTermly: typeof stageConfig.priceLanguagesTermly === "number" ? stageConfig.priceLanguagesTermly : (p?.priceLanguagesTermly ?? 0),
       priceLanguagesYearly: typeof stageConfig.priceLanguagesYearly === "number" ? stageConfig.priceLanguagesYearly : (p?.priceLanguagesYearly ?? 0),
@@ -116,8 +116,20 @@ export function TeacherPublicProfile() {
       [field]: val,
     };
 
+    // Synchronize root price columns with sec_1 or current active stage
+    const syncUpdates: Partial<Profile> = {};
+    if (activeStage === "sec_1" || p.priceMonthly == null) {
+      if (field === "priceMonthly") syncUpdates.priceMonthly = val;
+      if (field === "priceTermly") syncUpdates.priceTermly = val;
+      if (field === "priceYearly") syncUpdates.priceYearly = val;
+      if (field === "priceLanguagesMonthly") syncUpdates.priceLanguagesMonthly = val;
+      if (field === "priceLanguagesTermly") syncUpdates.priceLanguagesTermly = val;
+      if (field === "priceLanguagesYearly") syncUpdates.priceLanguagesYearly = val;
+    }
+
     setP({
       ...p,
+      ...syncUpdates,
       stagePricing: JSON.stringify(parsedMap),
     });
   };
@@ -386,9 +398,9 @@ export function TeacherPublicProfile() {
           const currentP = getStagePricing(activeStage);
           const stageName = activeStage === "sec_1" ? "أولى بكالوريا" : "ثانية بكالوريا";
           
-          const monthlyAr = currentP.priceMonthly ?? 180;
-          const termlyAr = currentP.priceTermly ?? 750;
-          const yearlyAr = currentP.priceYearly ?? 1200;
+          const monthlyAr = currentP.priceMonthly ?? (p?.priceMonthly ?? 180);
+          const termlyAr = currentP.priceTermly ?? (p?.priceTermly ?? 750);
+          const yearlyAr = currentP.priceYearly ?? (p?.priceYearly ?? 1200);
 
           const langMonthly = currentP.priceLanguagesMonthly ?? 0;
           const langTermly = currentP.priceLanguagesTermly ?? 0;
@@ -507,7 +519,7 @@ export function TeacherPublicProfile() {
                   </div>
                 </h4>
                 <div>
-                  <label className={label}>السعر المباشر للمسار العربي (جنيه - افتراضي 180ج)</label>
+                  <label className={label}>السعر المباشر للمسار العربي (جنيه مصري)</label>
                   <input
                     type="number"
                     min="0"
@@ -515,7 +527,7 @@ export function TeacherPublicProfile() {
                     className={input}
                     value={currentP.priceMonthly ?? ""}
                     onChange={(e) => updateStageField("priceMonthly", e.target.value ? Number(e.target.value) : null)}
-                    placeholder="180"
+                    placeholder="السعر بالجنيه"
                   />
                 </div>
               </div>
@@ -534,7 +546,7 @@ export function TeacherPublicProfile() {
                   </div>
                 </h4>
                 <div>
-                  <label className={label}>السعر المباشر للمسار العربي (جنيه - افتراضي 750ج)</label>
+                  <label className={label}>السعر المباشر للمسار العربي (جنيه مصري)</label>
                   <input
                     type="number"
                     min="0"
@@ -542,7 +554,7 @@ export function TeacherPublicProfile() {
                     className={input}
                     value={currentP.priceTermly ?? ""}
                     onChange={(e) => updateStageField("priceTermly", e.target.value ? Number(e.target.value) : null)}
-                    placeholder="750"
+                    placeholder="السعر بالجنيه"
                   />
                 </div>
               </div>
@@ -561,7 +573,7 @@ export function TeacherPublicProfile() {
                   </div>
                 </h4>
                 <div>
-                  <label className={label}>السعر المباشر للمسار العربي (جنيه - افتراضي 1200ج)</label>
+                  <label className={label}>السعر المباشر للمسار العربي (جنيه مصري)</label>
                   <input
                     type="number"
                     min="0"
@@ -569,7 +581,7 @@ export function TeacherPublicProfile() {
                     className={input}
                     value={currentP.priceYearly ?? ""}
                     onChange={(e) => updateStageField("priceYearly", e.target.value ? Number(e.target.value) : null)}
-                    placeholder="1200"
+                    placeholder="السعر بالجنيه"
                   />
                 </div>
               </div>

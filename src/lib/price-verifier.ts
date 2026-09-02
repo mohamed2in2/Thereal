@@ -107,12 +107,25 @@ export async function verifyAuthoritativePrice(params: {
     if (profile.stagePricing) {
       try {
         const parsedMap = JSON.parse(profile.stagePricing);
-        const checkStage = grade || studentProfileStage;
-        if (parsedMap && checkStage && parsedMap[checkStage]) {
-          const stageConfig = parsedMap[checkStage];
+        // Resolve target stage key: student profile stage -> request param stage -> sec_1 -> first available key
+        let matchedStageKey = grade && parsedMap[grade] ? grade : undefined;
+        if (!matchedStageKey && params.grade && parsedMap[params.grade]) {
+          matchedStageKey = params.grade;
+        }
+        if (!matchedStageKey) {
+          if (parsedMap["sec_1"]) matchedStageKey = "sec_1";
+          else if (parsedMap["sec_2"]) matchedStageKey = "sec_2";
+          else {
+            const keys = Object.keys(parsedMap);
+            if (keys.length > 0) matchedStageKey = keys[0];
+          }
+        }
+
+        if (matchedStageKey && parsedMap[matchedStageKey]) {
+          const stageConfig = parsedMap[matchedStageKey];
           if (stageConfig.bookingEnabled === false) {
-            // If the user profile stage is closed but the client explicitly requested a stage that is open, switch to it
-            if (params.grade && params.grade !== checkStage && parsedMap[params.grade]?.bookingEnabled !== false) {
+            // If the user profile stage is closed but the client explicitly requested an open stage, switch to it
+            if (params.grade && params.grade !== matchedStageKey && parsedMap[params.grade]?.bookingEnabled !== false) {
               grade = params.grade;
               const requestedConfig = parsedMap[params.grade];
               const keyMap: Record<string, string> = {
@@ -128,7 +141,7 @@ export async function verifyAuthoritativePrice(params: {
               return {
                 valid: false,
                 expectedPrice: 0,
-                itemName: `اشتراك المعلم (${checkStage})`,
+                itemName: `اشتراك المعلم (${matchedStageKey})`,
                 error: "عذراً، الحجز والاشتراك مغلق حالياً لهذه المرحلة الدراسية من قِبل المعلم",
               };
             }
@@ -164,11 +177,19 @@ export async function verifyAuthoritativePrice(params: {
       let langTermly = profile.priceLanguagesTermly ?? 0;
       let langYearly = profile.priceLanguagesYearly ?? 0;
 
-      if (profile.stagePricing && grade) {
+      if (profile.stagePricing) {
         try {
           const parsedMap = JSON.parse(profile.stagePricing);
-          if (parsedMap && parsedMap[grade]) {
-            const g = parsedMap[grade];
+          const stageKey =
+            grade && parsedMap[grade]
+              ? grade
+              : params.grade && parsedMap[params.grade]
+              ? params.grade
+              : parsedMap["sec_1"]
+              ? "sec_1"
+              : Object.keys(parsedMap)[0];
+          if (stageKey && parsedMap[stageKey]) {
+            const g = parsedMap[stageKey];
             if (typeof g.priceLanguagesMonthly === "number") langMonthly = g.priceLanguagesMonthly;
             if (typeof g.priceLanguagesTermly === "number") langTermly = g.priceLanguagesTermly;
             if (typeof g.priceLanguagesYearly === "number") langYearly = g.priceLanguagesYearly;

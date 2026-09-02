@@ -165,24 +165,32 @@ export function BookingButton({
     priceLanguagesYearly: priceLanguagesYearly ?? 0,
   };
 
-  if (parsedStageMap && parsedStageMap[studentGrade]) {
-    const g = parsedStageMap[studentGrade];
+  const matchedStageKey = parsedStageMap[studentGrade]
+    ? studentGrade
+    : parsedStageMap["sec_1"]
+    ? "sec_1"
+    : parsedStageMap["sec_2"]
+    ? "sec_2"
+    : Object.keys(parsedStageMap)[0];
+
+  if (matchedStageKey && parsedStageMap[matchedStageKey]) {
+    const g = parsedStageMap[matchedStageKey];
     stageConfig = {
       bookingEnabled: typeof g.bookingEnabled === "boolean" ? g.bookingEnabled : true,
-      priceMonthly: g.priceMonthly ?? priceMonthly ?? 180,
-      priceTermly: g.priceTermly ?? priceTermly ?? 750,
-      priceYearly: g.priceYearly ?? priceYearly ?? 1200,
-      priceLanguagesMonthly: g.priceLanguagesMonthly ?? priceLanguagesMonthly ?? 0,
-      priceLanguagesTermly: g.priceLanguagesTermly ?? priceLanguagesTermly ?? 0,
-      priceLanguagesYearly: g.priceLanguagesYearly ?? priceLanguagesYearly ?? 0,
+      priceMonthly: typeof g.priceMonthly === "number" && g.priceMonthly > 0 ? g.priceMonthly : (priceMonthly ?? 180),
+      priceTermly: typeof g.priceTermly === "number" && g.priceTermly > 0 ? g.priceTermly : (priceTermly ?? 750),
+      priceYearly: typeof g.priceYearly === "number" && g.priceYearly > 0 ? g.priceYearly : (priceYearly ?? 1200),
+      priceLanguagesMonthly: typeof g.priceLanguagesMonthly === "number" ? g.priceLanguagesMonthly : (priceLanguagesMonthly ?? 0),
+      priceLanguagesTermly: typeof g.priceLanguagesTermly === "number" ? g.priceLanguagesTermly : (priceLanguagesTermly ?? 0),
+      priceLanguagesYearly: typeof g.priceLanguagesYearly === "number" ? g.priceLanguagesYearly : (priceLanguagesYearly ?? 0),
     };
   }
 
   const isCurrentStageDisabled = stageConfig.bookingEnabled === false;
 
-  const baseMonthly = stageConfig.priceMonthly > 0 ? stageConfig.priceMonthly : 180;
-  const baseTermly = stageConfig.priceTermly > 0 ? stageConfig.priceTermly : 750;
-  const baseYearly = stageConfig.priceYearly > 0 ? stageConfig.priceYearly : 1200;
+  const baseMonthly = stageConfig.priceMonthly > 0 ? stageConfig.priceMonthly : (priceMonthly && priceMonthly > 0 ? priceMonthly : 180);
+  const baseTermly = stageConfig.priceTermly > 0 ? stageConfig.priceTermly : (priceTermly && priceTermly > 0 ? priceTermly : 750);
+  const baseYearly = stageConfig.priceYearly > 0 ? stageConfig.priceYearly : (priceYearly && priceYearly > 0 ? priceYearly : 1200);
 
   const isLanguages = languageTrack === "languages";
   const langMonthly = stageConfig.priceLanguagesMonthly ?? 0;
