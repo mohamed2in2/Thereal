@@ -119,7 +119,9 @@ const SECTION_TITLES: Record<string, string> = {
   codes: "أكواد الوصول",
   students: "المتعلمين",
   "referred-students": "متابعة الطلاب المُحالين",
-  requests: "طلبات المتعلمين",
+  requests: "طلبات زيادة المشاهدات",
+  "grade-requests": "طلبات تعديل الدرجات",
+  tickets: "تذاكر الدعم والاستفسارات",
   feedback: "ملاحظات المتعلمين",
   homework: "إدارة الواجبات",
   review: "مراجعة الإجابات",
@@ -1664,7 +1666,7 @@ export default function TeacherDashboardPage() {
                     courseTitle={selectedCourse.title}
                     folders={folders}
                     onRefreshFolders={async () => {
-                      await fetchFolders();
+                      await fetchFolders(selectedCourse.id);
                     }}
                   />
                 )}
@@ -3815,7 +3817,9 @@ export default function TeacherDashboardPage() {
           )}
 
           {activeSection === "quiz-results" && <TeacherQuizResults />}
-          {activeSection === "requests" && <TeacherRequests />}
+          {activeSection === "requests" && <TeacherRequests key="requests" initialTab="views" />}
+          {activeSection === "grade-requests" && <TeacherRequests key="grade-requests" initialTab="grades" />}
+          {activeSection === "tickets" && <TeacherRequests key="tickets" initialTab="tickets" />}
           {activeSection === "feedback" && <TeacherFeedback />}
 
           {/* ════════ HOMEWORK MANAGEMENT ════════ */}

@@ -26,6 +26,7 @@ import {
   Server,
   UserPlus,
   RefreshCw,
+  LifeBuoy,
 } from "lucide-react";
 import { DarkModeToggle } from "@/components/ui/DarkModeToggle";
 import { AdminActionPasswordBar } from "@/components/admin/AdminActionPasswordBar";
@@ -179,6 +180,7 @@ export function ClassicAdminShell({
         { id: "review", label: "مركز تصحيح الإجابات المباشر", badge: "Live", badgeVariant: "warning", icon: <Activity className="w-3.5 h-3.5" /> },
         { id: "quiz-results", label: "سجل ونتائج الاختبارات", icon: <Award className="w-3.5 h-3.5" /> },
         { id: "in-video-responses", label: "إجابات أسئلة الفيديو التفاعلية", icon: <Activity className="w-3.5 h-3.5" /> },
+        { id: "grade-requests", label: "طلبات تعديل الدرجات", icon: <Award className="w-3.5 h-3.5" /> },
       ],
     },
     {
@@ -190,6 +192,7 @@ export function ClassicAdminShell({
         { id: "codes", label: "توليد أكواد الوصول الذكية", icon: <KeyRound className="w-3.5 h-3.5" /> },
         { id: "referred-students", label: "الطلاب المُحالون والإحالات", icon: <Users className="w-3.5 h-3.5" /> },
         { id: "requests", label: "طلبات زيادة المشاهدات", icon: <Eye className="w-3.5 h-3.5" /> },
+        { id: "tickets", label: "تذاكر الدعم والاستفسارات", icon: <LifeBuoy className="w-3.5 h-3.5" /> },
         { id: "feedback", label: "ملاحظات وتقييمات الطلاب", icon: <FileText className="w-3.5 h-3.5" /> },
       ],
     },
