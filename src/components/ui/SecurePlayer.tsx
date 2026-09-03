@@ -58,6 +58,7 @@ function IframeSecureEmbed({
 }: CommonEmbedProps & { provider?: string }) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const vdoPlayerRef = useRef<VdoPlayerInstance | null>(null);
+  const [drmError, setDrmError] = useState<string | null>(null);
 
   // Resume playback for Bunny & VdoCipher
   useEffect(() => {
@@ -119,13 +120,31 @@ function IframeSecureEmbed({
             onPause?.();
           });
 
-          player.video?.addEventListener("play", () => {
-            onPlay?.();
+          player.video?.addEventListener("error", () => {
+            setDrmError("استخدم جهاز اخر او تابلت الوزاره لان جهازك غير مدعوم");
           });
         }
       };
 
+      const handleVdoWindowMessage = (e: MessageEvent) => {
+        try {
+          const data = typeof e.data === "string" ? JSON.parse(e.data) : e.data;
+          if (
+            data?.event === "error" ||
+            data?.type === "error" ||
+            (typeof data?.code === "number" && [6001, 6002, 6003, 6006, 6007, 6012, 6013, 6014].includes(data.code)) ||
+            data?.msg === "device_not_supported" ||
+            (typeof data?.message === "string" && /drm|widevine|not supported|license/i.test(data.message))
+          ) {
+            console.warn("[SecurePlayer] VdoCipher DRM error detected:", data);
+            setDrmError("استخدم جهاز اخر او تابلت الوزاره لان جهازك غير مدعوم");
+          }
+        } catch {}
+      };
+      window.addEventListener("message", handleVdoWindowMessage);
+
       return () => {
+        window.removeEventListener("message", handleVdoWindowMessage);
         if (document.body.contains(script)) {
           document.body.removeChild(script);
         }
@@ -161,16 +180,50 @@ function IframeSecureEmbed({
   }, [paused, provider]);
 
   return (
-    <iframe
-      ref={iframeRef}
-      src={embedUrl}
-      title={title}
-      className="absolute inset-0 w-full h-full"
-      allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture"
-      referrerPolicy="strict-origin"
-      style={{ border: "none" }}
-      draggable={false}
-    />
+    <div className="absolute inset-0 w-full h-full">
+      <iframe
+        ref={iframeRef}
+        src={embedUrl}
+        title={title}
+        className="absolute inset-0 w-full h-full"
+        allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture"
+        referrerPolicy="strict-origin"
+        style={{ border: "none" }}
+        draggable={false}
+      />
+      {drmError && (
+        <div className="absolute inset-0 bg-slate-950/95 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center z-50 dir-rtl animate-in fade-in duration-300">
+          <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 mb-4 shadow-lg shadow-amber-500/10 text-3xl">
+            📱
+          </div>
+          <h3 className="text-lg font-black text-white mb-2">تنبيه توافق الجهاز (DRM)</h3>
+          <div className="bg-amber-500/10 border border-amber-500/25 rounded-2xl p-4 max-w-md w-full mb-5 shadow-inner text-center">
+            <p className="text-sm md:text-base font-black text-amber-300 leading-relaxed">
+              استخدم جهاز اخر او تابلت الوزاره لان جهازك غير مدعوم
+            </p>
+            <p className="text-xs text-slate-300 mt-2.5 leading-relaxed">
+              هذا الدرس محمي بأحدث تقنيات التشفير العتادية العالمية (DRM)، وبعض معالجات الهواتف لا تدعم هذا المستوى الأمني. يمكنك المتابعة بدون أي مشكلة من تابلت المدرسة أو أي جهاز كمبيوتر أو لابتوب.
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setDrmError(null)}
+              className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl transition-all cursor-pointer border border-slate-700"
+            >
+              إعادة المحاولة
+            </button>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="px-5 py-2.5 bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold rounded-xl shadow-lg transition-all cursor-pointer"
+            >
+              تحديث الصفحة
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -192,6 +245,54 @@ function DirectVideoEmbed({
   onProgress?: (seconds: number) => void;
   onError?: () => void;
 }) {
+  const [deviceError, setDeviceError] = useState(false);
+  const isMobile =
+    typeof window !== "undefined" &&
+    (/Android|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+     (navigator.maxTouchPoints > 0 && window.innerWidth <= 768));
+
+  const handleVideoError = () => {
+    onError?.();
+    if (isMobile) {
+      setDeviceError(true);
+    }
+  };
+
+  if (deviceError) {
+    return (
+      <div className="absolute inset-0 bg-slate-950/95 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center z-50 dir-rtl animate-in fade-in duration-300">
+        <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 mb-4 shadow-lg shadow-amber-500/10 text-3xl">
+          📱
+        </div>
+        <h3 className="text-lg font-black text-white mb-2">تنبيه توافق الجهاز (DRM)</h3>
+        <div className="bg-amber-500/10 border border-amber-500/25 rounded-2xl p-4 max-w-md w-full mb-5 shadow-inner text-center">
+          <p className="text-sm md:text-base font-black text-amber-300 leading-relaxed">
+            استخدم جهاز اخر او تابلت الوزاره لان جهازك غير مدعوم
+          </p>
+          <p className="text-xs text-slate-300 mt-2.5 leading-relaxed">
+            هذا الدرس محمي بأنظمة تشفير DRM ولا يعمل على بعض الهواتف غير المعتمدة. يمكنك المتابعة بشكل طبيعي عبر تابلت المدرسة أو أي لابتوب أو كمبيوتر.
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setDeviceError(false)}
+            className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl transition-all cursor-pointer border border-slate-700"
+          >
+            إعادة المحاولة
+          </button>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="px-5 py-2.5 bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold rounded-xl shadow-lg transition-all cursor-pointer"
+          >
+            تحديث الصفحة
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <video
       src={embedUrl}
@@ -203,7 +304,7 @@ function DirectVideoEmbed({
       onPlay={() => onPlay?.()}
       onPause={() => onPause?.()}
       onEnded={() => onEnded?.()}
-      onError={onError}
+      onError={handleVideoError}
       onTimeUpdate={(e) => onProgress?.((e.target as HTMLVideoElement).currentTime)}
     />
   );

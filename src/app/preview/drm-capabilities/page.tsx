@@ -205,8 +205,7 @@ export default function DrmCapabilitiesPage() {
               </>
             ) : (
               <>
-                <strong>No DRM available.</strong> Protected lessons cannot play in this
-                browser at all.
+                <strong className="text-amber-400">لا يتوفر نظام فك تشفير DRM على هذا الجهاز:</strong> استخدم جهاز اخر او تابلت الوزاره لان جهازك غير مدعوم.
               </>
             )}
           </div>

@@ -89,7 +89,11 @@ export default function VideoWatchPage() {
   // unprotected Google Drive path stays in SecurePlayer for staff preview, but
   // nothing in the student player may switch it on.
   const directDriveMode = false;
-  const [drmConfig, setDrmConfig] = useState<any>(null);
+  const [drmConfig, setDrmConfig] = useState<{
+    token?: string;
+    licenseServers?: { widevine?: string; playready?: string; fairplay?: string; fairplayCertUrl?: string };
+    clearKeys?: Record<string, string>;
+  } | null>(null);
 
   // View request state for quota-exceeded handling
   const [viewRequestState, setViewRequestState] = useState<{
@@ -378,24 +382,49 @@ export default function VideoWatchPage() {
 
   if (error || !session) {
     const isQuotaExceeded = errorCode === "NO_WATCHES_REMAINING" || error?.includes("استنفدت");
+    const isDrmOrDeviceError =
+      errorCode === "DRM_NOT_SUPPORTED" ||
+      errorCode === "UNSUPPORTED_DEVICE" ||
+      error?.includes("غير مدعوم") ||
+      error?.includes("تابلت الوزاره") ||
+      error?.toLowerCase().includes("drm");
 
     return (
       <div className="min-h-screen bg-[#020617] flex flex-col items-center justify-center p-6" dir="rtl">
         <div className="bg-slate-900/90 border border-slate-800 backdrop-blur-xl rounded-3xl p-8 max-w-lg w-full text-center space-y-6 shadow-2xl">
           {/* Icon */}
           <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto text-3xl ${
-            isQuotaExceeded ? "bg-amber-500/20 text-amber-400" : "bg-red-500/20 text-red-400"
+            isDrmOrDeviceError
+              ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+              : isQuotaExceeded
+              ? "bg-amber-500/20 text-amber-400"
+              : "bg-red-500/20 text-red-400"
           }`}>
-            {isQuotaExceeded ? "👁️" : "⚠️"}
+            {isDrmOrDeviceError ? "📱" : isQuotaExceeded ? "👁️" : "⚠️"}
           </div>
 
           <div>
             <h2 className="text-2xl font-black text-white mb-2">
-              {isQuotaExceeded ? "استنفدت مشاهدات هذا الدرس" : "تعذر تشغيل الفيديو"}
+              {isDrmOrDeviceError
+                ? "تنبيه توافق الجهاز (DRM)"
+                : isQuotaExceeded
+                ? "استنفدت مشاهدات هذا الدرس"
+                : "تعذر تشغيل الفيديو"}
             </h2>
-            <p className="text-slate-400 text-sm leading-relaxed">
-              {error || "حدث خطأ غير متوقع أثناء بدء جلسة المشاهدة"}
-            </p>
+            {isDrmOrDeviceError ? (
+              <div className="bg-amber-500/10 border border-amber-500/25 rounded-2xl p-4 text-center space-y-2 mt-3">
+                <p className="text-base font-black text-amber-300">
+                  استخدم جهاز اخر او تابلت الوزاره لان جهازك غير مدعوم
+                </p>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  هذا الدرس محمي بأنظمة تشفير DRM عالية الأمان، وبعض معالجات الهواتف لا تدعم هذا النظام. يمكنك المتابعة بدون أي مشكلة من تابلت المدرسة أو أي لابتوب أو كمبيوتر.
+                </p>
+              </div>
+            ) : (
+              <p className="text-slate-400 text-sm leading-relaxed">
+                {error || "حدث خطأ غير متوقع أثناء بدء جلسة المشاهدة"}
+              </p>
+            )}
           </div>
 
           {/* Quota Exceeded Request Flow */}

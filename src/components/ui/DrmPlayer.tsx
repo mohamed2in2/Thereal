@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState, useCallback } from "react";
-import { Play, Pause, RotateCcw, RotateCw, Volume2, VolumeX, Maximize, Settings, AlertTriangle, ShieldCheck } from "lucide-react";
+import { Play, Pause, RotateCcw, RotateCw, Volume2, VolumeX, Maximize, Settings, AlertTriangle, ShieldCheck, Tablet } from "lucide-react";
 import { VideoWatermark } from "./VideoWatermark";
 
 interface ShakaPlayerInstance {
@@ -160,7 +160,7 @@ export function DrmPlayer({
 }: DrmPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const playerRef = useRef<any>(null);
+  const playerRef = useRef<ShakaPlayerInstance | null>(null);
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const [isPlaying, setIsPlaying] = useState(false);
@@ -191,11 +191,16 @@ export function DrmPlayer({
   }, [isPlaying]);
 
   useEffect(() => {
-    resetControlsTimer();
+    if (isPlaying) {
+      controlsTimeoutRef.current = setTimeout(() => {
+        setShowControls(false);
+        setShowSettings(false);
+      }, 3500);
+    }
     return () => {
       if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
     };
-  }, [resetControlsTimer]);
+  }, [isPlaying]);
 
   // ── Fullscreen state synchronizer ──────────────────────────────────────────
   useEffect(() => {
@@ -359,7 +364,7 @@ export function DrmPlayer({
   // ── Initialize Shaka Player Instance ───────────────────────────────────────
   useEffect(() => {
     let isCancelled = false;
-    let localPlayer: any = null;
+    let localPlayer: ShakaPlayerInstance | null = null;
 
     async function initPlayer() {
       if (!videoRef.current || !manifestUrl) return;
@@ -374,7 +379,7 @@ export function DrmPlayer({
         shaka.polyfill.installAll();
 
         if (!shaka.Player.isBrowserSupported()) {
-          setErrorMsg("متصفحك الحالي لا يدعم نظام فك التشفير العتادي (DRM). يرجى استخدام متصفح حديث مثل Chrome أو Edge أو Safari.");
+          setErrorMsg("استخدم جهاز اخر او تابلت الوزاره لان جهازك غير مدعوم");
           setIsLoading(false);
           return;
         }
@@ -465,9 +470,7 @@ export function DrmPlayer({
         // Strict mode is the opt-out: hardware or nothing, no SD fallback.
         const requireHardware = process.env.NEXT_PUBLIC_DRM_REQUIRE_HARDWARE === "true";
         if (requireHardware && !widevineHardware && !playreadyHardware) {
-          setErrorMsg(
-            "هذا الجهاز أو المتصفح لا يوفر فك تشفير عتادي (Hardware DRM) المطلوب لتشغيل هذا الدرس. جرّب متصفح Edge على ويندوز، أو تطبيق الهاتف."
-          );
+          setErrorMsg("استخدم جهاز اخر او تابلت الوزاره لان جهازك غير مدعوم");
           setIsLoading(false);
           return;
         }
@@ -502,7 +505,7 @@ export function DrmPlayer({
         });
 
         // Injects credentials and Axinom JWT Token on License requests
-        localPlayer.getNetworkingEngine().registerRequestFilter((type: any, request: any) => {
+        localPlayer.getNetworkingEngine().registerRequestFilter((type: unknown, request: { uris?: string[]; allowCrossSiteCredentials?: boolean; headers: Record<string, string> }) => {
           // Only send credentials (cookies) to same-origin API routes to avoid CORS wildcard rejection on external CDNs
           const isSameOrigin = request.uris?.some((u: string) =>
             u.startsWith("/") || (typeof window !== "undefined" && u.includes(window.location.host))
@@ -517,28 +520,35 @@ export function DrmPlayer({
         });
 
         // Error handler
-        localPlayer.addEventListener("error", (event: any) => {
-          const err = event.detail;
+        localPlayer.addEventListener("error", (event: unknown) => {
+          const err = (event as { detail?: { category?: number; code?: number } })?.detail || {};
           console.error("[Shaka Player DRM Error]", err);
           setIsLoading(false);
           const isBrave =
-            typeof (navigator as any).brave !== "undefined" ||
-            Boolean((window as any).navigator?.brave);
+            typeof (navigator as unknown as { brave?: unknown }).brave !== "undefined" ||
+            Boolean((window as unknown as { navigator?: { brave?: unknown } }).navigator?.brave);
 
           if (err.category === shaka.util.Error.Category.DRM) {
             if (isBrave) {
               setErrorMsg(
-                "متصفح Brave يحظر نظام Widevine DRM افتراضياً. يرجى الضغط على أيقونة الدرع في شريط العنوان أو تفعيل Widevine من brave://settings/extensions أو استخدام متصفح Chrome / Edge."
+                "متصفح Brave يحظر نظام Widevine DRM افتراضياً. يرجى تفعيل Widevine من إعدادات المتصفح، أو استخدم جهاز اخر او تابلت الوزاره لان جهازك غير مدعوم."
               );
             } else {
-              setErrorMsg(
-                "فشل الحصول على رخصة فك التشفير (DRM). يرجى التأكد من تفعيل Widevine في المتصفح أو تجربة متصفح Google Chrome / Edge."
-              );
+              setErrorMsg("استخدم جهاز اخر او تابلت الوزاره لان جهازك غير مدعوم");
             }
+          } else if (
+            err.code === 6001 ||
+            err.code === 6002 ||
+            err.code === 6003 ||
+            err.code === 6006 ||
+            err.code === 6007 ||
+            err.code === 6012
+          ) {
+            setErrorMsg("استخدم جهاز اخر او تابلت الوزاره لان جهازك غير مدعوم");
           } else if (err.category === shaka.util.Error.Category.NETWORK) {
             setErrorMsg(`خطأ في شبكة البث المشفر (رمز ${err.code || "1002"})`);
           } else {
-            setErrorMsg(`خطأ في تشغيل الفيديو المحمي (رمز ${err.code || "DRM"})`);
+            setErrorMsg("استخدم جهاز اخر او تابلت الوزاره لان جهازك غير مدعوم");
           }
         });
 
@@ -560,10 +570,26 @@ export function DrmPlayer({
         if (initialPosition > 0 && videoRef.current && Math.abs(videoRef.current.currentTime - initialPosition) > 2) {
           videoRef.current.currentTime = initialPosition;
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (isCancelled) return;
         console.error("[DrmPlayer] Init failed:", err);
-        setErrorMsg(err.message || "تعذر فتح البث المشفر. يرجى المحاولة مرة أخرى.");
+        const errObj = err as { message?: string; name?: string; code?: number };
+        const errMsgLower = (errObj?.message || "").toLowerCase();
+        const isDrmOrMobile =
+          errObj?.name === "NotSupportedError" ||
+          errMsgLower.includes("drm") ||
+          errMsgLower.includes("widevine") ||
+          errMsgLower.includes("supported") ||
+          errMsgLower.includes("key") ||
+          (typeof window !== "undefined" &&
+            (/Android|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+             window.innerWidth <= 768));
+
+        if (isDrmOrMobile) {
+          setErrorMsg("استخدم جهاز اخر او تابلت الوزاره لان جهازك غير مدعوم");
+        } else {
+          setErrorMsg(errObj?.message || "تعذر فتح البث المشفر. يرجى المحاولة مرة أخرى.");
+        }
         setIsLoading(false);
       }
     }
@@ -746,17 +772,53 @@ export function DrmPlayer({
       {/* ── Error Screen ── */}
       {errorMsg && (
         <div className="absolute inset-0 bg-slate-950/95 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center z-40 dir-rtl">
-          <div className="w-14 h-14 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 mb-4">
-            <AlertTriangle className="w-7 h-7" />
-          </div>
-          <h3 className="text-base font-bold text-white mb-2">تعذر تشغيل الفيديو المحمي</h3>
-          <p className="text-xs text-slate-400 max-w-sm mb-5 leading-relaxed">{errorMsg}</p>
-          <button
-            onClick={() => setRetryCount((c) => c + 1)}
-            className="px-5 py-2.5 bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold rounded-xl shadow-lg transition-all cursor-pointer"
-          >
-            إعادة المحاولة
-          </button>
+          {errorMsg.includes("استخدم جهاز اخر او تابلت الوزاره") ? (
+            <div className="flex flex-col items-center max-w-md w-full animate-in fade-in zoom-in duration-300">
+              <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 mb-4 shadow-lg shadow-amber-500/10">
+                <Tablet className="w-8 h-8" />
+              </div>
+              <h3 className="text-lg font-black text-white mb-2">تنبيه توافق الجهاز (DRM)</h3>
+              <div className="bg-amber-500/10 border border-amber-500/25 rounded-2xl p-4 w-full mb-5 shadow-inner text-center">
+                <p className="text-sm md:text-base font-black text-amber-300 leading-relaxed">
+                  استخدم جهاز اخر او تابلت الوزاره لان جهازك غير مدعوم
+                </p>
+                <p className="text-xs text-slate-300 mt-2.5 leading-relaxed">
+                  هذا الدرس محمي بأحدث تقنيات التشفير العتادية العالمية (DRM)، وبعض معالجات الهواتف لا تدعم هذا المستوى الأمني. يمكنك المتابعة بدون أي مشكلة من تابلت المدرسة أو أي جهاز كمبيوتر أو لابتوب.
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setRetryCount((c) => c + 1)}
+                  className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl transition-all cursor-pointer border border-slate-700"
+                >
+                  إعادة المحاولة
+                </button>
+                <button
+                  type="button"
+                  onClick={() => window.location.reload()}
+                  className="px-5 py-2.5 bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold rounded-xl shadow-lg transition-all cursor-pointer"
+                >
+                  تحديث الصفحة
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="w-14 h-14 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 mb-4">
+                <AlertTriangle className="w-7 h-7" />
+              </div>
+              <h3 className="text-base font-bold text-white mb-2">تعذر تشغيل الفيديو المحمي</h3>
+              <p className="text-xs text-slate-400 max-w-sm mb-5 leading-relaxed">{errorMsg}</p>
+              <button
+                type="button"
+                onClick={() => setRetryCount((c) => c + 1)}
+                className="px-5 py-2.5 bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold rounded-xl shadow-lg transition-all cursor-pointer"
+              >
+                إعادة المحاولة
+              </button>
+            </>
+          )}
         </div>
       )}
 
@@ -856,7 +918,11 @@ export function DrmPlayer({
             </div>
 
             {/* Fullscreen Button */}
-            <button onClick={toggleFullscreen} className="p-1.5 hover:text-sky-400 transition-colors cursor-pointer">
+            <button
+              onClick={toggleFullscreen}
+              title={isFullscreen ? "إنهاء ملء الشاشة" : "ملء الشاشة"}
+              className="p-1.5 hover:text-sky-400 transition-colors cursor-pointer"
+            >
               <Maximize className="w-4 h-4" />
             </button>
           </div>
