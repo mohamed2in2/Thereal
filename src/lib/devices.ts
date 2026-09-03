@@ -18,9 +18,15 @@ export async function readDeviceId(): Promise<{ deviceId: string; isNew: boolean
   return { deviceId: randomUUID(), isNew: true };
 }
 
+function isSecureCookieContext(): boolean {
+  if (process.env.SECURE_COOKIES === "true") return true;
+  if (process.env.SECURE_COOKIES === "false") return false;
+  return process.env.NODE_ENV === "production";
+}
+
 export async function setDeviceCookie(deviceId: string) {
   const store = await cookies();
-  const isSecure = process.env.NODE_ENV === "production" && process.env.SECURE_COOKIES === "true";
+  const isSecure = isSecureCookieContext();
   store.set(DEVICE_COOKIE, deviceId, {
     httpOnly: true,
     secure: isSecure,

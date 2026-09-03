@@ -5,15 +5,16 @@ import { isPhoneVerificationBypassed } from "@/lib/aws-sms";
 import { prisma } from "./prisma";
 import { normalizeEgyptPhone } from "@/lib/phone";
 import { getConfigNumberClamped } from "./config";
-import { getCachedUserSession, invalidateUserSessionCache } from "./cache";
+import { getCachedUserSession } from "./cache";
 
 function getJwtSecret(): Uint8Array {
   const secret = process.env.JWT_SECRET;
   if (!secret) {
-    if (process.env.NODE_ENV === "production" && !process.env.NEXT_PHASE) {
-      throw new Error("JWT_SECRET environment variable is not set. Please configure it in your .env file.");
+    // Only allow static compilation during next build to use dummy secret
+    if (process.env.NEXT_PHASE === "phase-production-build") {
+      return new TextEncoder().encode("build-time-fallback-jwt-secret-do-not-use-in-production");
     }
-    return new TextEncoder().encode("build-time-fallback-jwt-secret-do-not-use-in-production");
+    throw new Error("JWT_SECRET environment variable is not set. Please configure it in your .env file.");
   }
   return new TextEncoder().encode(secret);
 }
@@ -304,7 +305,7 @@ async function getJwtSession(): Promise<SessionUser | null> {
 
   // Token revocation check: if token carries a tokenVersion and DB user has a
   // different tokenVersion (due to password reset or device wipe), reject the token.
-  const userTokenVer = (user as any)?.tokenVersion;
+  const userTokenVer = (user as { tokenVersion?: number })?.tokenVersion;
   if (payload.tokenVersion !== undefined && userTokenVer !== undefined && userTokenVer !== payload.tokenVersion) {
     return null;
   }

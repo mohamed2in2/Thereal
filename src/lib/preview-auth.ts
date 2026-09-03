@@ -2,7 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import type { SessionUser } from "./auth";
 
 export const PREVIEW_COOKIE_NAME = "codeup_preview_auth";
-export const PREVIEW_COOKIE_MAX_AGE = 60 * 60 * 24 * 7; // 7 days
+export const PREVIEW_COOKIE_MAX_AGE = 60 * 60 * 24; // 24 hours (shortened from 7 days)
 
 /**
  * Resolves the preview password.
@@ -106,5 +106,15 @@ export function isAuthorizedPreview(
   }
 
   return verifyPreviewCookie(cookieValue);
+}
+
+/**
+ * Validates that a user has a full, authenticated staff session (teacher, admin, superadmin).
+ * Preview cookies alone are explicitly forbidden from performing provider uploads or imports.
+ */
+export function isAuthorizedStaffUpload(
+  session: SessionUser | { role?: string; id?: string; name?: string } | null
+): boolean {
+  return !!(session && ["superadmin", "admin", "teacher"].includes(session.role || ""));
 }
 

@@ -29,10 +29,13 @@ export async function POST(req: NextRequest) {
     });
 
     if (!user) {
-      return NextResponse.json(
-        { error: "لا يوجد حساب طالب مرتبط بهذا الرقم" },
-        { status: 404 }
-      );
+      // Prevent account enumeration by returning generic success with standard timing
+      await new Promise((r) => setTimeout(r, 400));
+      return NextResponse.json({
+        success: true,
+        channel: "sms",
+        message: "إذا كان هذا الرقم مسجلاً، فسيتم إرسال رمز التحقق إليه.",
+      });
     }
 
     const bypass = isPhoneVerificationBypassed();

@@ -15,14 +15,29 @@ export function getClientIp(headers: Headers | Record<string, string | undefined
     return (headers as Record<string, string | undefined | null>)[name] ?? null;
   };
 
-  const forwarded = getHeader("x-forwarded-for");
-  if (forwarded) {
-    const firstIp = forwarded.split(",")[0]?.trim();
-    if (firstIp) return firstIp;
+  // 1. Check trusted reverse-proxy headers first (cannot be easily spoofed by client when behind Nginx/Cloudflare)
+  const trustedHeaderIp =
+    getHeader("cf-connecting-ip") ||
+    getHeader("x-real-ip") ||
+    getHeader("fastly-client-ip") ||
+    getHeader("true-client-ip");
+
+  if (trustedHeaderIp && trustedHeaderIp.trim()) {
+    return trustedHeaderIp.trim();
   }
 
-  const realIp = getHeader("x-real-ip") || getHeader("cf-connecting-ip") || getHeader("fastly-client-ip");
-  if (realIp) return realIp.trim();
+  // 2. Fallback to rightmost or sanitized x-forwarded-for entry if behind trusted proxies
+  const forwarded = getHeader("x-forwarded-for");
+  if (forwarded) {
+    const parts = forwarded.split(",").map((p) => p.trim()).filter(Boolean);
+    if (parts.length > 0) {
+      // If multiple IPs are present, the last or first valid IP can be used
+      const candidate = parts[0];
+      if (/^[0-9a-fA-F:.]+$/.test(candidate)) {
+        return candidate;
+      }
+    }
+  }
 
   return "127.0.0.1";
 }

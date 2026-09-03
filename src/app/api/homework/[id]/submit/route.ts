@@ -116,8 +116,22 @@ export async function POST(
 
   // ── Upload ────────────────────────────────────────────────────────────────
   else if (hw.type === "upload") {
-    if (!body.fileUrl)
+    if (!body.fileUrl || typeof body.fileUrl !== "string") {
       return NextResponse.json({ error: "يجب رفع ملف أولاً" }, { status: 400 });
+    }
+
+    const expectedPrefix = `homework/${homeworkId}/${session.id}/`;
+    if (!body.fileUrl.startsWith(expectedPrefix) || body.fileUrl.includes("..") || body.fileUrl.includes("\0")) {
+      return NextResponse.json({ error: "مسار الملف غير صالح أو لا ينتمي لهذا الطالب" }, { status: 400 });
+    }
+
+    const physicalPath = path.join(process.cwd(), "uploads", body.fileUrl);
+    try {
+      await fs.access(physicalPath);
+    } catch {
+      return NextResponse.json({ error: "الملف المشار إليه غير موجود على السيرفر، يرجى إعادة رفعه" }, { status: 400 });
+    }
+
     status = "pending"; // teacher reviews manually
   }
 
@@ -165,8 +179,9 @@ export async function POST(
       );
       return savedSubmission;
     });
-  } catch (error: any) {
-    if (error?.code === "P2002") {
+  } catch (error: unknown) {
+    const err = error as { code?: string };
+    if (err?.code === "P2002") {
       return NextResponse.json({ error: "لقد أرسلت هذا الواجب بالفعل", alreadySubmitted: true }, { status: 409 });
     }
     throw error;

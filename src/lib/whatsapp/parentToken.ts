@@ -4,7 +4,7 @@ import { normalizeEgyptPhone } from "@/lib/phone";
 import { whatsappOrchestrator } from "./orchestrator";
 import { notifyParentVerificationRequired } from "@/lib/notifications";
 
-const TOKEN_EXPIRY_DAYS = 365;
+const TOKEN_EXPIRY_DAYS = 30; // Shortened from 365 to 30 days for security and privacy
 
 /**
  * Generates a cryptographically secure 128+ bit entropy URL-safe token

@@ -4,25 +4,55 @@ import { prisma } from "@/lib/prisma";
 import { checkVideoAccess } from "@/lib/authorization";
 import fs from "fs";
 import path from "path";
-import { Readable } from "stream";
 
 const DRM_STORAGE_DIR = path.resolve(process.cwd(), "uploads", "drm");
 
 // Whitelist of allowed extensions for DRM media streaming
 const ALLOWED_EXTENSIONS = new Set([".mpd", ".m3u8", ".m4s", ".mp4", ".ts"]);
 
-export async function OPTIONS(req: NextRequest) {
+function getDrmCorsHeaders(req: NextRequest): Record<string, string> {
   const origin = req.headers.get("origin");
+  const host = req.headers.get("host") || "";
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "";
+  let isAllowed = false;
+
+  if (origin) {
+    try {
+      const parsedOrigin = new URL(origin);
+      const parsedApp = appUrl ? new URL(appUrl) : null;
+      if (
+        parsedOrigin.host === host ||
+        (parsedApp && parsedOrigin.host === parsedApp.host) ||
+        parsedOrigin.hostname === "localhost" ||
+        parsedOrigin.hostname === "127.0.0.1"
+      ) {
+        isAllowed = true;
+      }
+    } catch {
+      isAllowed = false;
+    }
+  }
+
+  const headers: Record<string, string> = {
+    "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+    "Access-Control-Allow-Headers": "Range, Authorization, Content-Type, X-AxDRM-Message",
+    "Access-Control-Expose-Headers": "Content-Length, Content-Range, Accept-Ranges",
+    "Access-Control-Max-Age": "86400",
+  };
+
+  if (isAllowed && origin) {
+    headers["Access-Control-Allow-Origin"] = origin;
+    headers["Access-Control-Allow-Credentials"] = "true";
+  }
+
+  return headers;
+}
+
+export async function OPTIONS(req: NextRequest) {
+  const corsHeaders = getDrmCorsHeaders(req);
   return new NextResponse(null, {
     status: 204,
-    headers: {
-      "Access-Control-Allow-Origin": origin || "*",
-      "Access-Control-Allow-Credentials": "true",
-      "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
-      "Access-Control-Allow-Headers": "Range, Authorization, Content-Type, X-AxDRM-Message",
-      "Access-Control-Expose-Headers": "Content-Length, Content-Range, Accept-Ranges",
-      "Access-Control-Max-Age": "86400",
-    },
+    headers: corsHeaders,
   });
 }
 
@@ -119,14 +149,11 @@ export async function GET(
 
     // Determine Content-Type
     let contentType = "application/octet-stream";
-    let isManifest = false;
 
     if (ext === ".mpd") {
       contentType = "application/dash+xml";
-      isManifest = true;
     } else if (ext === ".m3u8") {
       contentType = "application/vnd.apple.mpegurl";
-      isManifest = true;
     } else if (ext === ".m4s") {
       contentType = "video/iso.segment";
     } else if (ext === ".mp4") {
@@ -135,18 +162,12 @@ export async function GET(
       contentType = "video/mp2t";
     }
 
-    const origin = req.headers.get("origin");
+    const corsHeaders = getDrmCorsHeaders(req);
     const baseHeaders: Record<string, string> = {
       "Content-Type": contentType,
       "Accept-Ranges": "bytes",
-      "Access-Control-Allow-Origin": origin || "*",
-      "Access-Control-Allow-Credentials": "true",
-      "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
-      "Access-Control-Allow-Headers": "Range, Authorization, Content-Type, X-AxDRM-Message",
-      "Access-Control-Expose-Headers": "Content-Length, Content-Range, Accept-Ranges",
-      "Cache-Control": isManifest
-        ? "no-cache, no-store, must-revalidate"
-        : "public, max-age=31536000, immutable",
+      ...corsHeaders,
+      "Cache-Control": "private, no-cache, no-store, must-revalidate",
     };
 
     // ── Range Request Handling (HTTP 206) with suffix range support ────────────

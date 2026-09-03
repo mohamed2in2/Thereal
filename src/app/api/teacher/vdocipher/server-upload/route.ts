@@ -6,7 +6,7 @@ import {
   requestVdoCipherUploadTicket,
   decryptVdoCipherSecret,
 } from "@/lib/vdocipher-accounts";
-import { PREVIEW_COOKIE_NAME, isAuthorizedPreview } from "@/lib/preview-auth";
+import { isAuthorizedStaffUpload } from "@/lib/preview-auth";
 
 function s3ErrorMessage(body: string): string {
   const message = /<Message>([\s\S]*?)<\/Message>/.exec(body)?.[1];
@@ -26,10 +26,12 @@ export const dynamic = "force-dynamic";
 export async function POST(req: NextRequest) {
   try {
     const session = await getSession();
-    const cookie = req.cookies.get(PREVIEW_COOKIE_NAME)?.value;
 
-    if (!isAuthorizedPreview(session, cookie)) {
-      return NextResponse.json({ error: "غير مصرح لك بالوصول" }, { status: 403 });
+    if (!isAuthorizedStaffUpload(session)) {
+      return NextResponse.json(
+        { error: "غير مصرح لك بالوصول. يتطلب رفع الفيديوهات تسجيل الدخول كمعلم أو مسؤول." },
+        { status: 403 }
+      );
     }
 
     const formData = await req.formData().catch(() => null);
@@ -46,7 +48,7 @@ export async function POST(req: NextRequest) {
     const videoTitle = customTitle.trim() || file.name.replace(/\.[^/.]+$/, "") || "معاينة درس مشفر";
     const folderId = formData.get("folderId") as string | null;
 
-    let folder: any = null;
+    let folder: { id: string; course?: { id: string; teacherId: string } | null } | null = null;
     if (folderId) {
       if (!session || !["teacher", "admin", "superadmin"].includes(session.role || "")) {
         return NextResponse.json(
@@ -72,7 +74,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 1. Select the best VdoCipher account
-    let bestAccount = await selectBestAccountForUpload({
+    const bestAccount = await selectBestAccountForUpload({
       estimatedSizeBytes: file.size,
     });
 
@@ -185,10 +187,11 @@ export async function POST(req: NextRequest) {
       sizeBytes: file.size,
       message: "تم رفع الفيديو إلى VdoCipher وتشفيره بنجاح! 🚀",
     });
-  } catch (error: any) {
-    console.error("[Teacher VdoCipher Server Upload] Error:", error.message || error);
+  } catch (error: unknown) {
+    const errMsg = (error as Error)?.message || String(error);
+    console.error("[Teacher VdoCipher Server Upload] Error:", errMsg);
     return NextResponse.json(
-      { error: error.message || "حدث خطأ غير متوقع أثناء معالجة رفع الفيديو" },
+      { error: "حدث خطأ غير متوقع أثناء معالجة رفع الفيديو إلى VdoCipher" },
       { status: 500 }
     );
   }

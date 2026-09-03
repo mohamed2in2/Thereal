@@ -71,7 +71,21 @@ export async function verifyRecaptchaToken(
     },
   };
 
-  let data: any;
+interface RecaptchaAssessmentResponse {
+  error?: unknown;
+  tokenProperties?: {
+    valid?: boolean;
+    invalidReason?: string;
+    action?: string;
+  };
+  riskAnalysis?: {
+    score?: number;
+    reasons?: string[];
+  };
+  name?: string;
+}
+
+  let data: RecaptchaAssessmentResponse | null = null;
   try {
     const res = await fetch(url, {
       method: "POST",
@@ -81,8 +95,8 @@ export async function verifyRecaptchaToken(
     data = await res.json();
   } catch (err) {
     console.error("[reCAPTCHA] Network error calling assessment API:", err);
-    // Fail open so a network blip doesn't lock out all users.
-    return { success: true, score: 0.5, reasons: ["NETWORK_ERROR"] };
+    // Fail closed to prevent bot bypass during network disruptions
+    return { success: false, score: 0, reasons: ["NETWORK_ERROR"] };
   }
 
   // The API returns an error object when the token is invalid or malformed.

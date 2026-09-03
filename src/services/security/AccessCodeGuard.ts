@@ -1,11 +1,19 @@
 import crypto from "crypto";
-import { prisma } from "@/lib/prisma";
 
 // In-memory sliding-window rate limiting map per (IP + UserID)
 const memoryRateLimitMap = new Map<string, number[]>();
 
 export class AccessCodeGuard {
-  private static SERVER_SECRET = process.env.ACCESS_CODE_SECRET || "codeup_access_code_server_secret_2026";
+  private static getServerSecret(): string {
+    const secret = process.env.ACCESS_CODE_SECRET || process.env.JWT_SECRET;
+    if (!secret) {
+      if (process.env.NEXT_PHASE === "phase-production-build") {
+        return "build-time-dummy-access-code-secret";
+      }
+      throw new Error("ACCESS_CODE_SECRET or JWT_SECRET must be configured in environment variables.");
+    }
+    return secret;
+  }
 
   /**
    * Generates a cryptographically secure, high-entropy access code.
@@ -28,7 +36,7 @@ export class AccessCodeGuard {
   public static hashCode(code: string): string {
     const normalized = String(code).trim().toUpperCase();
     return crypto
-      .createHmac("sha256", this.SERVER_SECRET)
+      .createHmac("sha256", this.getServerSecret())
       .update(normalized)
       .digest("hex");
   }

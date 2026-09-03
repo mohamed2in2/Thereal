@@ -1,21 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { validateParentToken, hashToken } from "@/lib/whatsapp/parentToken";
+import { validateParentToken } from "@/lib/whatsapp/parentToken";
 import { parentRateLimiter } from "@/lib/whatsapp/parentRateLimiter";
 import { whatsappOrchestrator } from "@/lib/whatsapp/orchestrator";
 import { averagePercent, examResultPercent, quizResultPercent } from "@/lib/scoring";
+import { getClientIp } from "@/lib/vpn-guard";
 
-function maskPhone(phone: string | null): string {
-  if (!phone) return "••••";
+function maskPhone(phone?: string | null): string | null {
+  if (!phone || phone.trim().length < 7) return null;
   const clean = phone.trim();
-  if (clean.length < 8) return clean;
-  return `${clean.slice(0, 3)}••••${clean.slice(-4)}`;
+  return `${clean.slice(0, 3)}****${clean.slice(-4)}`;
 }
 
 export async function GET(req: NextRequest) {
   try {
-    // 1. IP Rate Limiting (30 requests/minute)
-    const ip = req.headers.get("x-forwarded-for")?.split(",")[0] || req.headers.get("x-real-ip") || "127.0.0.1";
+    // 1. IP Rate Limiting (30 requests/minute) using hardened client IP resolution
+    const ip = getClientIp(req.headers);
     const rateCheck = parentRateLimiter.checkRateLimit(ip);
 
     if (!rateCheck.allowed) {
@@ -147,42 +147,50 @@ export async function GET(req: NextRequest) {
       }),
     ].slice(0, 8);
 
-    return NextResponse.json({
-      success: true,
-      stage: "REPORT",
-      student: {
-        id: student.id,
-        name: student.name,
-        educationalStage: student.educationalStage || null,
-        points: student.points,
-        parentPhone: student.parentPhone || null,
-        phone: student.phone || null,
+    return NextResponse.json(
+      {
+        success: true,
+        stage: "REPORT",
+        student: {
+          id: student.id,
+          name: student.name,
+          educationalStage: student.educationalStage || null,
+          points: student.points,
+          parentPhone: maskPhone(student.parentPhone),
+          phone: maskPhone(student.phone),
+        },
+        overallAveragePercent,
+        overallStatusBadge,
+        attendancePercent: null,
+        homeworkStats: {
+          completed: completedHomeworkCount,
+          pending: pendingHomeworkCount,
+          late: null,
+        },
+        recentExams,
+        teacherNotes: feedbacks.map((f) => ({
+          teacherName: f.teacher?.name || "المعلم",
+          content: f.content,
+          date: f.createdAt.toISOString().split("T")[0],
+        })),
+        subscriptions: subscriptions.map((sub) => ({
+          id: sub.id,
+          teacherName: sub.teacher?.name || "المعلم",
+          teacherPhone: maskPhone(sub.teacher?.phone),
+          planLabel: sub.planLabel,
+          amount: sub.amount,
+          createdAt: sub.createdAt.toISOString().split("T")[0],
+          status: sub.status,
+        })),
       },
-      overallAveragePercent,
-      overallStatusBadge,
-      attendancePercent: null,
-      homeworkStats: {
-        completed: completedHomeworkCount,
-        pending: pendingHomeworkCount,
-        late: null,
-      },
-      recentExams,
-      teacherNotes: feedbacks.map((f) => ({
-        teacherName: f.teacher?.name || "المعلم",
-        content: f.content,
-        date: f.createdAt.toISOString().split("T")[0],
-      })),
-      subscriptions: subscriptions.map((sub) => ({
-        id: sub.id,
-        teacherName: sub.teacher?.name || "المعلم",
-        teacherPhone: sub.teacher?.phone || null,
-        planLabel: sub.planLabel,
-        amount: sub.amount,
-        createdAt: sub.createdAt.toISOString().split("T")[0],
-        status: sub.status,
-      })),
-    });
-  } catch (error: any) {
-    return NextResponse.json({ error: error?.message || "حدث خطأ داخلي" }, { status: 500 });
+      {
+        headers: {
+          "Cache-Control": "private, no-cache, no-store, must-revalidate",
+        },
+      }
+    );
+  } catch (error: unknown) {
+    console.error("[parent/portal] Error:", error);
+    return NextResponse.json({ error: "حدث خطأ أثناء تحميل تقرير ولي الأمر" }, { status: 500 });
   }
 }

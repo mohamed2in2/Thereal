@@ -8,15 +8,17 @@ import {
   requestVdoCipherUploadTicket,
   decryptVdoCipherSecret,
 } from "@/lib/vdocipher-accounts";
-import { PREVIEW_COOKIE_NAME, isAuthorizedPreview } from "@/lib/preview-auth";
+import { isAuthorizedStaffUpload } from "@/lib/preview-auth";
 
 export async function POST(req: NextRequest) {
   try {
     const session = await getSession();
-    const cookie = req.cookies.get(PREVIEW_COOKIE_NAME)?.value;
 
-    if (!isAuthorizedPreview(session, cookie)) {
-      return NextResponse.json({ error: "غير مصرح لك بالوصول" }, { status: 403 });
+    if (!isAuthorizedStaffUpload(session)) {
+      return NextResponse.json(
+        { error: "غير مصرح لك بالوصول. يتطلب رفع الفيديوهات تسجيل الدخول كمعلم أو مسؤول." },
+        { status: 403 }
+      );
     }
 
     const body = (await req.json().catch(() => ({}))) as {
@@ -37,7 +39,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Select the best VdoCipher account automatically with multi-level fallback
-    let bestAccount = await selectBestAccountForUpload({
+    const bestAccount = await selectBestAccountForUpload({
       estimatedSizeBytes: body.estimatedSizeBytes,
     });
 
@@ -172,10 +174,11 @@ export async function POST(req: NextRequest) {
       clientPayload: ticket.clientPayload,
       title: video.title,
     });
-  } catch (error: any) {
-    console.error("[Teacher VdoCipher Upload Ticket] Error:", error.message || error);
+  } catch (error: unknown) {
+    const errMsg = (error as Error)?.message || String(error);
+    console.error("[Teacher VdoCipher Upload Ticket] Error:", errMsg);
     return NextResponse.json(
-      { error: error.message || "تعذر بدء عملية رفع الفيديو" },
+      { error: "تعذر بدء عملية رفع الفيديو إلى VdoCipher" },
       { status: 500 }
     );
   }

@@ -147,8 +147,8 @@ export async function POST(req: NextRequest) {
       manifestUrl: `/api/videos/drm/${safeAssetId}/manifest.mpd`,
       message: "تم تشفير الفيديو عتادياً بنظام CENC Widevine + PlayReady بنجاح!",
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[drm-package] error:", error);
-    return NextResponse.json({ error: error.message || "حدث خطأ أثناء تشفير الفيديو" }, { status: 500 });
+    return NextResponse.json({ error: "حدث خطأ أثناء معالجة وتشفير الفيديو" }, { status: 500 });
   }
 }

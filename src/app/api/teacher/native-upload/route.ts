@@ -18,8 +18,16 @@ export async function POST(req: NextRequest) {
 
     const contentType = req.headers.get("content-type") || "";
 
+    const ALLOWED_VIDEO_EXTS = new Set([".mp4", ".mov", ".mkv", ".webm", ".avi"]);
+    const MAX_UPLOAD_SIZE = 2 * 1024 * 1024 * 1024; // 2 GB
+
     // A. Direct Binary Stream Upload (fastest, lowest memory, smooth progress)
     if (contentType.includes("application/octet-stream") || contentType.startsWith("video/") || contentType.includes("multipart/form-data")) {
+      const contentLength = Number(req.headers.get("content-length"));
+      if (contentLength && contentLength > MAX_UPLOAD_SIZE) {
+        return NextResponse.json({ error: "حجم الملف يتجاوز الحد الأقصى المسموح (2 جيجابايت)" }, { status: 413 });
+      }
+
       if (!fs.existsSync(UPLOAD_DIR)) {
         fs.mkdirSync(UPLOAD_DIR, { recursive: true });
       }
@@ -31,7 +39,14 @@ export async function POST(req: NextRequest) {
         // use fallback if not URI encoded
       }
 
-      const ext = path.extname(originalName) || ".mp4";
+      const ext = (path.extname(originalName) || ".mp4").toLowerCase();
+      if (!ALLOWED_VIDEO_EXTS.has(ext)) {
+        return NextResponse.json(
+          { error: "نوع امتداد الملف غير مسموح. يرجى رفع ملف فيديو صالح (.mp4, .mov, .mkv, .webm)" },
+          { status: 400 }
+        );
+      }
+
       const randomId = crypto.randomBytes(8).toString("hex");
       const ownerId = session.id.replace(/[^a-zA-Z0-9_-]/g, "_");
       const filename = `local_${ownerId}_${Date.now()}_${randomId}${ext}`;
@@ -43,15 +58,35 @@ export async function POST(req: NextRequest) {
         if (!file) {
           return NextResponse.json({ error: "لم يتم اختيار أي ملف للرفع" }, { status: 400 });
         }
-        const arrayBuffer = await file.arrayBuffer();
-        fs.writeFileSync(filePath, Buffer.from(arrayBuffer));
+        if (file.size > MAX_UPLOAD_SIZE) {
+          return NextResponse.json({ error: "حجم الملف يتجاوز الحد الأقصى المسموح (2 جيجابايت)" }, { status: 413 });
+        }
+        const fileExt = (path.extname(file.name) || ext).toLowerCase();
+        if (!ALLOWED_VIDEO_EXTS.has(fileExt)) {
+          return NextResponse.json(
+            { error: "نوع امتداد الملف غير مسموح. يرجى رفع ملف فيديو صالح (.mp4, .mov, .mkv, .webm)" },
+            { status: 400 }
+          );
+        }
+        // Stream multipart file to disk without full memory buffering
+        const nodeStream = Readable.fromWeb(file.stream() as Parameters<typeof Readable.fromWeb>[0]);
+        const writeStream = fs.createWriteStream(filePath);
+        await pipeline(nodeStream, writeStream);
       } else {
-        // Stream directly from req.body to disk
+        // Stream directly from req.body to disk with byte monitoring
         if (!req.body) {
           return NextResponse.json({ error: "محتوى الملف فارغ" }, { status: 400 });
         }
-        const nodeStream = Readable.fromWeb(req.body as any);
+        const nodeStream = Readable.fromWeb(req.body as Parameters<typeof Readable.fromWeb>[0]);
         const writeStream = fs.createWriteStream(filePath);
+        let bytesWritten = 0;
+        nodeStream.on("data", (chunk: Buffer) => {
+          bytesWritten += chunk.length;
+          if (bytesWritten > MAX_UPLOAD_SIZE) {
+            writeStream.destroy();
+            try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch {}
+          }
+        });
         await pipeline(nodeStream, writeStream);
       }
 
@@ -86,8 +121,9 @@ export async function POST(req: NextRequest) {
           size,
         });
         return NextResponse.json({ success: true, isLocal: false, ...result });
-      } catch (err: any) {
-        console.warn("[Native Upload] Cloud SaaS init failed, using local server upload fallback:", err.message);
+      } catch (err: unknown) {
+        const errMsg = (err as Error)?.message || "";
+        console.warn("[Native Upload] Cloud SaaS init failed, using local server upload fallback:", errMsg);
         return NextResponse.json({
           success: true,
           isLocal: true,
@@ -122,13 +158,14 @@ export async function POST(req: NextRequest) {
           size_bytes,
         });
         return NextResponse.json({ success: true, isLocal: false, ...result });
-      } catch (err: any) {
+      } catch {
         return NextResponse.json({ success: true, isLocal: true, videoId: assetId, assetId, status: "ready" });
       }
     }
 
     return NextResponse.json({ error: "إجراء غير معروف" }, { status: 400 });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || "فشل الاتصال بخدمة Native Video" }, { status: 500 });
+  } catch (error: unknown) {
+    console.error("[native-upload] Error:", error);
+    return NextResponse.json({ error: "حدث خطأ أثناء معالجة رفع الفيديو" }, { status: 500 });
   }
 }

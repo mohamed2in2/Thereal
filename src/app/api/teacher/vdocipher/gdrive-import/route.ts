@@ -21,7 +21,39 @@ import {
   requestVdoCipherUploadTicket,
   decryptVdoCipherSecret,
 } from "@/lib/vdocipher-accounts";
-import { PREVIEW_COOKIE_NAME, isAuthorizedPreview } from "@/lib/preview-auth";
+import { isAuthorizedStaffUpload } from "@/lib/preview-auth";
+
+const activeImportsByStaff = new Map<string, number>();
+const hourlyImportsByStaff = new Map<string, { count: number; resetAt: number }>();
+
+/**
+ * Checks concurrency and hourly rate limit for Google Drive imports.
+ */
+function checkStaffImportLimit(staffId: string): { allowed: boolean; error?: string } {
+  const active = activeImportsByStaff.get(staffId) || 0;
+  if (active >= 2) {
+    return {
+      allowed: false,
+      error: "لديك عمليتا استيراد جاريتان بالفعل من Google Drive. يرجى الانتظار حتى اكتمالهما.",
+    };
+  }
+
+  const now = Date.now();
+  let hourly = hourlyImportsByStaff.get(staffId);
+  if (!hourly || now > hourly.resetAt) {
+    hourly = { count: 0, resetAt: now + 60 * 60 * 1000 };
+    hourlyImportsByStaff.set(staffId, hourly);
+  }
+
+  if (hourly.count >= 10) {
+    return {
+      allowed: false,
+      error: "تجاوزت الحد الأقصى لعمليات الاستيراد في الساعة (10 عمليات). يرجى المحاولة لاحقاً.",
+    };
+  }
+
+  return { allowed: true };
+}
 
 /**
  * An S3 POST policy is a base64 JSON document carrying an expiry and a
@@ -60,16 +92,27 @@ export const maxDuration = 300; // 5 minutes
 
 export async function POST(req: NextRequest) {
   let tempPath: string | null = null;
+  let callerStaffId: string | null = null;
   try {
     const session = await getSession();
-    const cookie = req.cookies.get(PREVIEW_COOKIE_NAME)?.value;
 
-    if (!isAuthorizedPreview(session, cookie)) {
+    if (!isAuthorizedStaffUpload(session) || !session?.id) {
       return NextResponse.json(
-        { error: "غير مصرح لك بالوصول. هذه الميزة مخصصة لحسابات المعلمين والإدارة والمعاينة." },
+        { error: "غير مصرح لك بالوصول. يتطلب استيراد الفيديوهات تسجيل الدخول بحساب معلم أو مسؤول." },
         { status: 403 }
       );
     }
+
+    callerStaffId = session.id;
+    const limitCheck = checkStaffImportLimit(callerStaffId);
+    if (!limitCheck.allowed) {
+      return NextResponse.json({ error: limitCheck.error }, { status: 429 });
+    }
+
+    // Increment concurrency and hourly counter
+    activeImportsByStaff.set(callerStaffId, (activeImportsByStaff.get(callerStaffId) || 0) + 1);
+    const hourly = hourlyImportsByStaff.get(callerStaffId);
+    if (hourly) hourly.count += 1;
 
     const body = (await req.json().catch(() => ({}))) as {
       url?: string;
@@ -95,7 +138,7 @@ export async function POST(req: NextRequest) {
     }
 
     const folderId = body.folderId;
-    let folder: any = null;
+    let folder: { id: string; course?: { id: string } | null } | null = null;
 
     if (folderId) {
       if (!session || !["teacher", "admin", "superadmin"].includes(session.role || "")) {
@@ -136,13 +179,20 @@ export async function POST(req: NextRequest) {
     const videoTitle = (body.title || metadata.name || "معاينة درس مشفر").trim();
     const sizeBytes = Number(metadata.size) || 0;
 
+    if (sizeBytes > 2 * 1024 * 1024 * 1024) {
+      return NextResponse.json(
+        { error: "حجم ملف Google Drive يتجاوز الحد الأقصى المسموح (2 جيجابايت)" },
+        { status: 413 }
+      );
+    }
+
     let durationMinutes = body.durationMinutes || 0;
     if (!durationMinutes && metadata.videoMediaMetadata?.durationMillis) {
       durationMinutes = Math.round(Number(metadata.videoMediaMetadata.durationMillis) / 60000);
     }
 
     // 2. Select best VdoCipher account automatically with fallback
-    let bestAccount = await selectBestAccountForUpload({
+    const bestAccount = await selectBestAccountForUpload({
       estimatedSizeBytes: sizeBytes,
     });
 
@@ -319,13 +369,22 @@ export async function POST(req: NextRequest) {
       video: createdVideo,
       message: `تم استيراد الفيديو بنجاح (${sizeFormatted}) وتعيينه في VdoCipher بحماية كاملة! 🚀`,
     });
-  } catch (error: any) {
-    console.error("[VdoCipher Google Drive Import] Error:", error.message || error);
+  } catch (error: unknown) {
+    const errMsg = (error as Error)?.message || String(error);
+    console.error("[VdoCipher Google Drive Import] Error:", errMsg);
     return NextResponse.json(
-      { error: error.message || "حدث خطأ أثناء استيراد الفيديو من Google Drive" },
+      { error: "حدث خطأ أثناء استيراد الفيديو من Google Drive. يرجى مراجعة صلاحيات الرابط والمحاولة مجدداً." },
       { status: 500 }
     );
   } finally {
+    if (callerStaffId) {
+      const cur = activeImportsByStaff.get(callerStaffId) || 0;
+      if (cur <= 1) {
+        activeImportsByStaff.delete(callerStaffId);
+      } else {
+        activeImportsByStaff.set(callerStaffId, cur - 1);
+      }
+    }
     if (tempPath) {
       await unlink(tempPath).catch(() => {
         /* the OS temp dir is swept anyway */

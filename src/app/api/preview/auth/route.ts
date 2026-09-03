@@ -7,6 +7,7 @@ import {
   verifyPreviewCookie,
   verifyPreviewPassword,
 } from "@/lib/preview-auth";
+import { getClientIp } from "@/lib/vpn-guard";
 
 /**
  * Validates whether the caller is authorized to view the CTO / Teacher DRM preview portal.
@@ -65,7 +66,7 @@ function checkPreviewRateLimit(ip: string, maxAttempts = 5, windowMs = 60000): {
  */
 export async function POST(req: NextRequest) {
   try {
-    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("x-real-ip") || "127.0.0.1";
+    const ip = getClientIp(req.headers);
     const rateCheck = checkPreviewRateLimit(ip, 5, 60000);
     if (!rateCheck.allowed) {
       return NextResponse.json(

@@ -14,12 +14,24 @@ const VIDEO_FRAME_HOSTS = [
   "https://alasly.lovable.app",
 ];
 
+const isProd = process.env.NODE_ENV === "production";
+const scriptSrcDirectives = [
+  "'self'",
+  "'unsafe-inline'",
+  ...(isProd ? [] : ["'unsafe-eval'"]),
+  "https://www.google.com",
+  "https://www.gstatic.com",
+  "https://www.youtube.com",
+  "https://s.ytimg.com",
+  "https://player.vdocipher.com",
+  "https://cdnjs.cloudflare.com",
+].join(" ");
+
 const CSP = [
   "default-src 'self'",
   // Next.js injects inline bootstrap scripts; 'unsafe-inline' stays until a
-  // nonce-based setup is introduced. Scripts still cannot be loaded from
-  // arbitrary origins, which is what blocks injected exfiltration payloads.
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.google.com https://www.gstatic.com https://www.youtube.com https://s.ytimg.com https://player.vdocipher.com https://cdnjs.cloudflare.com",
+  // nonce-based setup is introduced. 'unsafe-eval' is strictly disabled in production.
+  `script-src ${scriptSrcDirectives}`,
   // Google Fonts is loaded from the root layout and the parent portal
   // (Tajawal / IBM Plex Sans Arabic / Amiri / Noto Naskh Arabic). Omitting
   // these two hosts blocks every Arabic webfont on the site.
