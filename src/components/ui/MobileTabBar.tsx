@@ -12,7 +12,12 @@ export function MobileTabBar() {
   const router = useRouter();
   const [user, setUser] = useState<{ name: string; role: string } | null>(null);
 
-  const visible = !pathname.includes("/learn");
+  const visible =
+    !pathname.includes("/learn") &&
+    !pathname.startsWith("/adminpanel") &&
+    !pathname.startsWith("/admin") &&
+    !pathname.startsWith("/parent") &&
+    !pathname.startsWith("/p/");
 
   // Fetch student session to dynamically show login/signup or logout options
   useEffect(() => {

@@ -27,6 +27,8 @@ import {
   UserPlus,
   RefreshCw,
   LifeBuoy,
+  Menu,
+  Search,
 } from "lucide-react";
 import { DarkModeToggle } from "@/components/ui/DarkModeToggle";
 import { AdminActionPasswordBar } from "@/components/admin/AdminActionPasswordBar";
@@ -75,6 +77,8 @@ export function ClassicAdminShell({
 }: ClassicAdminShellProps) {
   // Mobile bottom sheet state
   const [mobileActiveHub, setMobileActiveHub] = useState<string | null>(null);
+  const [isMobileAllMenuOpen, setIsMobileAllMenuOpen] = useState(false);
+  const [mobileSearchQuery, setMobileSearchQuery] = useState("");
 
   // Desktop accordion open state for hubs
   const [openHubs, setOpenHubs] = useState<Record<string, boolean>>({
@@ -206,15 +210,21 @@ export function ClassicAdminShell({
     { hubId: "curriculum", label: "الكورسات", directId: "courses", icon: <Video className="w-5 h-5" /> },
     { hubId: "assessment", label: "التقييم", icon: <Award className="w-5 h-5" /> },
     { hubId: "students", label: "الطلاب", icon: <Users className="w-5 h-5" /> },
+    { hubId: "all_menu", label: "كل الخيارات", isMenu: true, icon: <Menu className="w-5 h-5" /> },
   ] : [
     { hubId: "main", label: "الرئيسية", icon: <LayoutDashboard className="w-5 h-5" /> },
     { hubId: "users", label: "المستخدمين", icon: <Users className="w-5 h-5" /> },
     { hubId: "finance", label: "المالية", icon: <Wallet className="w-5 h-5" /> },
     { hubId: "ai", label: "الذكاء", directId: "ai-studio", icon: <Bot className="w-5 h-5" /> },
-    { hubId: "operations", label: "الإدارة", icon: <Settings className="w-5 h-5" /> },
+    { hubId: "all_menu", label: "كل الخيارات", isMenu: true, icon: <Menu className="w-5 h-5" /> },
   ];
 
-  const handleMobileAnchorClick = (anchor: { hubId: string; directId?: string }) => {
+  const handleMobileAnchorClick = (anchor: { hubId: string; directId?: string; isMenu?: boolean }) => {
+    if (anchor.isMenu) {
+      setIsMobileAllMenuOpen(true);
+      setMobileActiveHub(null);
+      return;
+    }
     if (anchor.directId) {
       setActiveSection(anchor.directId);
       setMobileActiveHub(null);
@@ -252,7 +262,18 @@ export function ClassicAdminShell({
       <header className="sticky top-0 z-40 bg-white text-slate-900 border-b border-slate-200 shadow-sm dark:bg-slate-900 dark:text-white dark:border-slate-800 px-4 sm:px-8 py-3.5">
         <div className="flex items-center justify-between gap-4 w-full max-w-[1720px] mx-auto">
           {/* Brand & Identity */}
-          <div className="flex items-center gap-3.5">
+          <div className="flex items-center gap-2.5 sm:gap-3.5">
+            {/* Mobile Hamburger Menu Toggle */}
+            <button
+              type="button"
+              onClick={() => setIsMobileAllMenuOpen(true)}
+              aria-label="قائمة الخيارات والأقسام"
+              title="فتح القائمة الكاملة"
+              className="lg:hidden w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 border border-slate-300 dark:border-slate-700 flex items-center justify-center transition-all cursor-pointer shadow-sm ml-1"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+
             <div
               className={`w-10 h-10 rounded-xl border flex items-center justify-center shadow-md transition-colors ${
                 accentTheme === "emerald"
@@ -546,6 +567,133 @@ export function ClassicAdminShell({
                       </span>
                     )}
                   </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Comprehensive All Sections Mobile Drawer ── */}
+      {isMobileAllMenuOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden flex flex-col justify-end bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div
+            className="fixed inset-0"
+            onClick={() => {
+              setIsMobileAllMenuOpen(false);
+              setMobileSearchQuery("");
+            }}
+          />
+
+          <div className="relative bg-white dark:bg-[#0c101a] border-t border-slate-300 dark:border-slate-700/80 rounded-t-3xl p-5 space-y-4 max-h-[85vh] overflow-y-auto shadow-2xl animate-in slide-in-from-bottom duration-250">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-sky-500/10 text-sky-500 flex items-center justify-center">
+                  <Menu className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900 dark:text-white">
+                    قائمة أقسام لوحة التحكم
+                  </h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    اختر أي قسم للانتقال إليه مباشرة
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMobileAllMenuOpen(false);
+                  setMobileSearchQuery("");
+                }}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center cursor-pointer shadow-sm"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Quick Search */}
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="ابحث عن قسم (مثال: واجبات، كورسات، درجات، أكواد)..."
+                value={mobileSearchQuery}
+                onChange={(e) => setMobileSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-4 py-2.5 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-500"
+              />
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+            </div>
+
+            {/* Hubs & Sections Grid */}
+            <div className="space-y-4 pt-1">
+              {hubs.map((hub) => {
+                const filteredSections = hub.sections.filter((s) =>
+                  !mobileSearchQuery.trim() ||
+                  s.label.toLowerCase().includes(mobileSearchQuery.toLowerCase()) ||
+                  hub.title.toLowerCase().includes(mobileSearchQuery.toLowerCase())
+                );
+
+                if (filteredSections.length === 0) return null;
+
+                return (
+                  <div key={hub.id} className="space-y-2">
+                    <div className="flex items-center gap-2 px-1 text-xs font-bold text-slate-500 dark:text-slate-400">
+                      <span className="text-slate-700 dark:text-[#c5a880]">{hub.icon}</span>
+                      <span>{hub.title}</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-1.5">
+                      {filteredSections.map((section) => {
+                        const isActive = activeSection === section.id;
+                        return (
+                          <button
+                            key={section.id}
+                            type="button"
+                            onClick={() => {
+                              setActiveSection(section.id);
+                              setIsMobileAllMenuOpen(false);
+                              setMobileSearchQuery("");
+                            }}
+                            className={`w-full p-3 rounded-xl flex items-center justify-between text-right text-xs font-bold transition-all cursor-pointer ${
+                              isActive
+                                ? accentTheme === "emerald"
+                                  ? "bg-emerald-800 text-white shadow-sm dark:bg-emerald-950/80 dark:text-emerald-300 dark:border dark:border-emerald-800/60"
+                                  : "bg-blue-800 text-white shadow-sm dark:bg-blue-950/80 dark:text-blue-300 dark:border dark:border-blue-800/60"
+                                : "bg-slate-50 hover:bg-slate-100 text-slate-800 border border-slate-200 dark:bg-slate-900/80 dark:hover:bg-slate-800/80 dark:text-slate-200 dark:border-slate-800/80"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <div
+                                className={`p-1.5 rounded-lg ${
+                                  isActive
+                                    ? "bg-white/20 text-white"
+                                    : "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-400"
+                                }`}
+                              >
+                                {section.icon}
+                              </div>
+                              <span>{section.label}</span>
+                            </div>
+
+                            {section.badge && (
+                              <span
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                  section.badgeVariant === "danger"
+                                    ? "bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30"
+                                    : section.badgeVariant === "bronze"
+                                    ? "bg-slate-200 text-slate-800 dark:bg-[#c5a880]/20 dark:text-[#c5a880] dark:border dark:border-[#c5a880]/30"
+                                    : "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                                }`}
+                              >
+                                {section.badge}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 );
               })}
             </div>
