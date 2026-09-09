@@ -25,7 +25,7 @@ const GEMINI_KEYS = [
 const BACKUP_BASE_RAW = process.env.AI_BACKUP_BASE_URL || "https://generativelanguage.googleapis.com/v1beta";
 const BACKUP_BASE_URL = BACKUP_BASE_RAW.replace(/\/+$/, "");
 const BACKUP_MODEL = process.env.AI_BACKUP_MODEL || "gemini-flash-lite-latest";
-const PROVIDER_TIMEOUT_MS = 2_500;
+const PROVIDER_TIMEOUT_MS = 12_000;
 
 function providerSignal(requestSignal?: AbortSignal): AbortSignal {
   const timeout = AbortSignal.timeout(PROVIDER_TIMEOUT_MS);

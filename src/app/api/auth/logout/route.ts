@@ -18,7 +18,7 @@ export async function POST() {
   } catch (error) {
     console.error("[auth/logout] error:", error);
     return NextResponse.json(
-      { error: "\u062D\u062F\u062B \u062E\u0637\u0623 \u062F\u0627\u062E\u0644\u064A" },
+      { error: "حدث خطأ داخلي" },
       { status: 500 }
     );
   }

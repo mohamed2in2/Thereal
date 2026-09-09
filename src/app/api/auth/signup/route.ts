@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
 
     if (!name || !password || !phone || !parentPhone || !age || !educationalStage) {
       return NextResponse.json(
-        { error: "\u062C\u0645\u064A\u0639 \u0627\u0644\u062D\u0642\u0648\u0644 \u0645\u0637\u0644\u0648\u0628\u0629" },
+        { error: "جميع الحقول مطلوبة" },
         { status: 400 }
       );
     }
@@ -54,13 +54,13 @@ export async function POST(req: NextRequest) {
 
     if (nameStr.length < 2 || nameStr.length > MAX_NAME_LEN) {
       return NextResponse.json(
-        { error: "\u0627\u0644\u0627\u0633\u0645 \u064A\u062C\u0628 \u0623\u0646 \u064A\u0643\u0648\u0646 \u0628\u064A\u0646 2 \u0648 100 \u062D\u0631\u0641" },
+        { error: "الاسم يجب أن يكون بين 2 و 100 حرف" },
         { status: 400 }
       );
     }
     if (passwordStr.length < MIN_PASSWORD_LEN || passwordStr.length > MAX_PASSWORD_LEN) {
       return NextResponse.json(
-        { error: "\u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631 \u064A\u062C\u0628 \u0623\u0646 \u062A\u0643\u0648\u0646 \u0628\u064A\u0646 6 \u0648 128 \u062D\u0631\u0641" },
+        { error: "كلمة المرور يجب أن تكون بين 6 و 128 حرف" },
         { status: 400 }
       );
     }
@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
 
     if (normalizedPhone === normalizedParentPhone) {
       return NextResponse.json(
-        { error: "\u0631\u0642\u0645 \u0627\u0644\u0645\u062A\u0639\u0644\u0645 \u0644\u0627 \u064A\u0645\u0643\u0646 \u0623\u0646 \u064A\u0633\u0627\u0648\u064A \u0631\u0642\u0645 \u0648\u0644\u064A \u0627\u0644\u0623\u0645\u0631" },
+        { error: "رقم المتعلم لا يمكن أن يساوي رقم ولي الأمر" },
         { status: 400 }
       );
     }
@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
     if (!isPhoneVerificationBypassed()) {
       if (!verificationCode) {
         return NextResponse.json(
-          { error: "\u0631\u0645\u0632 \u0627\u0644\u062A\u062D\u0642\u0642 \u0645\u0637\u0644\u0648\u0628" },
+          { error: "رمز التحقق مطلوب" },
           { status: 400 }
         );
       }
@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
       );
       if (!isValid) {
         return NextResponse.json(
-          { error: "\u0631\u0645\u0632 \u0627\u0644\u062A\u062D\u0642\u0642 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D \u0623\u0648 \u0645\u0646\u062A\u0647\u064A \u0627\u0644\u0635\u0644\u0627\u062D\u064A\u0629" },
+          { error: "رمز التحقق غير صحيح أو منتهي الصلاحية" },
           { status: 400 }
         );
       }
@@ -101,7 +101,7 @@ export async function POST(req: NextRequest) {
     });
     if (existing) {
       return NextResponse.json(
-        { error: "\u0647\u0630\u0627 \u0627\u0644\u0631\u0642\u0645 \u0645\u0633\u062C\u0644 \u0628\u0627\u0644\u0641\u0639\u0644" },
+        { error: "هذا الرقم مسجل بالفعل" },
         { status: 409 }
       );
     }
@@ -110,7 +110,7 @@ export async function POST(req: NextRequest) {
     const parsedAge = Number(age);
     if (!Number.isFinite(parsedAge) || parsedAge < 6 || parsedAge > 25) {
       return NextResponse.json(
-        { error: "\u0627\u0644\u0639\u0645\u0631 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D" },
+        { error: "العمر غير صالح" },
         { status: 400 }
       );
     }
@@ -227,7 +227,7 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error("Signup error:", err);
     return NextResponse.json(
-      { error: "\u062D\u062F\u062B \u062E\u0637\u0623 \u0641\u064A \u0627\u0644\u062E\u0627\u062F\u0645" },
+      { error: "حدث خطأ في الخادم" },
       { status: 500 }
     );
   }

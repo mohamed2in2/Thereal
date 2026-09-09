@@ -39,7 +39,10 @@ export async function POST(req: NextRequest) {
     }
 
     // ── reCAPTCHA verification ───────────────────────────────────────────────
-    const captchaGate = await enforceCaptcha(recaptchaToken, "forgot_password");
+    const captchaGate = await enforceCaptcha(
+      typeof recaptchaToken === "string" ? recaptchaToken : undefined,
+      "forgot_password"
+    );
     if (!captchaGate.ok) {
       return NextResponse.json({ error: captchaGate.error }, { status: captchaGate.status });
     }
@@ -72,7 +75,7 @@ export async function POST(req: NextRequest) {
     if (!cooldownCheck.allowed) {
       return NextResponse.json(
         {
-          error: `\u064A\u0631\u062C\u0649 \u0627\u0644\u0627\u0646\u062A\u0638\u0627\u0631 ${cooldownCheck.remainingSeconds} \u062B\u0627\u0646\u064A\u0629 \u0642\u0628\u0644 \u0645\u062D\u0627\u0648\u0644\u0629 \u0625\u0631\u0633\u0627\u0644 \u0627\u0644\u0631\u0645\u0632 \u0645\u062C\u062F\u062F\u064B\u0627.`,
+          error: `يرجى الانتظار ${cooldownCheck.remainingSeconds} ثانية قبل محاولة إرسال الرمز مجددًا.`,
         },
         { status: 429 }
       );
@@ -84,7 +87,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           error:
-            "\u062A\u0645 \u0628\u0644\u0648\u063A \u0627\u0644\u062D\u062F \u0627\u0644\u064A\u0648\u0645\u064A \u0644\u0631\u0633\u0627\u0626\u0644 \u0627\u0644\u062A\u062D\u0642\u0642. \u064A\u0631\u062C\u0649 \u0627\u0644\u0645\u062D\u0627\u0648\u0644\u0629 \u063A\u062F\u064B\u0627 \u0623\u0648 \u0627\u0644\u062A\u0648\u0627\u0635\u0644 \u0645\u0639 \u0627\u0644\u062F\u0639\u0645.",
+            "تم بلوغ الحد اليومي لرسائل التحقق. يرجى المحاولة غدًا أو التواصل مع الدعم.",
         },
         { status: 429 }
       );
@@ -114,7 +117,7 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error("forgot-password error:", err);
     return NextResponse.json(
-      { error: "\u062D\u062F\u062B \u062E\u0637\u0623 \u0623\u062B\u0646\u0627\u0621 \u0645\u0639\u0627\u0644\u062C\u0629 \u0627\u0644\u0637\u0644\u0628" },
+      { error: "حدث خطأ أثناء معالجة الطلب" },
       { status: 500 }
     );
   }

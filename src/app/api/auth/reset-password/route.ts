@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
 
     if (!phone || !newPassword) {
       return NextResponse.json(
-        { error: "\u062C\u0645\u064A\u0639 \u0627\u0644\u062D\u0642\u0648\u0644 \u0645\u0637\u0644\u0648\u0628\u0629" },
+        { error: "جميع الحقول مطلوبة" },
         { status: 400 }
       );
     }
@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
     const passwordStr = String(newPassword);
     if (passwordStr.length < 6 || passwordStr.length > 128) {
       return NextResponse.json(
-        { error: "\u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631 \u064A\u062C\u0628 \u0623\u0646 \u062A\u0643\u0648\u0646 \u0628\u064A\u0646 6 \u0648 128 \u062D\u0631\u0641\u064B\u0627" },
+        { error: "كلمة المرور يجب أن تكون بين 6 و 128 حرفًا" },
         { status: 400 }
       );
     }
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
     if (!isPhoneVerificationBypassed()) {
       if (!verificationCode) {
         return NextResponse.json(
-          { error: "\u0631\u0645\u0632 \u0627\u0644\u062A\u062D\u0642\u0642 \u0645\u0637\u0644\u0648\u0628" },
+          { error: "رمز التحقق مطلوب" },
           { status: 400 }
         );
       }
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
       );
       if (!isValid) {
         return NextResponse.json(
-          { error: "\u0627\u0644\u0643\u0648\u062F \u063A\u064A\u0631 \u0635\u062D\u064A\u062D \u0623\u0648 \u0627\u0646\u062A\u0647\u062A \u0635\u0644\u0627\u062D\u064A\u062A\u0647" },
+          { error: "الكود غير صحيح أو انتهت صلاحيته" },
           { status: 400 }
         );
       }
@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
 
     if (!user) {
       return NextResponse.json(
-        { error: "\u0644\u0627 \u064A\u0648\u062C\u062F \u062D\u0633\u0627\u0628 \u0645\u0631\u062A\u0628\u0637 \u0628\u0647\u0630\u0627 \u0627\u0644\u0631\u0642\u0645" },
+        { error: "لا يوجد حساب مرتبط بهذا الرقم" },
         { status: 404 }
       );
     }
@@ -79,11 +79,11 @@ export async function POST(req: NextRequest) {
 
     await clearPhoneVerificationCookie();
 
-    return NextResponse.json({ message: "\u062A\u0645 \u062A\u063A\u064A\u064A\u0631 \u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631 \u0628\u0646\u062C\u0627\u062D" });
+    return NextResponse.json({ message: "تم تغيير كلمة المرور بنجاح" });
   } catch (err) {
     console.error("reset-password error:", err);
     return NextResponse.json(
-      { error: "\u062D\u062F\u062B \u062E\u0637\u0623 \u0623\u062B\u0646\u0627\u0621 \u062A\u063A\u064A\u064A\u0631 \u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631" },
+      { error: "حدث خطأ أثناء تغيير كلمة المرور" },
       { status: 500 }
     );
   }

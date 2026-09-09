@@ -12,7 +12,7 @@ const SCORE_MAX = 100;
 export async function POST(req: NextRequest) {
   try {
     const session = await getStudentSession();
-    if (!session) return NextResponse.json({ error: "\u063A\u064A\u0631 \u0645\u0635\u0631\u062D" }, { status: 401 });
+    if (!session) return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
 
     const body = await req.json().catch(() => ({}));
     const { quizId, reason, requestedScore, questionEvidence } = body as {
@@ -23,20 +23,20 @@ export async function POST(req: NextRequest) {
     };
 
     if (!quizId || typeof quizId !== "string" || quizId.trim().length === 0) {
-      return NextResponse.json({ error: "\u0628\u064A\u0627\u0646\u0627\u062A \u0646\u0627\u0642\u0635\u0629" }, { status: 400 });
+      return NextResponse.json({ error: "بيانات ناقصة" }, { status: 400 });
     }
     if (!reason || typeof reason !== "string") {
-      return NextResponse.json({ error: "\u0628\u064A\u0627\u0646\u0627\u062A \u0646\u0627\u0642\u0635\u0629" }, { status: 400 });
+      return NextResponse.json({ error: "بيانات ناقصة" }, { status: 400 });
     }
     if (reason.length < REASON_MIN) {
       return NextResponse.json(
-        { error: `\u0627\u0644\u0633\u0628\u0628 \u0642\u0635\u064A\u0631 \u062C\u062F\u064B\u0627\u060C \u0627\u0643\u062A\u0628 \u0648\u0635\u0641\u064B\u0627 \u0645\u0641\u0635\u0644\u064B\u0627 (${REASON_MIN} \u062D\u0631\u0641 \u0639\u0644\u0649 \u0627\u0644\u0623\u0642\u0644)` },
+        { error: `السبب قصير جدًا، اكتب وصفًا مفصلًا (${REASON_MIN} حرف على الأقل)` },
         { status: 400 }
       );
     }
     if (reason.length > REASON_MAX) {
       return NextResponse.json(
-        { error: `\u0627\u0644\u0633\u0628\u0628 \u0637\u0648\u064A\u0644 \u062C\u062F\u064B\u0627 (${REASON_MAX} \u062D\u0631\u0641 \u0643\u062D\u062F \u0623\u0642\u0635\u0649)` },
+        { error: `السبب طويل جدًا (${REASON_MAX} حرف كحد أقصى)` },
         { status: 400 }
       );
     }
@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
       const parsed = Number(requestedScore);
       if (!Number.isFinite(parsed) || parsed < SCORE_MIN || parsed > SCORE_MAX) {
         return NextResponse.json(
-          { error: `\u0627\u0644\u062F\u0631\u062C\u0629 \u0627\u0644\u0645\u0637\u0644\u0648\u0628\u0629 \u064A\u062C\u0628 \u0623\u0646 \u062A\u0643\u0648\u0646 \u0628\u064A\u0646 ${SCORE_MIN} \u0648 ${SCORE_MAX}` },
+          { error: `الدرجة المطلوبة يجب أن تكون بين ${SCORE_MIN} و ${SCORE_MAX}` },
           { status: 400 }
         );
       }
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
 
     if (!result) {
       return NextResponse.json(
-        { error: "\u0644\u0645 \u064A\u062A\u0645 \u062D\u0644 \u0647\u0630\u0627 \u0627\u0644\u0643\u0648\u064A\u0632 \u0628\u0639\u062F" },
+        { error: "لم يتم حل هذا الكويز بعد" },
         { status: 404 }
       );
     }
@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
     });
     if (existing) {
       return NextResponse.json(
-        { error: "\u0644\u062F\u064A\u0643 \u0637\u0644\u0628 \u062A\u0639\u062F\u064A\u0644 \u0644\u0646\u0641\u0633 \u0627\u0644\u0643\u0648\u064A\u0632 \u0642\u064A\u062F \u0627\u0644\u0645\u0631\u0627\u062C\u0639\u0629 \u0628\u0627\u0644\u0641\u0639\u0644" },
+        { error: "لديك طلب تعديل لنفس الكويز قيد المراجعة بالفعل" },
         { status: 409 }
       );
     }
@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
           q.correctAnswer,
           options
         );
-        aiAnalysis = `\u062A\u062D\u0644\u064A\u0644 \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A:\n${analysis.reasoning}\n(\u0627\u0644\u062B\u0642\u0629: ${Math.round(analysis.confidence * 100)}%)`;
+        aiAnalysis = `تحليل الذكاء الاصطناعي:\n${analysis.reasoning}\n(الثقة: ${Math.round(analysis.confidence * 100)}%)`;
         confidence = analysis.confidence;
       }
     }
@@ -126,11 +126,11 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       request: request_,
-      message: "\u062A\u0645 \u062A\u0642\u062F\u064A\u0645 \u0637\u0644\u0628\u0643 \u0644\u0644\u0645\u0639\u0644\u0645\u060C \u0633\u064A\u062A\u0645 \u0645\u0631\u0627\u062C\u0639\u062A\u0647 \u0642\u0631\u064A\u0628\u064B\u0627",
+      message: "تم تقديم طلبك للمعلم، سيتم مراجعته قريبًا",
     });
   } catch (err) {
     console.error("Grade request POST error:", err);
-    return NextResponse.json({ error: "\u062D\u062F\u062B \u062E\u0637\u0623" }, { status: 500 });
+    return NextResponse.json({ error: "حدث خطأ" }, { status: 500 });
   }
 }
 
@@ -138,7 +138,7 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   try {
     const session = await getSession();
-    if (!session) return NextResponse.json({ error: "\u063A\u064A\u0631 \u0645\u0635\u0631\u062D" }, { status: 401 });
+    if (!session) return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
 
     const statusParam = req.nextUrl.searchParams.get("status");
     // Only pass status to Prisma if it's a known value
@@ -179,9 +179,9 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ requests });
     }
 
-    return NextResponse.json({ error: "\u063A\u064A\u0631 \u0645\u0635\u0631\u062D" }, { status: 403 });
+    return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
   } catch (err) {
     console.error("Grade requests GET error:", err);
-    return NextResponse.json({ error: "\u062D\u062F\u062B \u062E\u0637\u0623" }, { status: 500 });
+    return NextResponse.json({ error: "حدث خطأ" }, { status: 500 });
   }
 }

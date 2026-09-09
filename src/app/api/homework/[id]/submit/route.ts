@@ -179,9 +179,8 @@ export async function POST(
       );
       return savedSubmission;
     });
-  } catch (error: unknown) {
-    const err = error as { code?: string };
-    if (err?.code === "P2002") {
+  } catch (error: any) {
+    if (error?.code === "P2002") {
       return NextResponse.json({ error: "لقد أرسلت هذا الواجب بالفعل", alreadySubmitted: true }, { status: 409 });
     }
     throw error;

@@ -15,7 +15,7 @@ const RECONCILE_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 /** GET /api/notifications — unread + last 20 for the signed-in user */
 export async function GET() {
   const session = await getSession();
-  if (!session) return NextResponse.json({ error: "\u063A\u064A\u0631 \u0645\u0635\u0631\u062D" }, { status: 401 });
+  if (!session) return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
 
   // Auto-reconcile recent pending payments — debounced per user
   if (session.role === "student") {
@@ -59,7 +59,7 @@ export async function GET() {
 /** POST /api/notifications — mark all as read */
 export async function POST() {
   const session = await getSession();
-  if (!session) return NextResponse.json({ error: "\u063A\u064A\u0631 \u0645\u0635\u0631\u062D" }, { status: 401 });
+  if (!session) return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
 
   await prisma.notification.updateMany({
     where: { userId: session.id, isRead: false },
@@ -69,7 +69,6 @@ export async function POST() {
   return NextResponse.json({ success: true });
 }
 
-<<<<<<< HEAD
 /** DELETE /api/notifications — delete single notification by id or all notifications */
 export async function DELETE(req: Request) {
   const session = await getSession();

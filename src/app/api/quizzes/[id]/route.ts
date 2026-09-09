@@ -12,7 +12,7 @@ export async function GET(
   try {
     const session = await getSession();
     if (!session) {
-      return NextResponse.json({ error: "\u063A\u064A\u0631 \u0645\u0635\u0631\u062D" }, { status: 401 });
+      return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
     }
 
     const { id: quizId } = await params;
@@ -34,7 +34,7 @@ export async function GET(
 
     if (!quiz) {
       return NextResponse.json(
-        { error: "\u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" },
+        { error: "الاختبار غير موجود" },
         { status: 404 }
       );
     }
@@ -42,7 +42,7 @@ export async function GET(
     const hasAccess = await checkQuizAccess(session.id, session.role, quizId);
     if (!hasAccess) {
       return NextResponse.json(
-        { error: "\u0644\u0627 \u064A\u0648\u062C\u062F \u0635\u0644\u0627\u062D\u064A\u0629 \u0644\u0644\u0648\u0635\u0648\u0644" },
+        { error: "لا يوجد صلاحية للوصول" },
         { status: 403 }
       );
     }
@@ -58,7 +58,7 @@ export async function GET(
       if ("requiredItem" in access) {
         return NextResponse.json(
           {
-            error: `\u064A\u062C\u0628 \u0625\u0643\u0645\u0627\u0644 \u00AB${access.requiredItem.title}\u00BB \u0623\u0648\u0644\u064B\u0627.`,
+            error: `يجب إكمال «${access.requiredItem.title}» أولًا.`,
             code: access.code,
             requiredItem: access.requiredItem,
           },
@@ -171,7 +171,7 @@ export async function GET(
   } catch (error) {
     console.error("[quizzes/[id]] error:", error);
     return NextResponse.json(
-      { error: "\u062D\u062F\u062B \u062E\u0637\u0623 \u062F\u0627\u062E\u0644\u064A" },
+      { error: "حدث خطأ داخلي" },
       { status: 500 }
     );
   }

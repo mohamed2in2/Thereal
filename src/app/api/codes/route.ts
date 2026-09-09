@@ -306,6 +306,7 @@ export async function POST(req: NextRequest) {
           if (err.message === "PLAN_NOT_FOUND") return NextResponse.json({ error: "الخطة غير موجودة" }, { status: 404 });
           if (err.message === "STAGE_MISMATCH") return NextResponse.json({ error: "هذا الكود مخصص لمرحلة دراسية مختلفة" }, { status: 400 });
           if (err.message === "ALREADY_USED_OR_INACTIVE") return NextResponse.json({ error: "هذا الكود مستخدم بالفعل أو غير فعال" }, { status: 400 });
+        }
         throw err;
       }
     }

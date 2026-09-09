@@ -89,13 +89,13 @@ export async function checkQuizAccess(userId: string, role: string, quizId: stri
     // Course-based quiz: teacher must own the course.
     if (quiz.folder?.course?.teacherId === userId) return true;
 
-    // Plan-based quiz: teacher must own the plan.
+    // Plan-based quiz: teacher must own/have created the plan.
     if (quiz.planLessonId && quiz.planLesson) {
       const plan = await prisma.plan.findUnique({
         where: { id: quiz.planLesson.planId },
-        select: { teacherId: true },
+        select: { createdById: true },
       });
-      if (plan?.teacherId === userId) return true;
+      if (plan?.createdById === userId) return true;
     }
 
     return false;

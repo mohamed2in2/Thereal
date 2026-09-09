@@ -18,7 +18,7 @@ const refreshingUsers = new Set<string>();
 export async function GET() {
   try {
     const session = await getStudentSession();
-    if (!session) return NextResponse.json({ error: "\u063A\u064A\u0631 \u0645\u0635\u0631\u062D" }, { status: 401 });
+    if (!session) return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
 
     const existing = await prisma.aIStudentInsight.findMany({
       where: { studentId: session.id },
@@ -78,7 +78,7 @@ export async function GET() {
     return NextResponse.json({ insights: existing, refreshed: false });
   } catch (err) {
     console.error("Insights GET error:", err);
-    return NextResponse.json({ error: "\u062D\u062F\u062B \u062E\u0637\u0623" }, { status: 500 });
+    return NextResponse.json({ error: "حدث خطأ" }, { status: 500 });
   }
 }
 
@@ -86,7 +86,7 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const session = await getStudentSession();
-    if (!session) return NextResponse.json({ error: "\u063A\u064A\u0631 \u0645\u0635\u0631\u062D" }, { status: 401 });
+    if (!session) return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
 
     const body = await req.json().catch(() => ({}));
     const { id, isRead, isActioned, actionTaken } = body as {
@@ -97,14 +97,14 @@ export async function POST(req: Request) {
     };
 
     if (!id || typeof id !== "string") {
-      return NextResponse.json({ error: "id \u0645\u0637\u0644\u0648\u0628" }, { status: 400 });
+      return NextResponse.json({ error: "id مطلوب" }, { status: 400 });
     }
 
     const insight = await prisma.aIStudentInsight.findFirst({
       where: { id, studentId: session.id },
     });
     if (!insight) {
-      return NextResponse.json({ error: "\u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" }, { status: 404 });
+      return NextResponse.json({ error: "غير موجود" }, { status: 404 });
     }
 
     const updated = await prisma.aIStudentInsight.update({
@@ -118,6 +118,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ insight: updated });
   } catch (err) {
     console.error("Insights POST error:", err);
-    return NextResponse.json({ error: "\u062D\u062F\u062B \u062E\u0637\u0623" }, { status: 500 });
+    return NextResponse.json({ error: "حدث خطأ" }, { status: 500 });
   }
 }

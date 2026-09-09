@@ -14,8 +14,9 @@ export function middleware(req: NextRequest) {
   const res = NextResponse.next();
 
   // ── Clickjacking protection ────────────────────────────────────────────────
-  // Prevents the app from being embedded in an <iframe> on a foreign origin.
-  res.headers.set("X-Frame-Options", "DENY");
+  // Allow framing only on the same origin (required for sandboxes & internal players),
+  // but prevents external malicious origins from embedding in iframes.
+  res.headers.set("X-Frame-Options", "SAMEORIGIN");
 
   // ── MIME-type sniffing protection ──────────────────────────────────────────
   // Forces the browser to honour the declared Content-Type instead of
@@ -35,26 +36,28 @@ export function middleware(req: NextRequest) {
   );
 
   // ── Content Security Policy ────────────────────────────────────────────────
-  // Restricts which origins may load scripts, styles, fonts, and data.
-  // 'unsafe-inline' is required for Next.js inline styles; tighten with
-  // nonce-based CSP once Next.js nonce support is wired in.
-  //
-  // Extend connect-src with any additional API / CDN domains your app calls.
+  // Configured to allow all legitimate EdTech integrations:
+  // - Video players: VdoCipher, Bunny CDN, YouTube
+  // - Security: Google reCAPTCHA Enterprise
+  // - Fonts: Google Fonts
+  // - Sandboxes: 'self', data:, blob:
   const isDev = process.env.NODE_ENV === "development";
   const csp = [
     "default-src 'self'",
-    // Next.js requires 'unsafe-inline' for its runtime style injection.
+    // Next.js runtime style injection & Google Fonts
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com data:",
-    // 'unsafe-eval' is needed only during local development (HMR).
+    // reCAPTCHA and Next.js scripts
     isDev
-      ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
-      : "script-src 'self' 'unsafe-inline'",
-    // Add your CDN / Supabase / Bunny hostnames here.
-    "connect-src 'self' https://*.supabase.co https://*.b-cdn.net wss:",
+      ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/"
+      : "script-src 'self' 'unsafe-inline' https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/",
+    // Supabase, Bunny, VdoCipher, reCAPTCHA APIs, WebSockets
+    "connect-src 'self' https://*.supabase.co https://*.b-cdn.net https://*.vdocipher.com https://dev.vdocipher.com https://player.vdocipher.com https://www.google.com/recaptcha/ https://*.google.com https://*.googleapis.com wss:",
     "img-src 'self' data: blob: https:",
-    "media-src 'self' blob: https:",
-    "frame-src 'none'",
+    "media-src 'self' blob: data: https:",
+    // Video player embeds (VdoCipher, Bunny, YouTube), reCAPTCHA frames, and interactive coding sandboxes
+    "frame-src 'self' data: blob: https://www.google.com/recaptcha/ https://recaptcha.google.com/ https://player.vdocipher.com https://iframe.mediadelivery.net https://*.b-cdn.net https://www.youtube.com https://www.youtube-nocookie.com https://youtube.com",
+    "worker-src 'self' blob:",
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",

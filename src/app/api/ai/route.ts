@@ -70,13 +70,13 @@ async function callGeminiFallback(
 export async function POST(req: NextRequest) {
   const session = await getSession();
   if (!session) {
-    return NextResponse.json({ error: "\u063A\u064A\u0631 \u0645\u0635\u0631\u062D" }, { status: 401 });
+    return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
   }
 
   // Rate limit
   if (!checkAiRateLimit(session.id)) {
     return NextResponse.json(
-      { error: "\u062D\u062F \u0627\u0644\u0637\u0644\u0628\u0627\u062A \u062A\u062C\u0627\u0648\u0632\u062A. \u062D\u0627\u0648\u0644 \u0628\u0639\u062F \u062F\u0642\u064A\u0642\u0629." },
+      { error: "حد الطلبات تجاوزت. حاول بعد دقيقة." },
       { status: 429 }
     );
   }
@@ -108,9 +108,9 @@ export async function POST(req: NextRequest) {
     : [];
 
   const systemPrompt = [
-    "\u0623\u0646\u062A \u0645\u0633\u0627\u0639\u062F \u062A\u062F\u0631\u064A\u0628\u064A \u0630\u0643\u064A \u0644\u0645\u0646\u0635\u0629 \u0643\u0648\u0631\u0633\u0627\u062A \u0645\u0635\u0631\u064A\u0629. \u0645\u0647\u0645\u062A\u0643 \u0645\u0633\u0627\u0639\u062F\u0629 \u0627\u0644\u0645\u062A\u0639\u0644\u0645\u064A\u0646 \u0641\u064A \u0648\u0636\u0639 \u062E\u0637\u0637 \u062A\u062F\u0631\u064A\u0628\u064A\u0629 \u064A\u0648\u0645\u064A\u0629.",
-    `\u0627\u0644\u0643\u0648\u0631\u0633\u0627\u062A \u0627\u0644\u0645\u0633\u062C\u0644 \u0641\u064A\u0647\u0627 \u0627\u0644\u0645\u062A\u0639\u0644\u0645: ${safeCourses.join(", ") || "\u0644\u0627 \u064A\u0648\u062C\u062F \u0643\u0648\u0631\u0633\u0627\u062A"}`,
-    "\u0623\u062C\u0628 \u0628\u0627\u0644\u0644\u063A\u0629 \u0627\u0644\u0639\u0631\u0628\u064A\u0629 \u062F\u0627\u0626\u0645\u064B\u0627. \u0643\u0646 \u0645\u0641\u064A\u062F\u064B\u0627 \u0648\u062F\u0627\u0639\u0645\u064B\u0627.",
+    "أنت مساعد تدريبي ذكي لمنصة كورسات مصرية. مهمتك مساعدة المتعلمين في وضع خطط تدريبية يومية.",
+    `الكورسات المسجل فيها المتعلم: ${safeCourses.join(", ") || "لا يوجد كورسات"}`,
+    "أجب باللغة العربية دائمًا. كن مفيدًا وداعمًا.",
   ].join("\n");
 
   const formattedMessages = [
@@ -120,7 +120,7 @@ export async function POST(req: NextRequest) {
 
   const reply =
     (await callGeminiFallback(formattedMessages)) ||
-    "\u0645\u0633\u0627\u0639\u062F \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A \u0642\u064A\u062F \u0627\u0644\u062A\u062D\u062F\u064A\u062B \u0648\u0627\u0644\u0635\u064A\u0627\u0646\u0629 \u062D\u0627\u0644\u064A\u064B\u0627\u060C \u064A\u0631\u062C\u0649 \u0627\u0644\u0645\u062D\u0627\u0648\u0644\u0629 \u0645\u0631\u0629 \u0623\u062E\u0631\u0649 \u0644\u0627\u062D\u0642\u064B\u0627 \u23F3";
+    "مساعد الذكاء الاصطناعي قيد التحديث والصيانة حاليًا، يرجى المحاولة مرة أخرى لاحقًا \u23F3";
 
   return NextResponse.json({ reply });
 }

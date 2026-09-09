@@ -17,7 +17,7 @@ interface ShakaPlayerInstance {
       ) => void
     ) => void;
   };
-  load: (manifestUri: string) => Promise<void>;
+  load: (manifestUri: string, startTime?: number, mimeType?: string) => Promise<void>;
 }
 
 declare global {

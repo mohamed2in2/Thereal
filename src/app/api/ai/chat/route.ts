@@ -14,12 +14,12 @@ export async function POST(req: NextRequest) {
     // Accept students AND admins/owners (they need to test the chat too)
     const session = (await getStudentSession()) ?? (await getSession());
     if (!session) {
-      return NextResponse.json({ error: "\u063A\u064A\u0631 \u0645\u0635\u0631\u062D" }, { status: 401 });
+      return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
     }
 
     const { message } = await req.json();
     if (!message || typeof message !== "string") {
-      return NextResponse.json({ error: "\u0627\u0644\u0631\u0633\u0627\u0644\u0629 \u0645\u0637\u0644\u0648\u0628\u0629" }, { status: 400 });
+      return NextResponse.json({ error: "الرسالة مطلوبة" }, { status: 400 });
     }
 
     // Sanitise: strip ASCII control chars, cap at 4 000 chars
@@ -28,14 +28,14 @@ export async function POST(req: NextRequest) {
       .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "")
       .slice(0, 4000);
     if (!trimmedMsg) {
-      return NextResponse.json({ error: "\u0627\u0644\u0631\u0633\u0627\u0644\u0629 \u0645\u0637\u0644\u0648\u0628\u0629" }, { status: 400 });
+      return NextResponse.json({ error: "الرسالة مطلوبة" }, { status: 400 });
     }
 
     requestSessionId = session.id;
     const active = activeAiRequests.get(session.id) ?? 0;
     if (active >= MAX_ACTIVE_AI_REQUESTS) {
       return NextResponse.json(
-        { error: "\u0647\u0646\u0627\u0643 \u0645\u062D\u0627\u062F\u062B\u0627\u062A \u0630\u0643\u0627\u0621 \u0627\u0635\u0637\u0646\u0627\u0639\u064A \u0646\u0634\u0637\u0629 \u0643\u062B\u064A\u0631\u0629. \u062D\u0627\u0648\u0644 \u0628\u0639\u062F \u0644\u062D\u0638\u0627\u062A." },
+        { error: "هناك محادثات ذكاء اصطناعي نشطة كثيرة. حاول بعد لحظات." },
         { status: 429 }
       );
     }
@@ -51,15 +51,15 @@ export async function POST(req: NextRequest) {
     // ── SUPERADMIN MASTER AI COMMANDS & GLOBAL CONTROLS ────────────────────
     if (isSuperAdmin) {
       const isAccessInquiry =
-        cleanMsg.includes("\u0635\u0644\u0627\u062D\u064A\u0627\u062A") ||
+        cleanMsg.includes("صلاحيات") ||
         cleanMsg.includes("access") ||
         cleanMsg.includes("powers") ||
-        cleanMsg.includes("\u062A\u0642\u062F\u0631 \u062A\u0639\u0645\u0644 \u0627\u064A\u0647") ||
-        cleanMsg.includes("\u062A\u0642\u062F\u0631 \u062A\u0639\u0645\u0644 \u0625\u064A\u0647") ||
-        cleanMsg.includes("\u0623\u0648\u0627\u0645\u0631\u0643") ||
-        cleanMsg.includes("\u0627\u0648\u0627\u0645\u0631\u0643") ||
-        cleanMsg.includes("\u0627\u0644\u0627\u0648\u0627\u0645\u0631") ||
-        cleanMsg.includes("\u0627\u0644\u0623\u0648\u0627\u0645\u0631") ||
+        cleanMsg.includes("تقدر تعمل ايه") ||
+        cleanMsg.includes("تقدر تعمل إيه") ||
+        cleanMsg.includes("أوامرك") ||
+        cleanMsg.includes("اوامرك") ||
+        cleanMsg.includes("الاوامر") ||
+        cleanMsg.includes("الأوامر") ||
         cleanMsg === "help" ||
         cleanMsg === "superadmin" ||
         cleanMsg === "admin";
@@ -74,26 +74,26 @@ export async function POST(req: NextRequest) {
         else if (currentPrimary === "mock") activeName = "Mock Provider (Local)";
 
         const accessBriefing =
-          `\u{1F451} **\u0644\u0648\u062D\u0629 \u062A\u062D\u0643\u0645 \u0648\u0635\u0644\u0627\u062D\u064A\u0627\u062A \u0627\u0644\u0645\u0634\u0631\u0641 \u0627\u0644\u0639\u0627\u0645 (Superadmin Master Access Control)**\n\n` +
-          `\u0623\u0647\u0644\u064B\u0627 \u0628\u0643 \u064A\u0627 \u0641\u0646\u062F\u0645! \u0628\u0635\u0641\u062A\u0643 **\u0627\u0644\u0645\u0634\u0631\u0641 \u0627\u0644\u0639\u0627\u0645 (Superadmin)**\u060C \u0644\u062F\u064A\u0643 \u0627\u0644\u0635\u0644\u0627\u062D\u064A\u0627\u062A \u0627\u0644\u0643\u0627\u0645\u0644\u0629 \u0644\u0644\u062A\u062D\u0643\u0645 \u0641\u064A \u0643\u0627\u0641\u0629 \u0645\u062D\u0631\u0643\u0627\u062A \u0648\u0645\u0646\u0638\u0648\u0645\u0627\u062A \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A \u0639\u0644\u0649 \u0645\u0646\u0635\u0629 Code-UP \u0645\u0628\u0627\u0634\u0631\u0629 \u0639\u0628\u0631 \u0627\u0644\u0645\u062D\u0627\u062F\u062B\u0629:\n\n` +
+          `\u{1F451} **لوحة تحكم وصلاحيات المشرف العام (Superadmin Master Access Control)**\n\n` +
+          `أهلًا بك يا فندم! بصفتك **المشرف العام (Superadmin)**، لديك الصلاحيات الكاملة للتحكم في كافة محركات ومنظومات الذكاء الاصطناعي على منصة Code-UP مباشرة عبر المحادثة:\n\n` +
           `\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n\n` +
-          `\u{1F310} **1. \u0627\u0644\u062A\u0628\u062F\u064A\u0644 \u0627\u0644\u0641\u0648\u0631\u064A \u0644\u0646\u0645\u0648\u0630\u062C \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A \u0627\u0644\u0639\u0627\u0645 \u0644\u062C\u0645\u064A\u0639 \u0627\u0644\u0637\u0644\u0627\u0628 (Global Model Switcher)**:\n` +
-          `\u2022 \u0627\u0644\u0646\u0645\u0648\u0630\u062C \u0627\u0644\u0646\u0634\u0637 \u062D\u0627\u0644\u064A\u064B\u0627 \u0644\u062C\u0645\u064A\u0639 \u0627\u0644\u0637\u0644\u0627\u0628: \`${activeName}\`\n` +
-          `\u2022 \u064A\u0645\u0643\u0646\u0643 \u062A\u063A\u064A\u064A\u0631 \u0627\u0644\u0645\u062D\u0631\u0643 \u0627\u0644\u0639\u0627\u0645 \u0644\u0643\u0644 \u0637\u0644\u0627\u0628 \u0627\u0644\u0645\u0646\u0635\u0629 \u0641\u064A \u0623\u064A \u0644\u062D\u0638\u0629 \u0628\u0645\u062C\u0631\u062F \u0643\u062A\u0627\u0628\u0629 \u0623\u064A \u0645\u0646 \u0627\u0644\u0623\u0648\u0627\u0645\u0631 \u0627\u0644\u062A\u0627\u0644\u064A\u0629:\n` +
-          `  - \u{1F535} *"\u0634\u063A\u0651\u0644 \u062F\u064A\u0628 \u0633\u064A\u0643 \u0644\u0644\u0637\u0644\u0627\u0628"* \u0623\u0648 \`switch to deepseek\`\n` +
-          `  - \u{1F7E2} *"\u0634\u063A\u0651\u0644 \u062C\u064A\u0645\u064A\u0646\u064A \u0644\u0644\u0637\u0644\u0627\u0628"* \u0623\u0648 \`switch to gemini\`\n` +
-          `  - \u26A1 *"\u0634\u063A\u0651\u0644 \u062F\u064A\u062C\u064A\u062A\u0627\u0644 \u0623\u0648\u0634\u0646 \u0644\u0644\u0637\u0644\u0627\u0628"* \u0623\u0648 \`switch to digitalocean\`\n` +
-          `  - \u{1F7E1} *"\u0634\u063A\u0651\u0644 mock \u0644\u0644\u0637\u0644\u0627\u0628"* \u0623\u0648 \`switch to mock\`\n\n` +
-          `\u{1F4CA} **2. \u0625\u062D\u0635\u0627\u0626\u064A\u0627\u062A \u0627\u0644\u0627\u0633\u062A\u0647\u0644\u0627\u0643 \u0648\u0627\u0644\u062A\u0643\u0627\u0644\u064A\u0641 \u0627\u0644\u0641\u0648\u0631\u064A\u0629 (Live Telemetry & Costs)**:\n` +
-          `\u2022 \u0627\u0643\u062A\u0628 \`Ahmed123M\` \u0623\u0648 \`stats\` \u0644\u0639\u0631\u0636 \u062A\u0642\u0631\u064A\u0631 \u0641\u0648\u0631\u064A.\n\n` +
-          `\u{1F3C6} **3. \u0627\u0644\u062A\u062D\u0643\u0645 \u0641\u064A \u0644\u0648\u062D\u0629 \u0627\u0644\u0634\u0631\u0641 24H \u0648\u0627\u0644\u062C\u0648\u0627\u0626\u0632 (Daily Leaderboard Control)**\n\n` +
-          `\u{1F6E1}\uFE0F **4. \u062C\u062F\u0627\u0631 \u0627\u0644\u062D\u0645\u0627\u064A\u0629 \u0648\u0627\u0644\u0623\u0645\u0627\u0646 \u0644\u0644\u0637\u0644\u0627\u0628 (AI Firewall & Moderation)**\n\n` +
-          `\u2699\uFE0F **5. \u0623\u0646\u0645\u0627\u0637 \u0627\u0644\u0623\u062F\u0627\u0621 \u0627\u0644\u0641\u0627\u0626\u0642\u0629 (Execution Modes)**:\n` +
-          `\u2022 \`AhmedToldMeSotalkelse\` : \u062A\u0641\u0639\u064A\u0644 \u0648\u0636\u0639 \u0627\u0644\u0645\u0637\u0648\u0631 \u0627\u0644\u0645\u0628\u0627\u0634\u0631.\n` +
-          `\u2022 \`AhmedProMode\` : \u062A\u0641\u0639\u064A\u0644 \u0627\u0644\u0648\u0636\u0639 \u0627\u0644\u0645\u0647\u0646\u064A \u0627\u0644\u0631\u0633\u0645\u064A.\n` +
-          `\u2022 \`AhmedFastMode\` : \u0648\u0636\u0639 \u0627\u0644\u0627\u0633\u062A\u062C\u0627\u0628\u0629 \u0641\u0627\u0626\u0642\u0629 \u0627\u0644\u0633\u0631\u0639\u0629.\n` +
-          `\u2022 \`AhmedReset\` : \u0645\u0633\u062D \u0633\u062C\u0644 \u0627\u0644\u0645\u062D\u0627\u062F\u062B\u0627\u062A \u0648\u0627\u0644\u0630\u0627\u0643\u0631\u0629.\n\n` +
-          `\u{1F4A1} *\u0623\u0646\u0627 \u062C\u0627\u0647\u0632 \u0644\u062A\u0646\u0641\u064A\u0630 \u0623\u064A \u0623\u0645\u0631 \u062A\u0631\u064A\u062F\u0647 \u0627\u0644\u0622\u0646!*`;
+          `\u{1F310} **1. التبديل الفوري لنموذج الذكاء الاصطناعي العام لجميع الطلاب (Global Model Switcher)**:\n` +
+          `• النموذج النشط حاليًا لجميع الطلاب: \`${activeName}\`\n` +
+          `• يمكنك تغيير المحرك العام لكل طلاب المنصة في أي لحظة بمجرد كتابة أي من الأوامر التالية:\n` +
+          `  - \u{1F535} *"شغّل ديب سيك للطلاب"* أو \`switch to deepseek\`\n` +
+          `  - \u{1F7E2} *"شغّل جيميني للطلاب"* أو \`switch to gemini\`\n` +
+          `  - \u26A1 *"شغّل ديجيتال أوشن للطلاب"* أو \`switch to digitalocean\`\n` +
+          `  - \u{1F7E1} *"شغّل mock للطلاب"* أو \`switch to mock\`\n\n` +
+          `\u{1F4CA} **2. إحصائيات الاستهلاك والتكاليف الفورية (Live Telemetry & Costs)**:\n` +
+          `• اكتب \`Ahmed123M\` أو \`stats\` لعرض تقرير فوري.\n\n` +
+          `\u{1F3C6} **3. التحكم في لوحة الشرف 24H والجوائز (Daily Leaderboard Control)**\n\n` +
+          `\u{1F6E1}\uFE0F **4. جدار الحماية والأمان للطلاب (AI Firewall & Moderation)**\n\n` +
+          `\u2699\uFE0F **5. أنماط الأداء الفائقة (Execution Modes)**:\n` +
+          `• \`AhmedToldMeSotalkelse\` : تفعيل وضع المطور المباشر.\n` +
+          `• \`AhmedProMode\` : تفعيل الوضع المهني الرسمي.\n` +
+          `• \`AhmedFastMode\` : وضع الاستجابة فائقة السرعة.\n` +
+          `• \`AhmedReset\` : مسح سجل المحادثات والذاكرة.\n\n` +
+          `\u{1F4A1} *أنا جاهز لتنفيذ أي أمر تريده الآن!*`;
 
         return NextResponse.json({
           message: accessBriefing,
@@ -103,26 +103,26 @@ export async function POST(req: NextRequest) {
       }
 
       const isSwitchIntent =
-        cleanMsg.includes("\u063A\u064A\u0631") ||
-        cleanMsg.includes("\u062D\u0648\u0644") ||
-        cleanMsg.includes("\u062E\u0644") ||
-        cleanMsg.includes("\u0634\u063A\u0644") ||
-        cleanMsg.includes("\u0634\u063A\u0651\u0644") ||
-        cleanMsg.includes("\u0627\u0633\u062A\u062E\u062F\u0645") ||
+        cleanMsg.includes("غير") ||
+        cleanMsg.includes("حول") ||
+        cleanMsg.includes("خل") ||
+        cleanMsg.includes("شغل") ||
+        cleanMsg.includes("شغّل") ||
+        cleanMsg.includes("استخدم") ||
         cleanMsg.includes("switch") ||
         cleanMsg.includes("use") ||
         cleanMsg.includes("set") ||
         cleanMsg.includes("talk") ||
-        cleanMsg.includes("\u0637\u0627\u0644\u0628") ||
-        cleanMsg.includes("\u0637\u0644\u0627\u0628") ||
+        cleanMsg.includes("طالب") ||
+        cleanMsg.includes("طلاب") ||
         cleanMsg.includes("student") ||
-        cleanMsg.includes("\u0627\u0644\u0646\u0645\u0648\u0630\u062C") ||
+        cleanMsg.includes("النموذج") ||
         cleanMsg.includes("model");
 
-      const wantsDeepSeek = cleanMsg.includes("deepseek") || cleanMsg.includes("\u062F\u064A\u0628 \u0633\u064A\u0643") || cleanMsg.includes("\u062F\u064A\u0628\u0633\u064A\u0643");
-      const wantsGemini = cleanMsg.includes("gemini") || cleanMsg.includes("\u062C\u064A\u0645\u064A\u0646\u064A") || cleanMsg.includes("\u062C\u064A\u0645\u064A\u0646\u0649") || cleanMsg.includes("\u062C\u0648\u062C\u0644");
-      const wantsDO = cleanMsg.includes("digitalocean") || cleanMsg.includes("\u062F\u064A\u062C\u064A\u062A\u0627\u0644") || cleanMsg.includes("llama") || cleanMsg.includes("codeup");
-      const wantsMock = cleanMsg.includes("mock") || cleanMsg.includes("\u0645\u062D\u0627\u0643\u064A") || cleanMsg.includes("\u062A\u062C\u0631\u064A\u0628\u064A");
+      const wantsDeepSeek = cleanMsg.includes("deepseek") || cleanMsg.includes("ديب سيك") || cleanMsg.includes("ديبسيك");
+      const wantsGemini = cleanMsg.includes("gemini") || cleanMsg.includes("جيميني") || cleanMsg.includes("جيمينى") || cleanMsg.includes("جوجل");
+      const wantsDO = cleanMsg.includes("digitalocean") || cleanMsg.includes("ديجيتال") || cleanMsg.includes("llama") || cleanMsg.includes("codeup");
+      const wantsMock = cleanMsg.includes("mock") || cleanMsg.includes("محاكي") || cleanMsg.includes("تجريبي");
 
       if (isSwitchIntent && (wantsDeepSeek || wantsGemini || wantsDO || wantsMock)) {
         const { ConfigManager } = await import("@/ai/config/AIConfig");
@@ -130,20 +130,20 @@ export async function POST(req: NextRequest) {
 
         let targetSlug = "gemini";
         let targetTitle = "Google Gemini Pool (Primary)";
-        let targetDesc = "\u0645\u062D\u0631\u0643 \u062C\u0648\u062C\u0644 \u0627\u0644\u0633\u0631\u064A\u0639 \u0648\u0627\u0644\u0645\u062E\u0635\u0635 \u0644\u0644\u0634\u0631\u062D \u0627\u0644\u0623\u0643\u0627\u062F\u064A\u0645\u064A \u0648\u0627\u0644\u062A\u062D\u0644\u064A\u0644 \u0627\u0644\u0630\u0643\u064A.";
+        let targetDesc = "محرك جوجل السريع والمخصص للشرح الأكاديمي والتحليل الذكي.";
 
         if (wantsDeepSeek) {
           targetSlug = "deepseek";
           targetTitle = "DeepSeek V4 Flash";
-          targetDesc = "\u0645\u062D\u0631\u0643 DeepSeek \u0639\u0627\u0644\u064A \u0627\u0644\u062F\u0642\u0629 \u0648\u0633\u0631\u064A\u0639 \u0627\u0644\u0628\u062F\u064A\u0647\u0629 \u0641\u064A \u0627\u0644\u0628\u0631\u0645\u062C\u0629 \u0648\u0627\u0644\u062D\u0644\u0648\u0644 \u0627\u0644\u0645\u0639\u0642\u062F\u0629.";
+          targetDesc = "محرك DeepSeek عالي الدقة وسريع البديهة في البرمجة والحلول المعقدة.";
         } else if (wantsDO) {
           targetSlug = "digitalocean";
           targetTitle = "Code-UP Platform Assistant (DigitalOcean Premium Llama-3.3-70B)";
-          targetDesc = "\u0646\u0645\u0648\u0630\u062C Llama-3.3 \u0627\u0644\u0645\u062A\u0645\u064A\u0632 \u0627\u0644\u0645\u0633\u062A\u0636\u0627\u0641 \u0639\u0644\u0649 DigitalOcean \u0639\u0627\u0644\u064A \u0627\u0644\u0623\u062F\u0627\u0621.";
+          targetDesc = "نموذج Llama-3.3 المتميز المستضاف على DigitalOcean عالي الأداء.";
         } else if (wantsMock) {
           targetSlug = "mock";
           targetTitle = "Mock Local Provider (Local Test)";
-          targetDesc = "\u0627\u0644\u0646\u0645\u0648\u0630\u062C \u0627\u0644\u0645\u062D\u0644\u064A \u0627\u0644\u062A\u062C\u0631\u064A\u0628\u064A \u0627\u0644\u0633\u0631\u064A\u0639 \u0644\u0627\u062E\u062A\u0628\u0627\u0631 \u0627\u0644\u0646\u0638\u0627\u0645.";
+          targetDesc = "النموذج المحلي التجريبي السريع لاختبار النظام.";
         }
 
         configMgr.updateConfig({ primaryProvider: targetSlug });
@@ -159,11 +159,11 @@ export async function POST(req: NextRequest) {
         }
 
         const confirmText =
-          `\u{1F451} **\u062A\u0645 \u062A\u0646\u0641\u064A\u0630 \u0623\u0645\u0631 \u0627\u0644\u0645\u0634\u0631\u0641 \u0627\u0644\u0639\u0627\u0645 \u0628\u0646\u062C\u0627\u062D! (Global AI Model Updated)**\n\n` +
-          `\u{1F310} **\u0627\u0644\u0646\u0645\u0648\u0630\u062C \u0627\u0644\u0646\u0634\u0637 \u0627\u0644\u0639\u0627\u0645 \u0644\u0644\u0637\u0644\u0627\u0628 \u0627\u0644\u0622\u0646**: \`${targetTitle}\`\n` +
-          `\u{1F4DD} **\u0627\u0644\u0648\u0635\u0641**: ${targetDesc}\n\n` +
-          `\u26A1 **\u062D\u0627\u0644\u0629 \u0627\u0644\u0645\u0646\u0635\u0629**: \u062A\u0645 \u062A\u062D\u0648\u064A\u0644 \u062C\u0645\u064A\u0639 \u0645\u062D\u0627\u062F\u062B\u0627\u062A \u0627\u0644\u0637\u0644\u0627\u0628 \u0641\u0648\u0631\u064B\u0627 \u0644\u0627\u0633\u062A\u062E\u062F\u0627\u0645 **${targetTitle}**.\n\n` +
-          `\u{1F4A1} *\u064A\u0645\u0643\u0646\u0643 \u0641\u064A \u0623\u064A \u0648\u0642\u062A \u0643\u062A\u0627\u0628\u0629 "\u0635\u0644\u0627\u062D\u064A\u0627\u062A" \u0644\u062A\u063A\u064A\u064A\u0631 \u0627\u0644\u0646\u0645\u0648\u0630\u062C \u0645\u062C\u062F\u062F\u064B\u0627.*`;
+          `\u{1F451} **تم تنفيذ أمر المشرف العام بنجاح! (Global AI Model Updated)**\n\n` +
+          `\u{1F310} **النموذج النشط العام للطلاب الآن**: \`${targetTitle}\`\n` +
+          `\u{1F4DD} **الوصف**: ${targetDesc}\n\n` +
+          `\u26A1 **حالة المنصة**: تم تحويل جميع محادثات الطلاب فورًا لاستخدام **${targetTitle}**.\n\n` +
+          `\u{1F4A1} *يمكنك في أي وقت كتابة "صلاحيات" لتغيير النموذج مجددًا.*`;
 
         return NextResponse.json({
           message: confirmText,
@@ -183,7 +183,7 @@ export async function POST(req: NextRequest) {
         })
         .catch(() => null);
       const isAfterDevMenu =
-        lastAssistantMsg?.content?.includes("[\u0645:dev_menu]") ||
+        lastAssistantMsg?.content?.includes("[م:dev_menu]") ||
         lastAssistantMsg?.content?.includes("Secret AI Model Switcher");
 
       if (cleanMsg === "ahmed123m" || cleanMsg === "admin123" || cleanMsg === "stats") {
@@ -262,35 +262,35 @@ export async function POST(req: NextRequest) {
 
         if (arg === "1" || arg === "do" || arg === "digitalocean" || arg === "codeup") {
           configMgr.updateConfig({ primaryProvider: "digitalocean" });
-          return NextResponse.json({ message: `\u{1F468}\u200D\u{1F4BB} **\u062A\u0645 \u062A\u0641\u0639\u064A\u0644 \u0648\u0636\u0639 \u0627\u0644\u0645\u0637\u0648\u0631 + \u062A\u062D\u0648\u064A\u0644 \u0625\u0644\u0649 DigitalOcean Premium (Llama-3.3-70B)**`, actions: [], source: "developer_mode" });
+          return NextResponse.json({ message: `\u{1F468}\u200D\u{1F4BB} **تم تفعيل وضع المطور + تحويل إلى DigitalOcean Premium (Llama-3.3-70B)**`, actions: [], source: "developer_mode" });
         } else if (arg === "2" || arg === "gemini") {
           configMgr.updateConfig({ primaryProvider: "gemini" });
-          return NextResponse.json({ message: "\u{1F468}\u200D\u{1F4BB} **\u062A\u0645 \u062A\u062D\u0648\u064A\u0644 \u0625\u0644\u0649 Google Gemini Pool (Primary)**", actions: [], source: "developer_mode" });
+          return NextResponse.json({ message: "\u{1F468}\u200D\u{1F4BB} **تم تحويل إلى Google Gemini Pool (Primary)**", actions: [], source: "developer_mode" });
         } else if (arg === "3" || arg === "deepseek") {
           configMgr.updateConfig({ primaryProvider: "deepseek" });
-          return NextResponse.json({ message: "\u{1F468}\u200D\u{1F4BB} **\u062A\u0645 \u062A\u062D\u0648\u064A\u0644 \u0625\u0644\u0649 DeepSeek V4 Flash**", actions: [], source: "developer_mode" });
+          return NextResponse.json({ message: "\u{1F468}\u200D\u{1F4BB} **تم تحويل إلى DeepSeek V4 Flash**", actions: [], source: "developer_mode" });
         } else if (arg === "4" || arg === "mock") {
           configMgr.updateConfig({ primaryProvider: "mock" });
-          return NextResponse.json({ message: "\u{1F468}\u200D\u{1F4BB} **\u062A\u0645 \u062A\u062D\u0648\u064A\u0644 \u0625\u0644\u0649 Mock Provider (Local Test)**", actions: [], source: "developer_mode" });
+          return NextResponse.json({ message: "\u{1F468}\u200D\u{1F4BB} **تم تحويل إلى Mock Provider (Local Test)**", actions: [], source: "developer_mode" });
         } else {
           const menuText =
-            `\u{1F468}\u200D\u{1F4BB} **\u062A\u0645 \u062A\u0641\u0639\u064A\u0644 \u0648\u0636\u0639 \u0627\u0644\u0645\u0637\u0648\u0631 \u0627\u0644\u0645\u0628\u0627\u0634\u0631 (Developer / Admin Mode Activated)**\n\n` +
-            `\u0623\u0647\u0644\u064B\u0627 \u064A\u0627 \u0628\u0627\u0634\u0645\u0647\u0646\u062F\u0633!\n\n` +
-            `\u{1F916} **\u0627\u062E\u062A\u064A\u0627\u0631 \u0627\u0644\u0646\u0645\u0648\u0630\u062C \u0628\u0640 1-4**:\n` +
+            `\u{1F468}\u200D\u{1F4BB} **تم تفعيل وضع المطور المباشر (Developer / Admin Mode Activated)**\n\n` +
+            `أهلًا يا باشمهندس!\n\n` +
+            `\u{1F916} **اختيار النموذج بـ 1-4**:\n` +
             `1\uFE0F\u20E3 DigitalOcean Premium (Llama-3.3-70B)\n` +
             `2\uFE0F\u20E3 Google Gemini Pool (Primary)\n` +
             `3\uFE0F\u20E3 DeepSeek V4 Flash\n` +
-            `4\uFE0F\u20E3 Mock Provider (Local Test)\n\n[\u0645:dev_menu]`;
+            `4\uFE0F\u20E3 Mock Provider (Local Test)\n\n[م:dev_menu]`;
           return NextResponse.json({ message: menuText, actions: [], source: "developer_mode" });
         }
       }
 
       if (cleanMsg === "ahmedpromode" || cleanMsg === "professional" || cleanMsg === "pro") {
-        return NextResponse.json({ message: "\u{1F454} **\u062A\u0645 \u062A\u0641\u0639\u064A\u0644 \u0627\u0644\u0648\u0636\u0639 \u0627\u0644\u0645\u0647\u0646\u064A \u0627\u0644\u0645\u062A\u0642\u062F\u0645 (Professional Mode)**\n\n[\u0645:pro_mode]", actions: [], source: "pro_mode" });
+        return NextResponse.json({ message: "\u{1F454} **تم تفعيل الوضع المهني المتقدم (Professional Mode)**\n\n[م:pro_mode]", actions: [], source: "pro_mode" });
       }
 
       if (cleanMsg === "ahmedfastmode" || cleanMsg === "fast" || cleanMsg === "speed") {
-        return NextResponse.json({ message: "\u26A1 **\u062A\u0645 \u062A\u0641\u0639\u064A\u0644 \u0648\u0636\u0639 \u0627\u0644\u0627\u0633\u062A\u062C\u0627\u0628\u0629 \u0627\u0644\u0641\u0627\u0626\u0642\u0629 (Fast Latency Mode)**\n\n[\u0645:fast_mode]", actions: [], source: "fast_mode" });
+        return NextResponse.json({ message: "\u26A1 **تم تفعيل وضع الاستجابة الفائقة (Fast Latency Mode)**\n\n[م:fast_mode]", actions: [], source: "fast_mode" });
       }
     }
 
@@ -299,14 +299,14 @@ export async function POST(req: NextRequest) {
     // triggers for wiping history; only respond to explicit reset commands.
     if (
       cleanMsg === "ahmedreset" ||
-      trimmedMsg === "\u0645\u0633\u062D \u0645\u062D\u0627\u062F\u062B\u062A\u064A" ||
-      trimmedMsg === "\u0627\u062D\u0630\u0641 \u0645\u062D\u0627\u062F\u062B\u062A\u064A"
+      trimmedMsg === "مسح محادثتي" ||
+      trimmedMsg === "احذف محادثتي"
     ) {
       await prisma.aIConversation.deleteMany({ where: { studentId: session.id } });
       const { MemoryManager } = await import("@/ai/memory/MemoryManager");
       MemoryManager.getInstance().clearSession(session.id);
       return NextResponse.json({
-        message: "\u{1F5D1}\uFE0F **\u062A\u0645 \u0645\u0633\u062D \u062C\u0645\u064A\u0639 \u0627\u0644\u0631\u0633\u0627\u0626\u0644 \u0648\u0627\u0644\u0645\u062D\u0627\u062F\u062B\u0627\u062A \u0627\u0644\u0633\u0627\u0628\u0642\u0629 \u0648\u0627\u0644\u062D\u0627\u0644\u064A\u0629 \u0628\u0646\u062C\u0627\u062D!**\n\n\u062A\u0645 \u0625\u0639\u0627\u062F\u0629 \u0636\u0628\u0637 \u0627\u0644\u0633\u062C\u0644 \u0628\u0627\u0644\u0643\u0627\u0645\u0644.",
+        message: "\u{1F5D1}\uFE0F **تم مسح جميع الرسائل والمحادثات السابقة والحالية بنجاح!**\n\nتم إعادة ضبط السجل بالكامل.",
         actions: [],
         source: "chat_cleared",
       });
@@ -318,7 +318,7 @@ export async function POST(req: NextRequest) {
       buildStudentContext(session.id).catch((ctxErr) => {
         console.error("[chat/route] buildStudentContext failed:", ctxErr);
         return {
-          profile: { id: session.id, name: session.name || "\u0627\u0644\u0637\u0627\u0644\u0628", email: session.email || "", age: null, educationalStage: null, phone: null },
+          profile: { id: session.id, name: session.name || "الطالب", email: session.email || "", age: null, educationalStage: null, phone: null },
           courses: [],
           overallStats: { totalCourses: 0, averageScore: 0, totalQuizzesTaken: 0, totalVideosWatched: 0 },
           weakAreas: [],
@@ -360,14 +360,14 @@ export async function POST(req: NextRequest) {
     const notifItems: string[] = [];
     const [recentGrades, recentTickets] = (notifData || [[], []]) as [any[], any[]];
     for (const r of recentGrades) {
-      notifItems.push(`\u062A\u0639\u062F\u064A\u0644 \u062F\u0631\u062C\u0629 "${r.quiz?.title || "\u0643\u0648\u064A\u0632"}": ${r.status === "approved" ? "\u0645\u0642\u0628\u0648\u0644 \u2705" : "\u0645\u0631\u0641\u0648\u0636 \u274C"}${r.teacherNotes ? ` - ${r.teacherNotes}` : ""}`);
+      notifItems.push(`تعديل درجة "${r.quiz?.title || "كويز"}": ${r.status === "approved" ? "مقبول \u2705" : "مرفوض \u274C"}${r.teacherNotes ? ` - ${r.teacherNotes}` : ""}`);
     }
     for (const t of recentTickets) {
-      notifItems.push(`"${t.title}": ${t.status === "resolved" ? "\u062A\u0645 \u0627\u0644\u062D\u0644 \u2705" : "\u0645\u063A\u0644\u0642"}${t.resolution ? ` - ${t.resolution}` : ""}`);
+      notifItems.push(`"${t.title}": ${t.status === "resolved" ? "تم الحل \u2705" : "مغلق"}${t.resolution ? ` - ${t.resolution}` : ""}`);
     }
     const notifications =
       notifItems.length > 0
-        ? `\u062A\u062D\u062F\u064A\u062B\u0627\u062A \u0637\u0644\u0628\u0627\u062A\u0643:\n${notifItems.map((n) => `\u2022 ${n}`).join("\n")}`
+        ? `تحديثات طلباتك:\n${notifItems.map((n) => `• ${n}`).join("\n")}`
         : undefined;
 
     let result;
@@ -376,7 +376,7 @@ export async function POST(req: NextRequest) {
     } catch (chatErr) {
       console.error("[chat/route] chatWithAI threw:", chatErr);
       result = {
-        message: "\u0645\u0633\u0627\u0639\u062F \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A \u0642\u064A\u062F \u0627\u0644\u062A\u062D\u062F\u064A\u062B \u0648\u0627\u0644\u0635\u064A\u0627\u0646\u0629 \u062D\u0627\u0644\u064A\u064B\u0627\u060C \u064A\u0631\u062C\u0649 \u0627\u0644\u0645\u062D\u0627\u0648\u0644\u0629 \u0645\u0631\u0629 \u0623\u062E\u0631\u0649 \u0644\u0627\u062D\u0642\u064B\u0627 \u23F3",
+        message: "مساعد الذكاء الاصطناعي قيد التحديث والصيانة حاليًا، يرجى المحاولة مرة أخرى لاحقًا \u23F3",
         actions: [] as AIAction[],
         source: "fallback" as const,
       };
@@ -396,27 +396,27 @@ export async function POST(req: NextRequest) {
           orderBy: { createdAt: "desc" },
           take: 10,
         });
-        let statusMsg = "\u{1F4CB} \u062D\u0627\u0644\u0629 \u0637\u0644\u0628\u0627\u062A\u064A:\n\n";
+        let statusMsg = "\u{1F4CB} حالة طلباتي:\n\n";
         if (gradeReqs.length === 0 && ticketReqs.length === 0) {
-          statusMsg += "\u0645\u0641\u064A\u0634 \u0637\u0644\u0628\u0627\u062A \u0644\u0633\u0647.\n";
+          statusMsg += "مفيش طلبات لسه.\n";
         } else {
           if (gradeReqs.length > 0) {
-            statusMsg += "\u270F\uFE0F \u0637\u0644\u0628\u0627\u062A \u062A\u0639\u062F\u064A\u0644 \u062F\u0631\u062C\u0629:\n";
+            statusMsg += "\u270F\uFE0F طلبات تعديل درجة:\n";
             for (const r of gradeReqs) {
-              const lbl = r.status === "approved" ? "\u0645\u0642\u0628\u0648\u0644 \u2705" : r.status === "rejected" ? "\u0645\u0631\u0641\u0648\u0636 \u274C" : "\u0642\u064A\u062F \u0627\u0644\u0645\u0631\u0627\u062C\u0639\u0629 \u23F3";
-              statusMsg += `\u2022 ${r.quiz.title}: ${lbl}${r.teacherNotes ? ` (${r.teacherNotes})` : ""}\n`;
+              const lbl = r.status === "approved" ? "مقبول \u2705" : r.status === "rejected" ? "مرفوض \u274C" : "قيد المراجعة \u23F3";
+              statusMsg += `• ${r.quiz.title}: ${lbl}${r.teacherNotes ? ` (${r.teacherNotes})` : ""}\n`;
             }
             statusMsg += "\n";
           }
           if (ticketReqs.length > 0) {
-            statusMsg += "\u{1F4E2} \u0627\u0644\u0634\u0643\u0627\u0648\u0649:\n";
+            statusMsg += "\u{1F4E2} الشكاوى:\n";
             for (const t of ticketReqs) {
-              const lbl = t.status === "resolved" ? "\u062A\u0645 \u0627\u0644\u062D\u0644 \u2705" : t.status === "closed" ? "\u0645\u063A\u0644\u0648\u0642" : t.status === "escalated" ? "\u062A\u0645 \u0627\u0644\u062A\u0635\u0639\u064A\u062F \u2191" : "\u0645\u0641\u062A\u0648\u062D \u23F3";
-              statusMsg += `\u2022 ${t.title}: ${lbl}${t.resolution ? ` (${t.resolution})` : ""}\n`;
+              const lbl = t.status === "resolved" ? "تم الحل \u2705" : t.status === "closed" ? "مغلوق" : t.status === "escalated" ? "تم التصعيد \u2191" : "مفتوح \u23F3";
+              statusMsg += `• ${t.title}: ${lbl}${t.resolution ? ` (${t.resolution})` : ""}\n`;
             }
           }
         }
-        statusMsg += "\n\u0627\u0643\u062A\u0628 0 \u0644\u0644\u0631\u062C\u0648\u0639\n\n[\u0645:5]";
+        statusMsg += "\nاكتب 0 للرجوع\n\n[م:5]";
         result.message = statusMsg;
         executedActions.push({ type: "show_insights", status: "ok" });
         continue;
@@ -458,7 +458,7 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error("AI chat error:", err instanceof Error ? err.stack : err);
     return NextResponse.json({
-      message: "\u0623\u0647\u0644\u064B\u0627 \u0628\u064A\u0643! \u0623\u0646\u0627 \u0645\u0631\u0634\u062F\u0643 \u0627\u0644\u0630\u0643\u064A \u0639\u0644\u0649 Code-UP \u{1F31F}\n\n\u0623\u0646\u0627 \u0647\u0646\u0627 \u0644\u0645\u0633\u0627\u0639\u062F\u062A\u0643!",
+      message: "أهلًا بيك! أنا مرشدك الذكي على Code-UP \u{1F31F}\n\nأنا هنا لمساعدتك!",
       actions: [],
       source: "fallback",
     });
@@ -474,7 +474,7 @@ export async function POST(req: NextRequest) {
 export async function GET() {
   try {
     const session = (await getStudentSession()) ?? (await getSession());
-    if (!session) return NextResponse.json({ error: "\u063A\u064A\u0631 \u0645\u0635\u0631\u062D" }, { status: 401 });
+    if (!session) return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
 
     const history = await prisma.aIConversation.findMany({
       where: { studentId: session.id },
@@ -486,23 +486,23 @@ export async function GET() {
     return NextResponse.json({ messages: history });
   } catch (err) {
     console.error("AI chat history error:", err);
-    return NextResponse.json({ error: "\u062D\u062F\u062B \u062E\u0637\u0623" }, { status: 500 });
+    return NextResponse.json({ error: "حدث خطأ" }, { status: 500 });
   }
 }
 
 export async function DELETE() {
   try {
     const session = (await getStudentSession()) ?? (await getSession());
-    if (!session) return NextResponse.json({ error: "\u063A\u064A\u0631 \u0645\u0635\u0631\u062D" }, { status: 401 });
+    if (!session) return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
 
     await prisma.aIConversation.deleteMany({ where: { studentId: session.id } });
     const { MemoryManager } = await import("@/ai/memory/MemoryManager");
     MemoryManager.getInstance().clearSession(session.id);
 
-    return NextResponse.json({ success: true, message: "\u062A\u0645 \u0645\u0633\u062D \u0627\u0644\u0645\u062D\u0627\u062F\u062B\u0629 \u0648\u062D\u0630\u0641 \u0627\u0644\u0633\u062C\u0644 \u0628\u0627\u0644\u0643\u0627\u0645\u0644" });
+    return NextResponse.json({ success: true, message: "تم مسح المحادثة وحذف السجل بالكامل" });
   } catch (err) {
     console.error("Delete conversation error:", err);
-    return NextResponse.json({ error: "\u062D\u062F\u062B \u062E\u0637\u0623 \u0623\u062B\u0646\u0627\u0621 \u0645\u0633\u062D \u0627\u0644\u0645\u062D\u0627\u062F\u062B\u0629" }, { status: 500 });
+    return NextResponse.json({ error: "حدث خطأ أثناء مسح المحادثة" }, { status: 500 });
   }
 }
 
@@ -520,7 +520,7 @@ async function executeAction(
           evidence?: string;
         };
         if (!p?.quizId || !p?.reason) {
-          return { type: action.type, status: "failed", error: "\u0628\u064A\u0627\u0646\u0627\u062A \u0646\u0627\u0642\u0635\u0629" };
+          return { type: action.type, status: "failed", error: "بيانات ناقصة" };
         }
 
         // Dedup: refuse to create a second pending request for the same quiz
@@ -533,7 +533,7 @@ async function executeAction(
             type: action.type,
             status: "skipped",
             id: existingPending.id,
-            error: "\u0644\u062F\u064A\u0643 \u0637\u0644\u0628 \u0645\u0639\u0644\u0642 \u0628\u0627\u0644\u0641\u0639\u0644 \u0644\u0647\u0630\u0627 \u0627\u0644\u0643\u0648\u064A\u0632 \u2014 \u0633\u064A\u062A\u0645 \u0645\u0631\u0627\u062C\u0639\u062A\u0647 \u0642\u0631\u064A\u0628\u064B\u0627.",
+            error: "لديك طلب معلق بالفعل لهذا الكويز — سيتم مراجعته قريبًا.",
           };
         }
 
@@ -542,16 +542,16 @@ async function executeAction(
           include: { quiz: { include: { folder: { select: { courseId: true } } } } },
         });
         if (!result) {
-          return { type: action.type, status: "failed", error: "\u0644\u0645 \u064A\u062A\u0645 \u062D\u0644 \u0647\u0630\u0627 \u0627\u0644\u0643\u0648\u064A\u0632" };
+          return { type: action.type, status: "failed", error: "لم يتم حل هذا الكويز" };
         }
 
-        let aiAnalysis = "\u062A\u0645 \u0625\u0646\u0634\u0627\u0621 \u0627\u0644\u0637\u0644\u0628 \u0628\u0648\u0627\u0633\u0637\u0629 \u0627\u0644\u0645\u0633\u0627\u0639\u062F \u0627\u0644\u0630\u0643\u064A \u0628\u0646\u0627\u0621\u064B \u0639\u0644\u0649 \u0634\u0643\u0648\u0649 \u0627\u0644\u0645\u062A\u0639\u0644\u0645";
+        let aiAnalysis = "تم إنشاء الطلب بواسطة المساعد الذكي بناءً على شكوى المتعلم";
         if (p.evidence) {
           try {
             const ctx = JSON.parse(p.evidence) as { chatHistory?: string; studentInfo?: string };
             const parts = [aiAnalysis];
-            if (ctx.studentInfo) parts.push(`\n\n\u{1F4CB} \u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0645\u062A\u0639\u0644\u0645:\n${ctx.studentInfo}`);
-            if (ctx.chatHistory) parts.push(`\n\n\u{1F4AC} \u0633\u062C\u0644 \u0627\u0644\u0645\u062D\u0627\u062F\u062B\u0629:\n${ctx.chatHistory}`);
+            if (ctx.studentInfo) parts.push(`\n\n\u{1F4CB} بيانات المتعلم:\n${ctx.studentInfo}`);
+            if (ctx.chatHistory) parts.push(`\n\n\u{1F4AC} سجل المحادثة:\n${ctx.chatHistory}`);
             aiAnalysis = parts.join("");
           } catch { /* keep default */ }
         }
@@ -584,22 +584,22 @@ async function executeAction(
           studentInfo?: string;
         };
         if (!p?.title || !p?.description) {
-          return { type: action.type, status: "failed", error: "\u0628\u064A\u0627\u0646\u0627\u062A \u0646\u0627\u0642\u0635\u0629" };
+          return { type: action.type, status: "failed", error: "بيانات ناقصة" };
         }
 
         if (p.courseId) {
           const { checkCourseEnrollment } = await import("@/lib/authorization");
           const isEnrolled = await checkCourseEnrollment(studentId, p.courseId);
           if (!isEnrolled) {
-            return { type: action.type, status: "failed", error: "\u063A\u064A\u0631 \u0645\u0633\u062C\u0644 \u0641\u064A \u0647\u0630\u0627 \u0627\u0644\u0643\u0648\u0631\u0633" };
+            return { type: action.type, status: "failed", error: "غير مسجل في هذا الكورس" };
           }
         }
 
         let aiResponse: string | null = null;
         if (p.chatHistory || p.studentInfo) {
           const parts: string[] = [];
-          if (p.studentInfo) parts.push(`\u{1F4CB} \u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0645\u062A\u0639\u0644\u0645:\n${p.studentInfo}`);
-          if (p.chatHistory) parts.push(`\u{1F4AC} \u0633\u062C\u0644 \u0627\u0644\u0645\u062D\u0627\u062F\u062B\u0629:\n${p.chatHistory}`);
+          if (p.studentInfo) parts.push(`\u{1F4CB} بيانات المتعلم:\n${p.studentInfo}`);
+          if (p.chatHistory) parts.push(`\u{1F4AC} سجل المحادثة:\n${p.chatHistory}`);
           aiResponse = parts.join("\n\n");
         }
 
@@ -627,18 +627,18 @@ async function executeAction(
           rating?: number;
         };
         if (!p?.courseId || !p?.content) {
-          return { type: action.type, status: "failed", error: "\u0628\u064A\u0627\u0646\u0627\u062A \u0646\u0627\u0642\u0635\u0629" };
+          return { type: action.type, status: "failed", error: "بيانات ناقصة" };
         }
         const { checkCourseEnrollment } = await import("@/lib/authorization");
         const isEnrolled = await checkCourseEnrollment(studentId, p.courseId);
         if (!isEnrolled) {
-          return { type: action.type, status: "failed", error: "\u063A\u064A\u0631 \u0645\u0633\u062C\u0644 \u0641\u064A \u0647\u0630\u0627 \u0627\u0644\u0643\u0648\u0631\u0633" };
+          return { type: action.type, status: "failed", error: "غير مسجل في هذا الكورس" };
         }
         const course = await prisma.course.findUnique({
           where: { id: p.courseId },
           select: { teacherId: true },
         });
-        if (!course) return { type: action.type, status: "failed", error: "\u0627\u0644\u0643\u0648\u0631\u0633 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" };
+        if (!course) return { type: action.type, status: "failed", error: "الكورس غير موجود" };
 
         const fb = await prisma.studentFeedback.create({
           data: {
@@ -678,7 +678,7 @@ async function executeAction(
     return {
       type: action.type,
       status: "failed",
-      error: err instanceof Error ? err.message : "\u062E\u0637\u0623 \u063A\u064A\u0631 \u0645\u0639\u0631\u0648\u0641",
+      error: err instanceof Error ? err.message : "خطأ غير معروف",
     };
   }
 }

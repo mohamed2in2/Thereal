@@ -8,7 +8,7 @@ const MAX_QUERY_LEN = 100;
 
 export async function GET(req: NextRequest) {
   const session = await getSession();
-  if (!session) return NextResponse.json({ error: "\u063A\u064A\u0631 \u0645\u0635\u0631\u062D" }, { status: 401 });
+  if (!session) return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
 
   const q = req.nextUrl.searchParams.get("q")?.trim() ?? "";
 
@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
   // Prevent DoS: a 100-KB LIKE pattern scans entire tables
   if (q.length > MAX_QUERY_LEN) {
     return NextResponse.json(
-      { error: "\u0627\u0633\u062A\u0639\u0644\u0627\u0645 \u0627\u0644\u0628\u062D\u062B \u0637\u0648\u064A\u0644 \u062C\u062F\u064B\u0627 (100 \u062D\u0631\u0641 \u0643\u062D\u062F \u0623\u0642\u0635\u0649)" },
+      { error: "استعلام البحث طويل جدًا (100 حرف كحد أقصى)" },
       { status: 400 }
     );
   }

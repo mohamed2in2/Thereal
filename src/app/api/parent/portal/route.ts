@@ -186,5 +186,5 @@ export async function GET(req: NextRequest) {
     console.error("[parent/portal] Error:", error);
     return NextResponse.json({ error: "حدث خطأ داخلي" }, { status: 500 });
   }
-  }
 }
+

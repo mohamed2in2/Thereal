@@ -25,7 +25,7 @@ function isAllowedStatus(v: unknown): v is TicketStatus {
 export async function POST(req: NextRequest) {
   try {
     const session = await getStudentSession();
-    if (!session) return NextResponse.json({ error: "\u063A\u064A\u0631 \u0645\u0635\u0631\u062D" }, { status: 401 });
+    if (!session) return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
 
     const body = await req.json().catch(() => ({}));
     const { title, description, type, priority, courseId } = body as {
@@ -39,26 +39,26 @@ export async function POST(req: NextRequest) {
     // Required fields
     if (!title || typeof title !== "string" || title.trim().length < 5) {
       return NextResponse.json(
-        { error: "\u0627\u0644\u0639\u0646\u0648\u0627\u0646 \u0645\u0637\u0644\u0648\u0628 (5 \u062D\u0631\u0648\u0641 \u0639\u0644\u0649 \u0627\u0644\u0623\u0642\u0644)" },
+        { error: "العنوان مطلوب (5 حروف على الأقل)" },
         { status: 400 }
       );
     }
     if (title.length > 200) {
       return NextResponse.json(
-        { error: "\u0627\u0644\u0639\u0646\u0648\u0627\u0646 \u0637\u0648\u064A\u0644 \u062C\u062F\u064B\u0627 (200 \u062D\u0631\u0641 \u0643\u062D\u062F \u0623\u0642\u0635\u0649)" },
+        { error: "العنوان طويل جدًا (200 حرف كحد أقصى)" },
         { status: 400 }
       );
     }
 
     if (!description || typeof description !== "string" || description.trim().length < 10) {
       return NextResponse.json(
-        { error: "\u0627\u0644\u0648\u0635\u0641 \u0645\u0637\u0644\u0648\u0628 (10 \u062D\u0631\u0648\u0641 \u0639\u0644\u0649 \u0627\u0644\u0623\u0642\u0644)" },
+        { error: "الوصف مطلوب (10 حروف على الأقل)" },
         { status: 400 }
       );
     }
     if (description.length > 5000) {
       return NextResponse.json(
-        { error: "\u0627\u0644\u0648\u0635\u0641 \u0637\u0648\u064A\u0644 \u062C\u062F\u064B\u0627 (5000 \u062D\u0631\u0641 \u0643\u062D\u062F \u0623\u0642\u0635\u0649)" },
+        { error: "الوصف طويل جدًا (5000 حرف كحد أقصى)" },
         { status: 400 }
       );
     }
@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
       const isEnrolled = await checkCourseEnrollment(session.id, safeCourseId);
       if (!isEnrolled) {
         return NextResponse.json(
-          { error: "\u063A\u064A\u0631 \u0645\u0633\u062C\u0644 \u0641\u064A \u0647\u0630\u0627 \u0627\u0644\u0643\u0648\u0631\u0633" },
+          { error: "غير مسجل في هذا الكورس" },
           { status: 403 }
         );
       }
@@ -96,11 +96,11 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       ticket,
-      message: "\u062A\u0645 \u0625\u0646\u0634\u0627\u0621 \u0627\u0644\u062A\u0630\u0643\u0631\u0629 \u0628\u0646\u062C\u0627\u062D",
+      message: "تم إنشاء التذكرة بنجاح",
     });
   } catch (err) {
     console.error("Tickets POST error:", err);
-    return NextResponse.json({ error: "\u062D\u062F\u062B \u062E\u0637\u0623" }, { status: 500 });
+    return NextResponse.json({ error: "حدث خطأ" }, { status: 500 });
   }
 }
 
@@ -108,7 +108,7 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   try {
     const session = await getSession();
-    if (!session) return NextResponse.json({ error: "\u063A\u064A\u0631 \u0645\u0635\u0631\u062D" }, { status: 401 });
+    if (!session) return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
 
     const statusParam = req.nextUrl.searchParams.get("status");
     // Only pass status to Prisma when it's a known enum value
@@ -157,9 +157,9 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ tickets });
     }
 
-    return NextResponse.json({ error: "\u063A\u064A\u0631 \u0645\u0635\u0631\u062D" }, { status: 403 });
+    return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
   } catch (err) {
     console.error("Tickets GET error:", err);
-    return NextResponse.json({ error: "\u062D\u062F\u062B \u062E\u0637\u0623" }, { status: 500 });
+    return NextResponse.json({ error: "حدث خطأ" }, { status: 500 });
   }
 }
