@@ -86,10 +86,19 @@ export async function checkQuizAccess(userId: string, role: string, quizId: stri
   if (!quiz) return false;
 
   if (role === "teacher") {
-    return (
-      (quiz.folder?.course?.teacherId === userId) ||
-      (quiz.planLessonId !== null)
-    );
+    // Course-based quiz: teacher must own the course.
+    if (quiz.folder?.course?.teacherId === userId) return true;
+
+    // Plan-based quiz: teacher must own the plan.
+    if (quiz.planLessonId && quiz.planLesson) {
+      const plan = await prisma.plan.findUnique({
+        where: { id: quiz.planLesson.planId },
+        select: { teacherId: true },
+      });
+      if (plan?.teacherId === userId) return true;
+    }
+
+    return false;
   }
 
   if (role !== "student") return false;
