@@ -29,6 +29,8 @@
 .env.local
 .env.*.local
 !.env.example
+.tokens.json
+.tokens.*.json
 
 # vercel
 .vercel
