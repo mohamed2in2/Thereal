@@ -70,3 +70,8 @@ bin/
 .env.save.2
 .eslintcache
 scratch/
+
+# Server Guardian & Watchdog
+/server-guardian/watchdog/watchdog-auth/
+/server-guardian/**/node_modules/
+
