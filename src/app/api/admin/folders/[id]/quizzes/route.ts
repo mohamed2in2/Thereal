@@ -2,11 +2,20 @@ import { logAdminAction } from "@/lib/admin-auth";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
+import { isTeacherLike, actingTeacherId, hasAssistantPermission } from "@/lib/teacher-scope";
 import { prisma } from "@/lib/prisma";
+import {
+  ContentType,
+  parseCloseSchedule,
+  syncContentCloseSchedule,
+} from "@/lib/content-access-engine";
+import { parseDegree } from "@/lib/quiz-grading";
+import { FolderContentType } from "@/generated/prisma";
+import { appendFolderContent } from "@/lib/folder-content-order";
 
 // Validation constants
 const MIN_QUESTIONS = 1;
-const MAX_QUESTIONS = 50;
+const MAX_QUESTIONS = 200;
 const MIN_OPTIONS = 2;
 const MAX_OPTIONS = 4;
 const MAX_QUESTION_LENGTH = 500;
@@ -94,6 +103,7 @@ function validateQuizData(title: string, questions: any[]): { valid: boolean; er
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id: folderId } = await params;
     const session = await getSession();
 
     if (session && session.role === "superadmin") {
@@ -108,12 +118,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         });
       } catch (e) {}
     }
-    if (!session || session.role !== "teacher") {
+    if (!session || !isTeacherLike(session.role)) {
       return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
     }
+    if (!hasAssistantPermission(session, "editCourses")) {
+      return NextResponse.json({ error: "المدرّس لم يمنحك صلاحية تعديل الكورسات" }, { status: 403 });
+    }
 
-    const { id: folderId } = await params;
-    const { title, questions, timeLimitMinutes } = await req.json();
+    const { title, questions, timeLimitMinutes, closeAt, enableAutoClose, hideAnswersUntilEssayGraded } = await req.json();
 
     // Validate quiz data
     const validation = validateQuizData(title, questions);
@@ -125,7 +137,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const folder = await prisma.folder.findFirst({
       where: {
         id: folderId,
-        course: { teacherId: session.id },
+        course: { teacherId: actingTeacherId(session) },
       },
     });
 
@@ -140,37 +152,67 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         ? Math.min(Math.round(parsedLimit), MAX_TIME_LIMIT)
         : 30;
 
+    const closeSchedule = parseCloseSchedule({ closeAt, enableAutoClose });
+    if (closeSchedule.error) {
+      return NextResponse.json({ error: closeSchedule.error }, { status: 400 });
+    }
+
     // Create quiz with validated data
     const quiz = await prisma.quiz.create({
       data: {
         title: title.trim(),
         folderId,
         timeLimitMinutes: normalizedLimit,
+        closeAt: closeSchedule.closeAt,
+        enableAutoClose: closeSchedule.enableAutoClose,
+        hideAnswersUntilEssayGraded: Boolean(hideAnswersUntilEssayGraded),
         questions: {
           create: questions.map(
             (
               q: {
                 question: string;
                 questionType?: string;
+                type?: string;
                 imageUrl?: string;
                 optionA?: string;
                 optionB?: string;
                 optionC?: string;
                 optionD?: string;
+                options?: string[];
                 correctAnswer?: string;
+                correctIndex?: number;
+                explanation?: string;
+                modelNumber?: number;
               },
               i: number
-            ) => ({
-              question: q.question.trim(),
-              questionType: q.questionType === "essay" ? "essay" : "mcq",
-              imageUrl: q.imageUrl?.trim() || null,
-              optionA: q.questionType === "essay" ? "" : (q.optionA?.trim() || ""),
-              optionB: q.questionType === "essay" ? "" : (q.optionB?.trim() || ""),
-              optionC: q.questionType === "essay" ? "" : (q.optionC?.trim() || ""),
-              optionD: q.questionType === "essay" ? "" : (q.optionD?.trim() || ""),
-              correctAnswer: q.questionType === "essay" ? "A" : (q.correctAnswer || "A"),
-              order: i,
-            })
+            ) => {
+              const isEssay = q.questionType === "essay" || q.type === "ESSAY" || q.type === "essay";
+              const optA = isEssay ? "" : (q.optionA?.trim() || (Array.isArray(q.options) ? q.options[0]?.trim() : "") || "");
+              const optB = isEssay ? "" : (q.optionB?.trim() || (Array.isArray(q.options) ? q.options[1]?.trim() : "") || "");
+              const optC = isEssay ? "" : (q.optionC?.trim() || (Array.isArray(q.options) ? q.options[2]?.trim() : "") || "");
+              const optD = isEssay ? "" : (q.optionD?.trim() || (Array.isArray(q.options) ? q.options[3]?.trim() : "") || "");
+              const optionsArr = Array.isArray(q.options) ? q.options : [optA, optB, optC, optD].filter(Boolean);
+              const corrAns = isEssay ? "A" : (q.correctAnswer || (typeof q.correctIndex === "number" ? ["A", "B", "C", "D"][q.correctIndex] : "A"));
+              const corrIdx = typeof q.correctIndex === "number" ? q.correctIndex : ["A", "B", "C", "D"].indexOf(corrAns);
+
+              return {
+                question: q.question.trim(),
+                questionType: isEssay ? "essay" : "mcq",
+                type: isEssay ? "ESSAY" : "MCQ",
+                imageUrl: q.imageUrl?.trim() || null,
+                optionA: optA,
+                optionB: optB,
+                optionC: optC,
+                optionD: optD,
+                options: optionsArr,
+                correctAnswer: corrAns,
+                correctIndex: corrIdx >= 0 ? corrIdx : 0,
+                explanation: q.explanation || null,
+                degree: parseDegree((q as { degree?: unknown }).degree),
+                modelNumber: Number(q.modelNumber) || 1,
+                order: i,
+              };
+            }
           ),
         },
       },
@@ -178,26 +220,71 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     });
 
     // Auto-create ContentItem graph node for the new quiz
-    await prisma.contentItem.upsert({
-      where: {
-        type_sourceId: {
-          type: "QUIZ",
-          sourceId: quiz.id,
-        },
-      },
-      create: {
-        type: "QUIZ",
-        sourceId: quiz.id,
-        title: quiz.title,
-      },
-      update: {
-        title: quiz.title,
-      },
-    }).catch(console.error);
+    await syncContentCloseSchedule({
+      type: ContentType.QUIZ,
+      sourceId: quiz.id,
+      title: quiz.title,
+      closeAt: quiz.closeAt,
+      enableAutoClose: quiz.enableAutoClose,
+    });
+
+    await appendFolderContent(folderId, FolderContentType.EXAM, quiz.id);
 
     return NextResponse.json({ quiz }, { status: 201 });
   } catch (error) {
     console.error("Failed to create quiz:", error);
     return NextResponse.json({ error: "تعذر إنشاء الاختبار" }, { status: 500 });
   }
+}
+
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const session = await getSession();
+  if (!session || !isTeacherLike(session.role)) {
+    return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
+  }
+  if (!hasAssistantPermission(session, "editCourses")) {
+    return NextResponse.json({ error: "المدرّس لم يمنحك صلاحية تعديل الكورسات" }, { status: 403 });
+  }
+
+  const { id: folderId } = await params;
+  const body = await req.json() as {
+    quizId?: string;
+    closeAt?: string | null;
+    enableAutoClose?: boolean;
+    hideAnswersUntilEssayGraded?: boolean;
+  };
+  if (!body.quizId) return NextResponse.json({ error: "quizId مطلوب" }, { status: 400 });
+
+  const quiz = await prisma.quiz.findFirst({
+    where: { id: body.quizId, folderId, folder: { course: { teacherId: actingTeacherId(session) } } },
+    select: { id: true, title: true },
+  });
+  if (!quiz) return NextResponse.json({ error: "الاختبار غير موجود" }, { status: 404 });
+
+  const closeSchedule = parseCloseSchedule({
+    closeAt: body.closeAt,
+    enableAutoClose: body.enableAutoClose,
+  });
+  if (closeSchedule.error) {
+    return NextResponse.json({ error: closeSchedule.error }, { status: 400 });
+  }
+
+  const updated = await prisma.quiz.update({
+    where: { id: quiz.id },
+    data: {
+      closeAt: closeSchedule.closeAt,
+      enableAutoClose: closeSchedule.enableAutoClose,
+      ...(body.hideAnswersUntilEssayGraded !== undefined ? { hideAnswersUntilEssayGraded: Boolean(body.hideAnswersUntilEssayGraded) } : {}),
+    },
+  });
+
+  await syncContentCloseSchedule({
+    type: ContentType.QUIZ,
+    sourceId: updated.id,
+    title: updated.title,
+    closeAt: updated.closeAt,
+    enableAutoClose: updated.enableAutoClose,
+  });
+
+  return NextResponse.json({ quiz: updated });
 }

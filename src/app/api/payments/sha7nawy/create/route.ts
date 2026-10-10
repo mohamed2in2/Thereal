@@ -8,6 +8,7 @@ import {
   SHA7NAWY_PENDING_TYPE,
   sha7nawyRefNote,
   normalizeEgyptianPhone,
+  sha7nawyGatewayIdNote,
 } from "@/lib/sha7nawy";
 import {
   createShakeOutPayment,
@@ -17,9 +18,14 @@ import {
 import { getPaymentMethod } from "@/lib/payment-methods";
 import { paymentRateLimiter } from "@/lib/paymentRateLimiter";
 import { verifyAuthoritativePrice } from "@/lib/price-verifier";
+import { blockSupportView } from "@/lib/support-auth";
 
 export async function POST(req: NextRequest) {
   const session = await getSession();
+  // Defence in depth behind the proxy guard: never let a support agent act as
+  // the student on grades, progress or money.
+  const supportBlocked = blockSupportView(session);
+  if (supportBlocked) return supportBlocked;
   if (!session) {
     return NextResponse.json({ error: "يجب تسجيل الدخول أولاً" }, { status: 401 });
   }
@@ -110,6 +116,28 @@ export async function POST(req: NextRequest) {
         { error: priceCheck.error || "المبلغ المطلوب لا يطابق السعر الفعلي المعتمد." },
         { status: 400 }
       );
+    }
+
+    // Stop a student paying (by any method) for a term they already own.
+    if (teacherId && planType === "termly") {
+      const { termForSale, ownsActiveTerm } = await import("@/lib/teacher-terms");
+      const stageUser = grade ? null : await prisma.user.findUnique({ where: { id: session.id }, select: { educationalStage: true } });
+      const saleTerm = await termForSale(teacherId, grade || stageUser?.educationalStage);
+      if (saleTerm && saleTerm.termNumber === null) {
+        return NextResponse.json({ error: "حجز الترم غير متاح حالياً عند هذا المعلم" }, { status: 400 });
+      }
+      if (saleTerm && saleTerm.termNumber !== null) {
+        const owned = await prisma.teacherSubscription.findUnique({
+          where: { studentId_teacherId_planType: { studentId: session.id, teacherId, planType } },
+          select: { status: true, expiresAt: true, termNumbers: true },
+        });
+        if (ownsActiveTerm(owned, saleTerm.termNumber)) {
+          return NextResponse.json(
+            { error: saleTerm.termNumber === 2 ? "أنت مشترك بالفعل في الترم الثاني مع هذا المعلم" : "أنت مشترك بالفعل في الترم الأول مع هذا المعلم" },
+            { status: 400 }
+          );
+        }
+      }
     }
 
     const verifiedFinalPrice = priceCheck.finalPrice ?? priceCheck.expectedPrice;
@@ -387,7 +415,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const noteText = `${sha7nawyRefNote(reference)}|base:${baseAmount}|total:${totalAmount}${itemMeta}`;
+    // Capture the gateway's own transaction id alongside our reference: it is the
+    // only identifier its verification endpoint accepts, and without it a payment
+    // can never be confirmed after the fact.
+    const gatewayTxId =
+      result.data?.id ?? result.data?.transaction_id ?? result.data?.provider_transaction_id ?? null;
+    const gatewayIdTag = gatewayTxId ? `|${sha7nawyGatewayIdNote(gatewayTxId)}` : "";
+    if (!gatewayTxId) {
+      console.warn(`[Sha7nawy Create] No gateway transaction id in create response for ref ${reference} — later verification will not be possible`);
+    }
+
+    const noteText = `${sha7nawyRefNote(reference)}|base:${baseAmount}|total:${totalAmount}${itemMeta}${gatewayIdTag}`;
     await prisma.balanceTransaction.create({
       data: {
         userId: session.id,

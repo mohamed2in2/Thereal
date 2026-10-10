@@ -1,12 +1,13 @@
 import { logAdminAction } from "@/lib/admin-auth";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
+import { isTeacherLike, actingTeacherId, hasAssistantPermission, maskPhone } from "@/lib/teacher-scope";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(req: NextRequest) {
   try {
     const session = await getSession();
-    if (!session || session.role !== "teacher") {
+    if (!session || !isTeacherLike(session.role)) {
       return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
     }
 
@@ -19,29 +20,51 @@ export async function GET(req: NextRequest) {
 
     // Verify course belongs to teacher
     const course = await prisma.course.findFirst({
-      where: { id: courseId, teacherId: session.id },
+      where: { id: courseId, teacherId: actingTeacherId(session) },
     });
 
     if (!course) {
       return NextResponse.json({ error: "الكورس غير موجود" }, { status: 404 });
     }
 
-    // Get all students enrolled in this course (strictly excluding testers)
+    // Codes and direct enrollments, plus students whose paid booking opens this course.
     const { TeacherVisibilityService } = await import("@/services/teacher/TeacherVisibilityService");
-    const students = await prisma.user.findMany({
+    const studentSelect = {
+      id: true,
+      name: true,
+      email: true,
+      phone: true,
+      educationalStage: true,
+      isActive: true,
+      createdAt: true,
+    } as const;
+    const directStudents = await prisma.user.findMany({
       where: TeacherVisibilityService.getEnrolledStudentsWhere(courseId),
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        phone: true,
-        educationalStage: true,
-        isActive: true,
-        createdAt: true,
-      },
+      select: studentSelect,
     });
+    const bookingIds = await TeacherVisibilityService.listBookingStudentIds(course);
+    const seen = new Set(directStudents.map((s) => s.id));
+    const missingBookingIds = bookingIds.filter((id) => !seen.has(id));
+    const bookingStudents = missingBookingIds.length
+      ? await prisma.user.findMany({
+          where: { id: { in: missingBookingIds } },
+          select: studentSelect,
+        })
+      : [];
+    const students = [...directStudents, ...bookingStudents];
 
-    return NextResponse.json({ students });
+    const canSeePhones = hasAssistantPermission(session, "viewStudentPhones");
+    const canViewStudents = hasAssistantPermission(session, "canViewStudents");
+    if (!canViewStudents) {
+      return NextResponse.json({ error: "المدرّس لم يمنحك صلاحية عرض الطلاب والتقارير" }, { status: 403 });
+    }
+
+    return NextResponse.json({
+      students: students.map((s) => ({
+        ...s,
+        phone: canSeePhones ? s.phone : maskPhone(s.phone),
+      })),
+    });
   } catch (error) {
     console.error("Failed to fetch students:", error);
     return NextResponse.json(
@@ -67,8 +90,11 @@ export async function PATCH(req: NextRequest) {
         });
       } catch (e) {}
     }
-    if (!session || session.role !== "teacher") {
+    if (!session || !isTeacherLike(session.role)) {
       return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
+    }
+    if (!hasAssistantPermission(session, "manageCodes")) {
+      return NextResponse.json({ error: "المدرّس لم يمنحك صلاحية إدارة وصول الطلاب" }, { status: 403 });
     }
 
     const { studentId, courseId, action } = await req.json();
@@ -82,7 +108,7 @@ export async function PATCH(req: NextRequest) {
 
     // Verify course belongs to teacher
     const course = await prisma.course.findFirst({
-      where: { id: courseId, teacherId: session.id },
+      where: { id: courseId, teacherId: actingTeacherId(session) },
     });
 
     if (!course) {

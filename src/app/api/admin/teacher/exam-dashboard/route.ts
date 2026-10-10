@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
+import { isTeacherLike, actingTeacherId } from "@/lib/teacher-scope";
 import { prisma } from "@/lib/prisma";
 import { logAdminAction } from "@/lib/admin-auth";
+import { ContentType, parseCloseSchedule, syncContentCloseSchedule } from "@/lib/content-access-engine";
+import { FolderContentType } from "@/generated/prisma";
+import { removeFolderContent } from "@/lib/folder-content-order";
 
 /**
  * API route for the Teacher Exam Dashboard.
@@ -13,7 +17,7 @@ import { logAdminAction } from "@/lib/admin-auth";
 
 export async function GET(req: NextRequest) {
   const session = await getSession();
-  if (!session || (session.role !== "teacher" && session.role !== "superadmin")) {
+  if (!session || (!isTeacherLike(session.role) && session.role !== "superadmin")) {
     return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
   }
 
@@ -21,7 +25,7 @@ export async function GET(req: NextRequest) {
   const courseId = searchParams.get("courseId");
 
   const whereClause: any = session.role !== "superadmin"
-    ? { folder: { course: { teacherId: session.id } } }
+    ? { folder: { course: { teacherId: actingTeacherId(session) } } }
     : {};
 
   if (courseId) {
@@ -47,7 +51,7 @@ export async function GET(req: NextRequest) {
         },
       },
       results: {
-        where: session.role === "teacher" ? { student: { accountMode: { not: "TESTER" } } } : undefined,
+        where: isTeacherLike(session.role) ? { student: { accountMode: { not: "TESTER" } } } : undefined,
         select: {
           id: true,
           score: true,
@@ -70,12 +74,17 @@ export async function GET(req: NextRequest) {
 
     const completedResults = q.results.filter((r) => r.completedAt !== null);
     const totalAttempts = completedResults.length;
-    const totalScoreSum = completedResults.reduce((acc, r) => acc + r.score, 0);
-    const avgScore = totalAttempts > 0 ? Number((totalScoreSum / totalAttempts).toFixed(1)) : 0;
-    const passedCount = completedResults.filter((r) => r.score >= 50).length;
-    
+
+    // A result with pending essay answers has no final grade yet, so it must
+    // not drag the average down to 0% or be counted as failed.
+    const gradedResults = completedResults.filter((r) => !r.answers || r.answers.length === 0);
+    const pendingResultsCount = totalAttempts - gradedResults.length;
+    const totalScoreSum = gradedResults.reduce((acc, r) => acc + r.score, 0);
+    const avgScore = gradedResults.length > 0 ? Number((totalScoreSum / gradedResults.length).toFixed(1)) : 0;
+    const passedCount = gradedResults.filter((r) => r.score >= 50).length;
+
     // Count pending essay answers in this quiz
-    const pendingEssayCount = q.results.reduce(
+    const pendingEssayCount = completedResults.reduce(
       (acc, r) => acc + (r.answers ? r.answers.length : 0),
       0
     );
@@ -84,15 +93,20 @@ export async function GET(req: NextRequest) {
       id: q.id,
       title: q.title,
       timeLimitMinutes: q.timeLimitMinutes,
+      closeAt: q.closeAt,
+      enableAutoClose: q.enableAutoClose,
       createdAt: q.createdAt,
       courseId: q.folder?.course?.id || "",
       courseTitle: q.folder?.course?.title || "كورس غير معرف",
+      folderId: q.folder?.id || "",
       folderName: q.folder?.name || "",
       totalQuestions,
       mcqCount,
       essayCount,
       imagesCount,
       totalAttempts,
+      gradedAttempts: gradedResults.length,
+      pendingResultsCount,
       avgScore,
       passedCount,
       pendingEssayCount,
@@ -101,13 +115,14 @@ export async function GET(req: NextRequest) {
 
   const totalExams = formattedExams.length;
   const totalAttempts = formattedExams.reduce((acc, e) => acc + e.totalAttempts, 0);
+  const totalGraded = formattedExams.reduce((acc, e) => acc + e.gradedAttempts, 0);
   const totalPendingEssays = formattedExams.reduce((acc, e) => acc + e.pendingEssayCount, 0);
   const overallAvgScore =
-    totalAttempts > 0
+    totalGraded > 0
       ? Number(
           (
-            formattedExams.reduce((acc, e) => acc + e.avgScore * e.totalAttempts, 0) /
-            totalAttempts
+            formattedExams.reduce((acc, e) => acc + e.avgScore * e.gradedAttempts, 0) /
+            totalGraded
           ).toFixed(1)
         )
       : 0;
@@ -138,7 +153,7 @@ export async function DELETE(req: NextRequest) {
     } catch {}
   }
 
-  if (!session || (session.role !== "teacher" && session.role !== "superadmin")) {
+  if (!session || (!isTeacherLike(session.role) && session.role !== "superadmin")) {
     return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
   }
 
@@ -153,7 +168,7 @@ export async function DELETE(req: NextRequest) {
     where: {
       id: quizId,
       ...(session.role !== "superadmin"
-        ? { folder: { course: { teacherId: session.id } } }
+        ? { folder: { course: { teacherId: actingTeacherId(session) } } }
         : {}),
     },
   });
@@ -163,18 +178,24 @@ export async function DELETE(req: NextRequest) {
   }
 
   await prisma.quiz.delete({ where: { id: quizId } });
+  await removeFolderContent(FolderContentType.EXAM, quizId);
   return NextResponse.json({ success: true });
 }
 
 export async function PATCH(req: NextRequest) {
   const session = await getSession();
-  if (!session || (session.role !== "teacher" && session.role !== "superadmin")) {
+  if (!session || (!isTeacherLike(session.role) && session.role !== "superadmin")) {
     return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
   }
 
-  const { quizId, action } = await req.json().catch(() => ({}));
-
-  if (!quizId || action !== "allow_all_retakes") {
+  const body = (await req.json().catch(() => ({}))) as {
+    quizId?: string;
+    action?: string;
+    closeAt?: string | null;
+    enableAutoClose?: boolean;
+  };
+  const quizId = String(body.quizId || "").trim();
+  if (!quizId) {
     return NextResponse.json({ error: "بيانات الإجراء غير صالحة" }, { status: 400 });
   }
 
@@ -182,7 +203,7 @@ export async function PATCH(req: NextRequest) {
     where: {
       id: quizId,
       ...(session.role !== "superadmin"
-        ? { folder: { course: { teacherId: session.id } } }
+        ? { folder: { course: { teacherId: actingTeacherId(session) } } }
         : {}),
     },
   });
@@ -191,10 +212,40 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "الاختبار غير موجود" }, { status: 404 });
   }
 
-  const updated = await prisma.quizResult.updateMany({
-    where: { quizId },
-    data: { allowRetake: true },
-  });
+  if (body.action === "allow_all_retakes") {
+    // Flag only — students still see their old sheet until they press
+    // "بدء محاولة جديدة" on the quiz page.
+    const updated = await prisma.quizResult.updateMany({
+      where: { quizId },
+      data: { allowRetake: true },
+    });
+    return NextResponse.json({ success: true, updatedCount: updated.count });
+  }
 
-  return NextResponse.json({ success: true, updatedCount: updated.count });
+  if (body.closeAt !== undefined || body.enableAutoClose !== undefined) {
+    const closeSchedule = parseCloseSchedule({
+      closeAt: body.closeAt,
+      enableAutoClose: body.enableAutoClose,
+    });
+    if (closeSchedule.error) {
+      return NextResponse.json({ error: closeSchedule.error }, { status: 400 });
+    }
+    const updated = await prisma.quiz.update({
+      where: { id: quizId },
+      data: {
+        closeAt: closeSchedule.closeAt,
+        enableAutoClose: closeSchedule.enableAutoClose,
+      },
+    });
+    await syncContentCloseSchedule({
+      type: ContentType.QUIZ,
+      sourceId: updated.id,
+      title: updated.title,
+      closeAt: updated.closeAt,
+      enableAutoClose: updated.enableAutoClose,
+    });
+    return NextResponse.json({ success: true, quiz: updated });
+  }
+
+  return NextResponse.json({ error: "بيانات الإجراء غير صالحة" }, { status: 400 });
 }

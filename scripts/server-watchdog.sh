@@ -41,6 +41,23 @@ PUBLIC_HOST="code-up.tech"
 MAX_LOG_LINES=6000
 EXPENSIVE_TTL=1800          # seconds to cache du / dmesg-scan style probes
 
+# ---- build recovery tuning ---------------------------------------------------
+# LASTGOOD_DIR      verified copy of the last build that actually served traffic.
+#                   Restoring it is the fast path: seconds instead of a rebuild.
+# BUILD_TIMEOUT     the old 900s cap killed a legitimate build part-way on
+#                   2026-09-03 and the truncated .next is what took the site
+#                   down. A full build here takes ~4-6 min under memory pressure.
+# BUILD_HEAP        node heap for the build; the box has 2GB+ swap headroom.
+# BUILD_COOLDOWN    rebuilds stay rate-limited -- an unthrottled rebuild loop on
+#                   2 vCPU turns one outage into a permanent one. Shorter than
+#                   the old 1200s because a failed build is no longer destructive.
+# RESTORE_COOLDOWN  the snapshot restore is cheap and safe, so it may run often.
+LASTGOOD_DIR="$APP_DIR/.next.last-good"
+BUILD_TIMEOUT=2400
+BUILD_HEAP=3072
+BUILD_COOLDOWN=600
+RESTORE_COOLDOWN=120
+
 export HOME="/home/ec2-user"
 export USER="ec2-user"
 export PATH="/home/ec2-user/.nvm/versions/node/v20.20.2/bin:/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:$PATH"
@@ -287,7 +304,7 @@ case "$1" in
   93) D="ecosystem.config.js present";                        T="warn";;
   94) D="server.js present";                                  T="warn";;
   95) D="no core.* dump files in home dir";                   T="disk";;
-  96) D="no watchdog lock file older than 1h in /tmp";        T="lock";;
+  96) D="no stale foreign thefake lock >1h in /tmp";          T="lock";;
   97) D="tsconfig.tsbuildinfo present";                       T="warn";;
   98) D=".git directory present";                             T="warn";;
   # ---- Memory / CPU / kernel (99-114) ----
@@ -421,7 +438,7 @@ case "$1" in
   75) [ -n "$(env_val DIRECT_URL)" ] ;;
   76) [ -n "$(find /home/ec2-user/backups -name 'codeup-*.dump' -mmin -1800 2>/dev/null | head -1)" ] ;;
   77) l=$(tail -1 /home/ec2-user/backups/backup.log 2>/dev/null); [[ ! "$l" =~ (FAIL|BAD) ]] ;;
-  78) timeout 20 aws s3 ls "s3://codeup-backups-687374520011/nightly/" --page-size 1 >/dev/null 2>&1 ;;
+  78) AWS_CONFIG_FILE=/dev/null AWS_SHARED_CREDENTIALS_FILE=/dev/null AWS_REGION=eu-north-1 timeout 20 aws s3 ls "s3://codeup-backups-687374520011/nightly/" --page-size 1 >/dev/null 2>&1 ;;
   79) [ "$(cached pgjournal sudo -n journalctl -u postgresql --no-pager -n 60 -q 2>/dev/null | grep -Ec 'FATAL|PANIC')" -lt 1 ] ;;
   80) f=/var/lib/pgsql/data/pg_hba.conf; [ -r "$f" ] || f=$(sudo -n psql -U postgres -tAc 'SHOW hba_file;' 2>/dev/null);
       if sudo -n test -r "$f" 2>/dev/null; then sudo -n grep -E '^host[[:space:]]+all[[:space:]]+all[[:space:]]+127\.0\.0\.1' "$f" 2>/dev/null | grep -q 'scram'; else true; fi ;;
@@ -441,7 +458,7 @@ case "$1" in
   93) [ -f ecosystem.config.js ] ;;
   94) [ -f server.js ] ;;
   95) [ -z "$(ls /home/ec2-user/core.* 2>/dev/null)" ] ;;
-  96) [ -z "$(find /tmp -maxdepth 2 -iname '*thefake*' \( -name '*.lock' -o -name 'lock' \) -mmin +60 2>/dev/null)" ] ;;
+  96) [ -z "$(find /tmp -maxdepth 2 -iname '*thefake*' \( -name '*.lock' -o -name 'lock' \) ! -name 'thefake_watchdog.lock' ! -name 'thefake_watchdog.cron.lock' -mmin +60 2>/dev/null)" ] ;;
   97) [ -f tsconfig.tsbuildinfo ] ;;
   98) [ -d .git ] ;;
 
@@ -499,11 +516,14 @@ esac
 REMEDY_LOG=""
 did() { REMEDY_LOG="$REMEDY_LOG $1"; log INFO "remedy: $1"; }
 
+# Our own flock files (thefake_watchdog.lock / .cron.lock) are long-lived by
+# design and are excluded from the sweep below -- they always age past 60m, and
+# deleting a held flock breaks the mutual exclusion it exists to provide.
 remedy_lock() {
   did lock
   rm -f .next/lock 2>/dev/null || true
   rm -rf .next.tmp .next-* 2>/dev/null || true
-  find /tmp -maxdepth 2 -iname '*thefake*' \( -name '*.lock' -o -name 'lock' \) -mmin +60 -delete 2>/dev/null || true
+  find /tmp -maxdepth 2 -iname '*thefake*' \( -name '*.lock' -o -name 'lock' \) ! -name 'thefake_watchdog.lock' ! -name 'thefake_watchdog.cron.lock' -mmin +60 -delete 2>/dev/null || true
   pkill -f 'next-server' 2>/dev/null || true
 }
 remedy_env_perms() { did env_perms; chmod 600 .env 2>/dev/null || true; }
@@ -600,20 +620,148 @@ remedy_pm2() {
     || timeout 60 pm2 restart Thefake --update-env >> "$LOG_FILE" 2>&1 || true
   timeout 20 pm2 save >/dev/null 2>&1 || true
 }
-remedy_build() {
-  did build
-  cooldown_ok build 1200 || { log WARN "build remedy suppressed by 20m cooldown"; return 0; }
-  log WARN "deep heal: stop cluster, prisma generate, next build"
+# True while a legitimate deploy is rewriting .next. update.sh and `npm run build`
+# build IN PLACE, so BUILD_ID and the manifests are transiently absent for
+# minutes. Without this guard the watchdog reads that as a corrupt build, stops
+# the cluster and starts a SECOND build on top of the first -- which corrupts
+# both and takes the site down. Keyed on a live process (not just .next/lock) so
+# a stale lock left by a dead build can never wedge repairs off permanently.
+build_in_progress() {
+  pgrep -f 'next build|npm run build' >/dev/null 2>&1 && return 0
+  # scripts/deploy.sh holds this lock for its whole run, including the swap +
+  # reload + auto-rollback window after the build process has already exited.
+  [ -e /tmp/thefake_deploy.lock ] && ! flock -n /tmp/thefake_deploy.lock true 2>/dev/null && return 0
+  if [ -f .next/lock ]; then
+    local age; age=$(( $(now) - $(stat -c %Y .next/lock 2>/dev/null || echo 0) ))
+    [ "$age" -lt 120 ] && return 0
+  fi
+  return 1
+}
 
-  # Stop the cluster BEFORE building. A half-missing .next makes every worker
-  # exit(1) on boot; leaving pm2 to keep respawning it starves the build of the
-  # very RAM/CPU it needs (this box has 2 vCPU / ~3.7GB + 2GB swap). Stop, kill
-  # any stray next-server, free port 3000, then build on a quiet machine.
+# --- build-artifact helpers --------------------------------------------------
+# A Next.js build is only usable if EVERY boot-critical manifest is present AND
+# parseable. The 2026-09-03 outage slipped past the old check because it looked
+# only for BUILD_ID / routes-manifest / required-server-files / server -- while
+# prerender-manifest.json was the file actually missing, and every worker
+# exit(1)'d on boot. A truncated write also leaves a non-empty but unparseable
+# file, so presence alone is not proof.
+build_artifacts_ok() {
+  local d="${1:-.next}" f
+  [ -s "$d/BUILD_ID" ] || return 1
+  [ -d "$d/server" ]   || return 1
+  for f in routes-manifest.json required-server-files.json prerender-manifest.json; do
+    [ -f "$d/$f" ] || return 1
+    jq -e . "$d/$f" >/dev/null 2>&1 || return 1
+  done
+  return 0
+}
+
+# Keep a verified copy of the build we are currently serving. This is what makes
+# recovery take seconds instead of minutes: a corrupt build is undone by a file
+# swap, not a 5-minute rebuild. Only copies when BUILD_ID actually changed.
+snapshot_build() {
+  build_artifacts_ok .next || return 1
+  local cur snap need avail
+  cur="$(cat .next/BUILD_ID 2>/dev/null)"
+  snap="$(cat "$LASTGOOD_DIR/BUILD_ID" 2>/dev/null || echo '')"
+  [ -n "$cur" ] && [ "$cur" = "$snap" ] && return 0
+  need=$(du -sk --exclude=./cache .next 2>/dev/null | awk '{print $1}')
+  avail=$(df -Pk "$APP_DIR" 2>/dev/null | awk 'NR==2{print $4}')
+  if [ "${avail:-0}" -lt $(( ${need:-0} + 1048576 )) ]; then
+    log WARN "last-good snapshot skipped: only ${avail:-0}KB free on $APP_DIR"
+    return 1
+  fi
+  rm -rf "$LASTGOOD_DIR.tmp" 2>/dev/null || true
+  # Skip cache/: ~700MB of webpack build cache the server never reads at runtime.
+  # Without it the snapshot is ~40MB and restore_last_good takes seconds.
+  if timeout 300 rsync -a --exclude=/cache/ .next/ "$LASTGOOD_DIR.tmp/" 2>/dev/null && build_artifacts_ok "$LASTGOOD_DIR.tmp"; then
+    rm -rf "$LASTGOOD_DIR.old" 2>/dev/null || true
+    [ -d "$LASTGOOD_DIR" ] && mv "$LASTGOOD_DIR" "$LASTGOOD_DIR.old" 2>/dev/null
+    if mv "$LASTGOOD_DIR.tmp" "$LASTGOOD_DIR" 2>/dev/null; then
+      rm -rf "$LASTGOOD_DIR.old" 2>/dev/null || true
+      log INFO "last-good build snapshot updated (BUILD_ID $cur)"
+      return 0
+    fi
+    [ -d "$LASTGOOD_DIR.old" ] && [ ! -d "$LASTGOOD_DIR" ] && mv "$LASTGOOD_DIR.old" "$LASTGOOD_DIR" 2>/dev/null
+  fi
+  rm -rf "$LASTGOOD_DIR.tmp" 2>/dev/null || true
+  return 1
+}
+
+# Swap the verified snapshot back into place. Never leaves the tree worse off:
+# the copy is validated before it replaces anything, and the outgoing .next is
+# parked as .next.broken and put back if the swap fails.
+restore_last_good() {
+  build_artifacts_ok "$LASTGOOD_DIR" || return 1
+  log WARN "restoring last-good build (BUILD_ID $(cat "$LASTGOOD_DIR/BUILD_ID" 2>/dev/null))"
+  rm -rf .next.restoring .next.broken 2>/dev/null || true
+  if timeout 300 cp -a "$LASTGOOD_DIR" .next.restoring 2>/dev/null && build_artifacts_ok .next.restoring; then
+    [ -d .next ] && mv .next .next.broken 2>/dev/null
+    if mv .next.restoring .next 2>/dev/null; then
+      rm -rf .next.broken 2>/dev/null || true
+      return 0
+    fi
+    [ -d .next.broken ] && [ ! -d .next ] && mv .next.broken .next 2>/dev/null
+  fi
+  rm -rf .next.restoring 2>/dev/null || true
+  return 1
+}
+
+start_cluster() {
+  # delete first: a worker parked in "errored" by max_restarts ignores `pm2 start`
+  timeout 30 pm2 delete Thefake >> "$LOG_FILE" 2>&1 || true
+  timeout 90 pm2 start ecosystem.config.js --update-env >> "$LOG_FILE" 2>&1 || true
+  timeout 15 pm2 reset Thefake >/dev/null 2>&1 || true
+  timeout 20 pm2 save >/dev/null 2>&1 || true
+}
+
+wait_healthy() {
+  local n="${1:-25}" i=0
+  while [ "$i" -lt "$n" ]; do core_healthy && return 0; sleep 1; i=$((i+1)); done
+  return 1
+}
+
+quiesce_cluster() {
   timeout 60 pm2 stop Thefake >> "$LOG_FILE" 2>&1 || true
   pkill -f 'next-server' 2>/dev/null || true
   fuser -k 3000/tcp >/dev/null 2>&1 || true
   rm -f .next/lock 2>/dev/null || true
   sleep 2
+}
+
+remedy_build() {
+  did build
+
+  # Stop the cluster BEFORE touching the build. A half-missing .next makes every
+  # worker exit(1) on boot; leaving pm2 respawning it starves the repair of the
+  # very RAM/CPU it needs on a 2 vCPU / ~3.7GB box.
+  quiesce_cluster
+
+  # ---------------------------------------------------------------------------
+  # FAST PATH -- restore the last known-good build. Seconds, not minutes.
+  # Cheap and non-destructive (the snapshot is verified before AND after the
+  # copy), so it gets a short cooldown rather than the rebuild's long one.
+  # ---------------------------------------------------------------------------
+  if ! build_artifacts_ok .next && build_artifacts_ok "$LASTGOOD_DIR"; then
+    if cooldown_ok restore "$RESTORE_COOLDOWN" && restore_last_good; then
+      start_cluster
+      if wait_healthy 25; then
+        rm -f "$STATE_DIR/build_failed"
+        log INFO "recovered from last-good snapshot -- no rebuild needed"
+        notify "recovered" "code-up: the live .next was corrupt; restored the last-good build snapshot and the site came back in seconds. No rebuild required."
+        return 0
+      fi
+      log WARN "snapshot restored but health did not return -- falling through to a full rebuild"
+    fi
+  fi
+
+  # ---------------------------------------------------------------------------
+  # SLOW PATH -- full rebuild. Still rate-limited: an unthrottled rebuild loop on
+  # 2 vCPU is how one outage becomes a permanent one.
+  # ---------------------------------------------------------------------------
+  cooldown_ok build "$BUILD_COOLDOWN" || { log WARN "rebuild suppressed by ${BUILD_COOLDOWN}s cooldown (no usable last-good snapshot)"; return 0; }
+  log WARN "deep heal: prisma generate + next build (timeout ${BUILD_TIMEOUT}s, heap ${BUILD_HEAP}MB)"
+  quiesce_cluster
 
   if [ ! -x node_modules/.bin/next ] || [ ! -d node_modules/.prisma/client ]; then
     log WARN "node_modules incomplete -> npm ci"
@@ -621,25 +769,37 @@ remedy_build() {
   fi
   timeout 180 node scripts/prisma-generate.js >> "$LOG_FILE" 2>&1 || true
 
-  # Success == build exited 0 AND the artifacts that were missing are now on disk.
-  if timeout 900 env NODE_OPTIONS="--max-old-space-size=2048" npx next build --webpack >> "$LOG_FILE" 2>&1 \
-       && [ -s .next/BUILD_ID ] && [ -f .next/routes-manifest.json ] && [ -f .next/required-server-files.json ] && [ -d .next/server ]; then
+  # Record the headroom we start with: the 2026-09-03 build was killed part-way
+  # with ~500MB free, and that truncated build is what corrupted .next.
+  log INFO "pre-build memory: $(awk '/MemAvailable/{printf "%d", $2/1024}' /proc/meminfo)MB avail, $(awk '/SwapFree/{printf "%d", $2/1024}' /proc/meminfo)MB swap free"
+
+  if timeout "$BUILD_TIMEOUT" env NODE_OPTIONS="--max-old-space-size=$BUILD_HEAP" npx next build --webpack >> "$LOG_FILE" 2>&1 \
+       && build_artifacts_ok .next; then
     rm -f "$STATE_DIR/build_failed"
+    [ -f .next/server/proxy.js ] && (cd .next/server && ln -sf proxy.js middleware.js 2>/dev/null || true)
     log INFO "build OK -> (re)creating cluster from ecosystem.config.js"
-    # delete first: a worker parked in "errored" by max_restarts ignores `pm2 start`
-    timeout 30 pm2 delete Thefake >> "$LOG_FILE" 2>&1 || true
-    timeout 90 pm2 start ecosystem.config.js --update-env >> "$LOG_FILE" 2>&1 || true
-    timeout 15 pm2 reset Thefake >/dev/null 2>&1 || true
-    timeout 20 pm2 save >/dev/null 2>&1 || true
+    start_cluster
+    if wait_healthy 30; then
+      snapshot_build || true
+      log INFO "rebuild recovered the site; last-good snapshot refreshed"
+    fi
   else
-    # DO NOT restart pm2 here. A failed build means the artifacts are still
-    # missing/corrupt, so starting the cluster would only crash-loop it -- the
-    # exact spiral that caused the 2026-09-02 incident. Leave it stopped, persist
-    # that state, page a human, and let the box idle so someone can get in.
+    # Rebuild failed or produced incomplete artifacts. Before paging a human, try
+    # the snapshot -- a stale build that serves beats a site that is down.
+    log WARN "rebuild failed or artifacts incomplete"
+    if build_artifacts_ok "$LASTGOOD_DIR" && restore_last_good; then
+      start_cluster
+      if wait_healthy 25; then
+        rm -f "$STATE_DIR/build_failed"
+        log CRITICAL "rebuild FAILED but the last-good snapshot is live -- site is UP on an older build"
+        notify "CRITICAL" "code-up: 'next build' FAILED, so the site was rolled back to the last-good build and is serving again. The NEWEST CODE IS NOT LIVE -- a human should fix the build error."
+        return 0
+      fi
+    fi
     : > "$STATE_DIR/build_failed"
     timeout 20 pm2 save >/dev/null 2>&1 || true
-    log CRITICAL "build FAILED -- cluster left STOPPED (no crash-loop, no OS reboot); manual fix required"
-    notify "CRITICAL" "code-up self-heal: 'next build' FAILED. PM2 'Thefake' left STOPPED so the box stays reachable over SSH/SSM. The .next build is missing/corrupt and needs a human. The OS was NOT rebooted."
+    log CRITICAL "build FAILED and no usable snapshot -- cluster left STOPPED (no crash-loop, no OS reboot); manual fix required"
+    notify "CRITICAL" "code-up self-heal: 'next build' FAILED and there is no usable last-good snapshot. PM2 'Thefake' left STOPPED so the box stays reachable over SSH/SSM. The OS was NOT rebooted."
   fi
 }
 
@@ -678,6 +838,15 @@ for i in $(seq 1 140); do
 done
 
 log INFO "probes: $PASS ok / ${#FAILED_IDS[@]} actionable / ${#WARN_IDS[@]} advisory / ${#SKIP_IDS[@]} n/a"
+
+# A deploy in flight owns .next. Every disruptive remedy is suspended until it
+# finishes -- the guard clears itself as soon as the build process exits.
+if build_in_progress; then
+  for t in build pm2 pm2reload prisma killport lock; do
+    [ -n "${TAGS_HIT[$t]:-}" ] && log WARN "remedy $t SKIPPED: a build/deploy is in progress"
+    unset "TAGS_HIT[$t]"
+  done
+fi
 
 # A full rebuild is expensive and takes the cluster down. Only do it when the app
 # is genuinely broken -- i.e. a build artifact is actually missing/corrupt, or
@@ -733,6 +902,14 @@ if [ "$HEALTHY" -eq 1 ]; then
     notify "recovered" "core health OK after remedies:${REMEDY_LOG}"
   fi
   rm -f "$FAILC_FILE" "$STATE_DIR/build_failed"
+  # Capture the build we are actually serving. No-ops unless BUILD_ID changed,
+  # so this costs nothing on a steady-state tick -- but it is what lets the next
+  # corrupt build be undone in seconds instead of minutes.
+  snapshot_build || true
+elif build_in_progress; then
+  # The site being down mid-deploy is expected, not a fault. Counting these ticks
+  # would burn the 3-strike budget and fire a bogus CRITICAL page every deploy.
+  log WARN "core health down while a build/deploy is in progress -- holding escalation until it finishes"
 else
   prev=$(cat "$FAILC_FILE" 2>/dev/null || echo 0); cur=$((prev+1)); echo "$cur" > "$FAILC_FILE"
   log ERROR "core health STILL DOWN after remedies (consecutive failure $cur/3)"

@@ -17,16 +17,21 @@ export async function GET(req: NextRequest) {
 
   try {
     const graceDays = await getTeacherGraceDays();
+    let purged = 0;
     // ── Lazy purge: anyone past the grace window is gone forever ──
-    const cutoff = new Date(Date.now() - graceDays * 86400000);
-    const expired = await prisma.user.findMany({
-      where: { role: "teacher", isDeleted: true, deletedAt: { lt: cutoff } },
-      select: { id: true },
-    });
-    if (expired.length > 0) {
-      const ids = expired.map((t) => t.id);
-      await prisma.course.deleteMany({ where: { teacherId: { in: ids } } });
-      await prisma.user.deleteMany({ where: { id: { in: ids } } });
+    // Never run this from a showroom session — it would delete real teachers.
+    if (!session.demoTour) {
+      const cutoff = new Date(Date.now() - graceDays * 86400000);
+      const expired = await prisma.user.findMany({
+        where: { role: "teacher", isDeleted: true, deletedAt: { lt: cutoff } },
+        select: { id: true },
+      });
+      if (expired.length > 0) {
+        const ids = expired.map((t) => t.id);
+        await prisma.course.deleteMany({ where: { teacherId: { in: ids } } });
+        await prisma.user.deleteMany({ where: { id: { in: ids } } });
+        purged = ids.length;
+      }
     }
 
     const { searchParams } = new URL(req.url);
@@ -34,6 +39,7 @@ export async function GET(req: NextRequest) {
     const where = {
       role: "teacher",
       isDeleted: true,
+      ...(session.demoTour ? { isDemo: true } : {}),
       ...(name ? { name: { contains: name } } : {}),
     };
 
@@ -50,7 +56,7 @@ export async function GET(req: NextRequest) {
       orderBy: { deletedAt: "desc" },
     });
 
-    return NextResponse.json({ teachers, graceDays, purged: expired.length });
+    return NextResponse.json({ teachers, graceDays, purged });
   } catch (error) {
     console.error("Deleted teachers fetch error:", error);
     return NextResponse.json({ error: "تعذر جلب المعلمين المحذوفين" }, { status: 500 });

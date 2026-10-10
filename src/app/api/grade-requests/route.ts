@@ -2,11 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession, getStudentSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { analyzeQuizAnswer } from "@/lib/ai-assistant";
-
-const REASON_MIN = 20;
-const REASON_MAX = 2000;
-const SCORE_MIN = 0;
-const SCORE_MAX = 100;
+import { actingTeacherId, hasAssistantPermission, isTeacherLike, maskPhone } from "@/lib/teacher-scope";
 
 // POST — student requests grade adjustment (with AI analysis)
 export async function POST(req: NextRequest) {
@@ -14,49 +10,21 @@ export async function POST(req: NextRequest) {
     const session = await getStudentSession();
     if (!session) return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
 
-    const body = await req.json().catch(() => ({}));
-    const { quizId, reason, requestedScore, questionEvidence } = body as {
-      quizId?: unknown;
-      reason?: unknown;
-      requestedScore?: unknown;
-      questionEvidence?: { questionId?: string; studentAnswer?: string } | null;
-    };
-
-    if (!quizId || typeof quizId !== "string" || quizId.trim().length === 0) {
+    const { quizId, reason, requestedScore, questionEvidence } = await req.json();
+    if (!quizId || !reason) {
       return NextResponse.json({ error: "بيانات ناقصة" }, { status: 400 });
     }
-    if (!reason || typeof reason !== "string") {
-      return NextResponse.json({ error: "بيانات ناقصة" }, { status: 400 });
-    }
-    if (reason.length < REASON_MIN) {
-      return NextResponse.json(
-        { error: `السبب قصير جدًا، اكتب وصفًا مفصلًا (${REASON_MIN} حرف على الأقل)` },
-        { status: 400 }
-      );
-    }
-    if (reason.length > REASON_MAX) {
-      return NextResponse.json(
-        { error: `السبب طويل جدًا (${REASON_MAX} حرف كحد أقصى)` },
-        { status: 400 }
-      );
-    }
 
-    // Validate requestedScore when provided
-    let safeRequestedScore: number | null = null;
-    if (requestedScore !== undefined && requestedScore !== null) {
-      const parsed = Number(requestedScore);
-      if (!Number.isFinite(parsed) || parsed < SCORE_MIN || parsed > SCORE_MAX) {
-        return NextResponse.json(
-          { error: `الدرجة المطلوبة يجب أن تكون بين ${SCORE_MIN} و ${SCORE_MAX}` },
-          { status: 400 }
-        );
-      }
-      safeRequestedScore = parsed;
+    if (reason.length < 20) {
+      return NextResponse.json(
+        { error: "السبب قصير جداً، اكتب وصفاً مفصلاً (20 حرف على الأقل)" },
+        { status: 400 }
+      );
     }
 
     // Get the quiz result for current score
     const result = await prisma.quizResult.findFirst({
-      where: { quizId: quizId.trim(), studentId: session.id },
+      where: { quizId, studentId: session.id },
       include: {
         quiz: {
           include: {
@@ -78,7 +46,7 @@ export async function POST(req: NextRequest) {
     const existing = await prisma.gradeAdjustmentRequest.findFirst({
       where: {
         studentId: session.id,
-        quizId: quizId.trim(),
+        quizId,
         status: { in: ["pending", "ai_reviewed"] },
       },
     });
@@ -95,7 +63,12 @@ export async function POST(req: NextRequest) {
     if (questionEvidence?.questionId) {
       const q = result.quiz.questions.find((qq) => qq.id === questionEvidence.questionId);
       if (q) {
-        const options = { A: q.optionA, B: q.optionB, C: q.optionC, D: q.optionD };
+        const options = {
+          A: q.optionA,
+          B: q.optionB,
+          C: q.optionC,
+          D: q.optionD,
+        };
         const analysis = await analyzeQuizAnswer(
           q.question,
           questionEvidence.studentAnswer ?? "",
@@ -112,11 +85,11 @@ export async function POST(req: NextRequest) {
     const request_ = await prisma.gradeAdjustmentRequest.create({
       data: {
         studentId: session.id,
-        quizId: quizId.trim(),
+        quizId,
         courseId: result.quiz.folder?.courseId ?? null,
         requestedBy: "student",
         currentScore: result.score,
-        requestedScore: safeRequestedScore,
+        requestedScore: requestedScore ?? null,
         reason,
         aiAnalysis,
         evidence: questionEvidence ? JSON.stringify(questionEvidence) : null,
@@ -126,7 +99,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       request: request_,
-      message: "تم تقديم طلبك للمعلم، سيتم مراجعته قريبًا",
+      message: "تم تقديم طلبك للمعلم، سيتم مراجعته قريباً",
     });
   } catch (err) {
     console.error("Grade request POST error:", err);
@@ -140,17 +113,14 @@ export async function GET(req: NextRequest) {
     const session = await getSession();
     if (!session) return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
 
-    const statusParam = req.nextUrl.searchParams.get("status");
-    // Only pass status to Prisma if it's a known value
-    const ALLOWED_STATUSES = ["pending", "ai_reviewed", "approved", "rejected"] as const;
-    const statusFilter =
-      statusParam && (ALLOWED_STATUSES as readonly string[]).includes(statusParam)
-        ? { status: statusParam }
-        : {};
+    const status = req.nextUrl.searchParams.get("status");
 
     if (session.role === "student") {
       const requests = await prisma.gradeAdjustmentRequest.findMany({
-        where: { studentId: session.id, ...statusFilter },
+        where: {
+          studentId: session.id,
+          ...(status ? { status } : {}),
+        },
         orderBy: { createdAt: "desc" },
         include: {
           quiz: { select: { title: true } },
@@ -160,15 +130,22 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ requests });
     }
 
-    if (session.role === "teacher") {
+    if (isTeacherLike(session.role)) {
+      if (!hasAssistantPermission(session, "manageRequests")) {
+        return NextResponse.json({ error: "المدرّس لم يمنحك صلاحية الطلبات" }, { status: 403 });
+      }
+      const canSeePhones = hasAssistantPermission(session, "viewStudentPhones");
       const courses = await prisma.course.findMany({
-        where: { teacherId: session.id },
+        where: { teacherId: actingTeacherId(session) },
         select: { id: true },
       });
       const courseIds = courses.map((c) => c.id);
 
       const requests = await prisma.gradeAdjustmentRequest.findMany({
-        where: { courseId: { in: courseIds }, ...statusFilter },
+        where: {
+          courseId: { in: courseIds },
+          ...(status ? { status } : {}),
+        },
         orderBy: { createdAt: "desc" },
         include: {
           quiz: { select: { title: true } },
@@ -176,7 +153,14 @@ export async function GET(req: NextRequest) {
           student: { select: { name: true, email: true, phone: true } },
         },
       });
-      return NextResponse.json({ requests });
+      return NextResponse.json({
+        requests: requests.map((r) => ({
+          ...r,
+          student: r.student
+            ? { ...r.student, phone: canSeePhones ? r.student.phone : maskPhone(r.student.phone) }
+            : r.student,
+        })),
+      });
     }
 
     return NextResponse.json({ error: "غير مصرح" }, { status: 403 });

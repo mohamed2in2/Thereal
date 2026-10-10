@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
+import { isTeacherLike, actingTeacherId } from "@/lib/teacher-scope";
 import { prisma } from "@/lib/prisma";
 import { isAdminRole, hasPermission } from "@/lib/rbac";
 import { logAdminAction } from "@/lib/admin-auth";
@@ -23,12 +24,10 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   if (!student) return NextResponse.json({ error: "الطالب غير موجود" }, { status: 404 });
 
   let allowed = false;
-  if (session.role === "teacher") {
-    const enrolled = await prisma.accessCode.findFirst({
-      where: { studentId, course: { teacherId: session.id } },
-      select: { id: true },
-    });
-    allowed = !!enrolled;
+  if (isTeacherLike(session.role)) {
+    const { TeacherVisibilityService } = await import("@/services/teacher/TeacherVisibilityService");
+    const visible = await TeacherVisibilityService.findStudentById(actingTeacherId(session), studentId);
+    allowed = !!visible;
   } else if (session.role === "superadmin") {
     allowed = true;
   } else if (isAdminRole(session.role)) {

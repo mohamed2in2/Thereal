@@ -1,25 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession, getStudentSession } from "@/lib/auth";
+import { isTeacherLike, actingTeacherId, hasAssistantPermission, maskPhone } from "@/lib/teacher-scope";
 import { prisma } from "@/lib/prisma";
+
 import { checkCourseEnrollment } from "@/lib/authorization";
-
-const ALLOWED_TYPES = ["complaint", "question", "suggestion", "technical", "other"] as const;
-const ALLOWED_PRIORITIES = ["low", "normal", "high", "urgent"] as const;
-const ALLOWED_STATUSES = ["open", "in_progress", "resolved", "closed", "escalated"] as const;
-
-type TicketType = (typeof ALLOWED_TYPES)[number];
-type TicketPriority = (typeof ALLOWED_PRIORITIES)[number];
-type TicketStatus = (typeof ALLOWED_STATUSES)[number];
-
-function isAllowedType(v: unknown): v is TicketType {
-  return ALLOWED_TYPES.includes(v as TicketType);
-}
-function isAllowedPriority(v: unknown): v is TicketPriority {
-  return ALLOWED_PRIORITIES.includes(v as TicketPriority);
-}
-function isAllowedStatus(v: unknown): v is TicketStatus {
-  return ALLOWED_STATUSES.includes(v as TicketStatus);
-}
 
 // POST — student creates a support ticket
 export async function POST(req: NextRequest) {
@@ -27,77 +11,37 @@ export async function POST(req: NextRequest) {
     const session = await getStudentSession();
     if (!session) return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
 
-    const body = await req.json().catch(() => ({}));
-    const { title, description, type, priority, courseId } = body as {
-      title?: unknown;
-      description?: unknown;
-      type?: unknown;
-      priority?: unknown;
-      courseId?: unknown;
-    };
-
-    // Required fields
-    if (!title || typeof title !== "string" || title.trim().length < 5) {
-      return NextResponse.json(
-        { error: "العنوان مطلوب (5 حروف على الأقل)" },
-        { status: 400 }
-      );
+    const { title, description, type, priority, courseId } = await req.json();
+    if (!title || !description) {
+      return NextResponse.json({ error: "العنوان والوصف مطلوبان" }, { status: 400 });
     }
-    if (title.length > 200) {
-      return NextResponse.json(
-        { error: "العنوان طويل جدًا (200 حرف كحد أقصى)" },
-        { status: 400 }
-      );
+    if (typeof title !== "string" || typeof description !== "string" || title.length > 200 || description.length > 5000) {
+      return NextResponse.json({ error: "العنوان أو الوصف طويل جداً" }, { status: 400 });
     }
+    // Clamp priority to a known set so a crafted value can't sort above real
+    // urgent tickets; unknown values fall back to the caller's intent as "normal".
+    const safePriority = ["low", "normal", "high", "urgent"].includes(String(priority)) ? String(priority) : "normal";
 
-    if (!description || typeof description !== "string" || description.trim().length < 10) {
-      return NextResponse.json(
-        { error: "الوصف مطلوب (10 حروف على الأقل)" },
-        { status: 400 }
-      );
-    }
-    if (description.length > 5000) {
-      return NextResponse.json(
-        { error: "الوصف طويل جدًا (5000 حرف كحد أقصى)" },
-        { status: 400 }
-      );
-    }
-
-    // Optional but validated when present
-    const safeType: TicketType = isAllowedType(type) ? type : "other";
-    const safePriority: TicketPriority = isAllowedPriority(priority) ? priority : "normal";
-
-    const safeCourseId =
-      courseId && typeof courseId === "string" && courseId.length > 0
-        ? courseId
-        : null;
-
-    if (safeCourseId) {
-      const isEnrolled = await checkCourseEnrollment(session.id, safeCourseId);
+    if (courseId) {
+      const isEnrolled = await checkCourseEnrollment(session.id, courseId);
       if (!isEnrolled) {
-        return NextResponse.json(
-          { error: "غير مسجل في هذا الكورس" },
-          { status: 403 }
-        );
+        return NextResponse.json({ error: "غير مسجل في هذا الكورس" }, { status: 403 });
       }
     }
 
     const ticket = await prisma.supportTicket.create({
       data: {
         studentId: session.id,
-        courseId: safeCourseId,
-        title: title.trim(),
-        description: description.trim(),
-        type: safeType,
+        courseId: courseId ?? null,
+        title,
+        description,
+        type: type || "other",
         priority: safePriority,
         status: "open",
       },
     });
 
-    return NextResponse.json({
-      ticket,
-      message: "تم إنشاء التذكرة بنجاح",
-    });
+    return NextResponse.json({ ticket, message: "تم إنشاء التذكرة بنجاح" });
   } catch (err) {
     console.error("Tickets POST error:", err);
     return NextResponse.json({ error: "حدث خطأ" }, { status: 500 });
@@ -110,31 +54,33 @@ export async function GET(req: NextRequest) {
     const session = await getSession();
     if (!session) return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
 
-    const statusParam = req.nextUrl.searchParams.get("status");
-    // Only pass status to Prisma when it's a known enum value
-    const statusFilter: { status: TicketStatus } | Record<string, never> =
-      statusParam && isAllowedStatus(statusParam)
-        ? { status: statusParam }
-        : {};
+    const status = req.nextUrl.searchParams.get("status");
 
     if (session.role === "student") {
       const tickets = await prisma.supportTicket.findMany({
-        where: { studentId: session.id, ...statusFilter },
+        where: {
+          studentId: session.id,
+          ...(status ? { status } : {}),
+        },
         orderBy: { createdAt: "desc" },
         include: { course: { select: { title: true } } },
       });
       return NextResponse.json({ tickets });
     }
 
-    if (session.role === "teacher") {
+    if (isTeacherLike(session.role)) {
+      if (!hasAssistantPermission(session, "manageTickets")) {
+        return NextResponse.json({ error: "المدرّس لم يمنحك صلاحية التذاكر" }, { status: 403 });
+      }
+      const canSeePhones = hasAssistantPermission(session, "viewStudentPhones");
       const courses = await prisma.course.findMany({
-        where: { teacherId: session.id },
+        where: { teacherId: actingTeacherId(session) },
         select: { id: true },
       });
       const tickets = await prisma.supportTicket.findMany({
         where: {
           courseId: { in: courses.map((c) => c.id) },
-          ...statusFilter,
+          ...(status ? { status } : {}),
         },
         orderBy: { createdAt: "desc" },
         include: {
@@ -142,12 +88,19 @@ export async function GET(req: NextRequest) {
           course: { select: { title: true } },
         },
       });
-      return NextResponse.json({ tickets });
+      return NextResponse.json({
+        tickets: tickets.map((t) => ({
+          ...t,
+          student: t.student
+            ? { ...t.student, phone: canSeePhones ? t.student.phone : maskPhone(t.student.phone) }
+            : t.student,
+        })),
+      });
     }
 
     if (session.role === "superadmin" || session.role === "admin") {
       const tickets = await prisma.supportTicket.findMany({
-        where: { ...statusFilter },
+        where: status ? { status } : {},
         orderBy: { createdAt: "desc" },
         include: {
           student: { select: { name: true, phone: true } },

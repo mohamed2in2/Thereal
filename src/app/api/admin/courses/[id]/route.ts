@@ -1,9 +1,11 @@
 import { logAdminAction } from "@/lib/admin-auth";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
+import { isTeacherLike, actingTeacherId, hasAssistantPermission } from "@/lib/teacher-scope";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma";
 import { invalidateCourseCache } from "@/lib/cache";
+import { inferCoursePlacement } from "@/lib/teacher-terms";
 
 const MAX_TITLE_LENGTH = 100;
 const MAX_DESCRIPTION_LENGTH = 1000;
@@ -21,6 +23,9 @@ type CoursePatchInput = {
   homeworkUrl?: string | null;
   sequentialAccess?: boolean;
   enableWatchedButton?: boolean;
+  deliveryMode?: string;
+  bookingKind?: string | null;
+  bookingTerm?: number | null;
 };
 
 function validateCourseData(data: CoursePatchInput): { valid: boolean; error?: string } {
@@ -82,14 +87,17 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
         });
       } catch (e) {}
     }
-    if (!session || session.role !== "teacher") {
+    if (!session || !isTeacherLike(session.role)) {
       return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
+    }
+    if (!hasAssistantPermission(session, "editCourses")) {
+      return NextResponse.json({ error: "المدرّس لم يمنحك صلاحية تعديل الكورسات" }, { status: 403 });
     }
 
     const { id } = await params;
 
     const course = await prisma.course.findFirst({
-      where: { id, teacherId: session.id },
+      where: { id, teacherId: actingTeacherId(session) },
     });
 
     if (!course) {
@@ -125,14 +133,17 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         });
       } catch (e) {}
     }
-    if (!session || session.role !== "teacher") {
+    if (!session || !isTeacherLike(session.role)) {
       return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
+    }
+    if (!hasAssistantPermission(session, "editCourses")) {
+      return NextResponse.json({ error: "المدرّس لم يمنحك صلاحية تعديل الكورسات" }, { status: 403 });
     }
 
     const { id } = await params;
 
     const course = await prisma.course.findFirst({
-      where: { id, teacherId: session.id },
+      where: { id, teacherId: actingTeacherId(session) },
     });
 
     if (!course) {
@@ -187,6 +198,37 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
     if (data.enableWatchedButton !== undefined) {
       updateData.enableWatchedButton = !!data.enableWatchedButton;
+    }
+    if (data.deliveryMode !== undefined) {
+      const mode = typeof data.deliveryMode === "string" ? data.deliveryMode.toUpperCase().trim() : "ONLINE";
+      if (["ONLINE", "CENTER", "BOTH"].includes(mode)) {
+        updateData.deliveryMode = mode;
+      }
+    }
+    if (data.bookingKind !== undefined) {
+      updateData.bookingKind = data.bookingKind ? data.bookingKind.trim() : null;
+      if (data.bookingTerm !== undefined) {
+        updateData.bookingTerm = data.bookingTerm;
+      } else if (updateData.bookingKind) {
+        const monthMatch = (updateData.bookingKind as string).match(/month:(\d+)/);
+        if (monthMatch) {
+          updateData.bookingTerm = Number(monthMatch[1]) >= 5 ? 2 : 1;
+        } else if ((updateData.bookingKind as string).includes(":2")) {
+          updateData.bookingTerm = 2;
+        } else {
+          updateData.bookingTerm = 1;
+        }
+      } else {
+        updateData.bookingTerm = null;
+      }
+    } else if (data.title !== undefined) {
+      if (!course.bookingKind) {
+        const inferred = inferCoursePlacement(data.title.trim());
+        if (inferred) {
+          updateData.bookingKind = inferred.bookingKind;
+          updateData.bookingTerm = inferred.bookingTerm;
+        }
+      }
     }
 
     const updated = await prisma.course.update({

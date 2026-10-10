@@ -5,11 +5,17 @@ import { getSession } from "@/lib/auth";
 import { getConfigNumberClamped } from "@/lib/config";
 import { canBypassPayment } from "@/lib/demo";
 import { checkCourseEnrollment } from "@/lib/authorization";
+import { getCourseContentLocks } from "@/lib/content-access-engine";
+import { denyCenterIdOffHost, filterFoldersForGrant, getCenterPassGrant } from "@/lib/center-pass";
+import { assembleFolderContents } from "@/lib/folder-content-order";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await getSession();
     if (!session) return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
+
+    const hostDenied = denyCenterIdOffHost(req, session.accountMode);
+    if (hostDenied) return hostDenied;
 
     const { id } = await params;
     const role = session.role;
@@ -104,12 +110,58 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           if (!isTester) {
             const targetCourseRow = await prisma.course.findUnique({
               where: { id },
-              select: { teacherId: true },
+              select: { teacherId: true, bookingKind: true, bookingTerm: true },
             });
             const canBypass = await canBypassPayment(role, targetCourseRow?.teacherId, session.accountMode);
             if (!canBypass) {
+              let isRenewalRequired = false;
+              let renewalMonth: number | null = null;
+
+              if (targetCourseRow?.teacherId) {
+                const subs = await prisma.teacherSubscription.findMany({
+                  where: { studentId: session.id, teacherId: targetCourseRow.teacherId },
+                  select: { planType: true, termNumbers: true },
+                });
+                if (subs.length > 0) {
+                  const { parseCoursePlacements } = await import("@/lib/teacher-terms");
+                  const placements = parseCoursePlacements(targetCourseRow);
+                  const monthPlacements = placements.filter((p) => p.kind === "month");
+                  if (monthPlacements.length > 0) {
+                    const ownedMonths = Array.from(
+                      new Set(subs.flatMap((s) => (s.termNumbers || []).filter((n) => typeof n === "number" && n > 0)))
+                    );
+                    if (ownedMonths.length === 0 && subs.some((s) => s.planType === "monthly")) {
+                      ownedMonths.push(1);
+                    }
+                    const targetPlacement = monthPlacements.find((p) => !ownedMonths.includes(p.term)) || monthPlacements[0];
+                    if (targetPlacement) {
+                      isRenewalRequired = true;
+                      renewalMonth = targetPlacement.term || 2;
+                    }
+                  }
+                }
+              }
+
+              console.log("[center-video-access]", JSON.stringify({
+                event: "course_learn_denied",
+                phone: session.phone,
+                studentId: session.id,
+                courseId: id,
+                code: "NOT_ENROLLED",
+                isRenewalRequired,
+                renewalMonth,
+              }));
+
               return NextResponse.json(
-                { error: "لا يوجد صلاحية للوصول. فعّل كود الكورس أو تواصل مع المعلم.", code: "NOT_ENROLLED" },
+                {
+                  error: isRenewalRequired
+                    ? `هذا الكورس متاح لمشتركي باقة الشهر ${renewalMonth || 2}. يرجى تجديد الاشتراك للوصول إلى محتواه.`
+                    : "لا يوجد صلاحية للوصول. فعّل كود الكورس أو تواصل مع المعلم.",
+                  code: "NOT_ENROLLED",
+                  isRenewalRequired,
+                  renewalMonth,
+                  teacherId: targetCourseRow?.teacherId,
+                },
                 { status: 403 }
               );
             }
@@ -150,11 +202,18 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
                 id: true,
                 title: true,
                 timeLimitMinutes: true,
+                closeAt: true,
+                enableAutoClose: true,
                 questions: { orderBy: { order: "asc" } },
+                results: {
+                  where: { studentId: session.id, completedAt: { not: null } },
+                  select: { score: true, totalQ: true, completedAt: true, allowRetake: true },
+                  take: 1,
+                },
               } as any),
             },
             homeworks: {
-              where: role === "student" ? { isPublished: true } : undefined,
+              where: role === "student" && session.accountMode !== "CENTER_ID" ? { isPublished: true } : undefined,
               orderBy: { createdAt: "asc" },
               select: {
                 id: true,
@@ -163,6 +222,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
                 type: true,
                 linkUrl: true,
                 dueAt: true,
+                closeAt: true,
+                enableAutoClose: true,
                 timeLimitMinutes: true,
                 isPublished: true,
                 videoId: true,
@@ -175,6 +236,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
                     score: true,
                     totalQ: true,
                     completedAt: true,
+                    allowRetake: true,
+                    review: { select: { verdict: true, reviewedAt: true } },
                   },
                   take: 1,
                 },
@@ -186,6 +249,26 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     });
 
     if (!course) return NextResponse.json({ error: "الكورس غير موجود" }, { status: 404 });
+
+    // Extra views granted by a teacher or the support panel must appear in the
+    // student UI. Without this, the learn page only subtracts used watches from
+    // Video.maxWatchesPerUser and treats a support grant as if it never happened.
+    const videoIdsForGrants = course.folders.flatMap((folder) => folder.videos.map((v) => v.id));
+    const grants =
+      role === "student" && videoIdsForGrants.length
+        ? await prisma.videoViewRequest.groupBy({
+            by: ["videoId"],
+            where: {
+              studentId: session.id,
+              videoId: { in: videoIdsForGrants },
+              status: "approved",
+            },
+            _sum: { grantedViews: true },
+          })
+        : [];
+    const grantedByVideo = new Map(
+      grants.map((g) => [g.videoId, Math.max(0, g._sum.grantedViews ?? 0)] as const)
+    );
 
     const foldersToMap = (role === "student" && hasPlanAccess)
       ? course.folders
@@ -200,20 +283,68 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           .filter(Boolean) as any[]
       : course.folders;
 
+    const centerGrant = role === "student" ? await getCenterPassGrant(session.id) : null;
+    const grantedFolders = centerGrant?.isActive
+      ? filterFoldersForGrant(foldersToMap as any[], centerGrant)
+      : foldersToMap;
+
+    // Teacher-panel content chain (مسار وفتح المحتوى): when the course has
+    // prerequisite edges, evaluate them against the student's progress so the
+    // client locks exactly what the chain locks — not whatever happens to be
+    // the previous row in display order. chainActive=false means no edges
+    // exist and the client keeps its legacy previous-video behaviour.
+    // Center-ID bundles skip the chain: superadmin already chose the set.
+    let chainActive = false;
+    let chainLocks = new Map<string, { id: string; title: string; type: string }>();
+    let timedClosed = new Set<string>();
+    if (role === "student" && !centerGrant) {
+      try {
+        const allSourceIds: string[] = [];
+        for (const folder of grantedFolders as any[]) {
+          folder.videos?.forEach((v: any) => allSourceIds.push(v.id));
+          folder.quizzes?.forEach((q: any) => allSourceIds.push(q.id));
+          folder.homeworks?.forEach((h: any) => allSourceIds.push(h.id));
+          folder.materials?.forEach((m: any) => allSourceIds.push(m.id));
+        }
+        const result = await getCourseContentLocks(session.id, allSourceIds);
+        chainActive = result.active;
+        chainLocks = result.locks as typeof chainLocks;
+        timedClosed = result.timedClosed;
+      } catch (chainErr) {
+        console.error("[courses/[id]] chain lock evaluation error:", chainErr);
+      }
+    }
+
+    const grantedFolderIds = (grantedFolders as any[]).map((folder) => folder.id).filter(Boolean);
+    const contentOrderRows = grantedFolderIds.length
+      ? await prisma.folderContent.findMany({
+          where: { folderId: { in: grantedFolderIds } },
+          orderBy: { order: "asc" },
+        })
+      : [];
+    const ordersByFolder = new Map<string, typeof contentOrderRows>();
+    for (const row of contentOrderRows) {
+      const list = ordersByFolder.get(row.folderId) ?? [];
+      list.push(row);
+      ordersByFolder.set(row.folderId, list);
+    }
+
     const safeCourse = {
       ...course,
       homeworkUrl: course.homeworkUrl,
       maxWatchCount: course.maxWatchCount,
-      folders: (foldersToMap as any[]).map((folder: any) => ({
-        ...folder,
-        videos: (folder.videos || []).map((video: any) => ({
+      folders: (grantedFolders as any[]).map((folder: any) => {
+        const videos = (folder.videos || []).map((video: any) => ({
           ...video,
           vdoCipherId: undefined,
           providerVideoId: undefined,
           usedWatches: video.watchSessions?.length || 0,
+          grantedViews: grantedByVideo.get(video.id) ?? 0,
           watchSessions: undefined,
-        })),
-        quizzes: (folder.quizzes || []).map((quiz: any) => {
+          chainLocked: chainActive ? chainLocks.has(video.id) : false,
+          chainLockedBy: chainActive ? (chainLocks.get(video.id)?.title ?? null) : null,
+        }));
+        const quizzes = (folder.quizzes || []).map((quiz: any) => {
           const q = quiz as unknown as {
             id: string;
             title: string;
@@ -225,9 +356,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
             title: q.title,
             timeLimitMinutes: q.timeLimitMinutes,
             questions: (q.questions ?? []).map((question) => ({ ...question, correctAnswer: undefined })),
+            chainLocked: chainActive ? chainLocks.has(q.id) : false,
+            chainLockedBy: chainActive ? (chainLocks.get(q.id)?.title ?? null) : null,
+            timedClosed: timedClosed.has(q.id),
+            myResult: (quiz as { results?: Array<{ score: number; totalQ: number; completedAt: Date | null; allowRetake?: boolean }> }).results?.[0] ?? null,
           };
-        }),
-        homeworks: (folder.homeworks || []).map((hw: any) => ({
+        });
+        const homeworks = (folder.homeworks || []).map((hw: any) => ({
           id: hw.id,
           title: hw.title,
           description: hw.description,
@@ -239,13 +374,29 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           videoId: hw.videoId,
           allowedFileTypes: hw.allowedFileTypes,
           mySubmission: hw.submissions?.[0] || null,
-        })),
-      })),
+          chainLocked: chainActive ? chainLocks.has(hw.id) : false,
+          chainLockedBy: chainActive ? (chainLocks.get(hw.id)?.title ?? null) : null,
+          timedClosed: timedClosed.has(hw.id),
+        }));
+        const materials = (folder.materials || []).map((m: any) => ({
+          ...m,
+          chainLocked: chainActive ? chainLocks.has(m.id) : false,
+          chainLockedBy: chainActive ? (chainLocks.get(m.id)?.title ?? null) : null,
+        }));
+        const contents = assembleFolderContents({
+          orders: ordersByFolder.get(folder.id) ?? [],
+          videos,
+          homeworks,
+          quizzes,
+          materials,
+        });
+        return { ...folder, videos, quizzes, homeworks, materials, contents };
+      }),
     };
 
     // Mark-complete gate (% watched) is superadmin-configurable (was 80).
     const markCompleteThreshold = await getConfigNumberClamped("mark_complete_threshold", 1, 100);
-    return NextResponse.json({ course: safeCourse, markCompleteThreshold, isTeacherPreview });
+    return NextResponse.json({ course: safeCourse, markCompleteThreshold, isTeacherPreview, chainActive });
   } catch (error) {
     console.error("[courses/[id]] error:", error);
     return NextResponse.json({ error: "حدث خطأ داخلي" }, { status: 500 });

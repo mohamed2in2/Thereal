@@ -25,6 +25,17 @@ export function VideoGuard({
   const [violationType, setViolationType] = useState<string>("");
   const [violationCount, setViolationCount] = useState(0);
   const [isTabHidden, setIsTabHidden] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  const pauseAllVideos = useCallback(() => {
+    try {
+      const videos = document.querySelectorAll("video");
+      videos.forEach((v) => {
+        if (!v.paused) v.pause();
+      });
+    } catch {}
+  }, []);
+
 
   const reportedTypesRef = useRef<Set<string>>(new Set());
 
@@ -59,11 +70,12 @@ export function VideoGuard({
   const triggerViolationModal = useCallback(
     (type: string, details?: string) => {
       if (disabled) return;
+      pauseAllVideos();
       setHasViolation(true);
       setViolationType(type);
       void reportViolation(type, details);
     },
-    [reportViolation, disabled]
+    [reportViolation, pauseAllVideos, disabled]
   );
 
   // 1. DevTools Detection Mechanisms
@@ -107,15 +119,6 @@ export function VideoGuard({
   }, [triggerViolationModal, disabled]);
 
   // Helper to pause all video playback immediately upon focus loss or capture attempt
-  const pauseAllVideos = useCallback(() => {
-    try {
-      const videos = document.querySelectorAll("video");
-      videos.forEach((v) => {
-        if (!v.paused) v.pause();
-      });
-    } catch {}
-  }, []);
-
   // 2. Keyboard & PrintScreen / Screen-Recording Shortcuts Prevention
   useEffect(() => {
     if (disabled) return;
@@ -129,13 +132,20 @@ export function VideoGuard({
         (typeof e.getModifierState === "function" &&
           (e.getModifierState("Meta") || e.getModifierState("OS")));
 
-      const isWinSnipping = isMeta && e.shiftKey && lowerK === "s";
-      const isWinGameBar = isMeta && (lowerK === "g" || (e.altKey && lowerK === "r"));
+      // Physical KeyS or Arabic "س"
+      const isKeyS = lowerK === "s" || lowerK === "س" || e.code === "KeyS" || e.keyCode === 83;
+      // Physical KeyG or Arabic "ل"
+      const isKeyG = lowerK === "g" || lowerK === "ل" || e.code === "KeyG" || e.keyCode === 71;
+      // Physical KeyR or Arabic "ق"
+      const isKeyR = lowerK === "r" || lowerK === "ق" || e.code === "KeyR" || e.keyCode === 82;
+
+      const isWinSnipping = isMeta && e.shiftKey && isKeyS;
+      const isWinGameBar = isMeta && (isKeyG || (e.altKey && isKeyR));
       const isMacScreenshot = isMeta && e.shiftKey && ["3", "4", "5", "#", "$", "%"].includes(k);
-      const isBrowserScreenshot = (e.ctrlKey || isMeta) && e.shiftKey && lowerK === "s";
+      const isBrowserScreenshot = (e.ctrlKey || isMeta) && e.shiftKey && isKeyS;
 
       // F12 / DevTools
-      if (k === "F12" || ((e.ctrlKey || isMeta) && e.shiftKey && ["i", "j", "c"].includes(lowerK))) {
+      if (k === "F12" || ((e.ctrlKey || isMeta) && e.shiftKey && ["i", "j", "c", "ه", "ـ", "ؤ"].includes(lowerK))) {
         e.preventDefault();
         e.stopPropagation();
         pauseAllVideos();
@@ -144,7 +154,7 @@ export function VideoGuard({
       }
 
       // View Source
-      if ((e.ctrlKey || isMeta) && lowerK === "u") {
+      if ((e.ctrlKey || isMeta) && (lowerK === "u" || lowerK === "ع")) {
         e.preventDefault();
         e.stopPropagation();
         triggerViolationModal("DEVTOOLS", "View Source attempt");
@@ -152,7 +162,7 @@ export function VideoGuard({
       }
 
       // Save / Print
-      if ((e.ctrlKey || isMeta) && (lowerK === "s" || lowerK === "p")) {
+      if ((e.ctrlKey || isMeta) && (isKeyS || lowerK === "p" || lowerK === "ح")) {
         if (e.shiftKey) {
           // Handled as screenshot below
         } else {
@@ -177,7 +187,10 @@ export function VideoGuard({
 
     const handleKeyUp = (e: KeyboardEvent) => {
       const k = e.key;
-      if (k === "PrintScreen" || e.code === "PrintScreen" || e.keyCode === 44) {
+      const lowerK = k.toLowerCase();
+      const isKeyS = lowerK === "s" || lowerK === "س" || e.code === "KeyS" || e.keyCode === 83;
+      const isPrtScn = k === "PrintScreen" || e.code === "PrintScreen" || e.keyCode === 44;
+      if (isPrtScn || isKeyS) {
         if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
           navigator.clipboard.writeText("").catch(() => {});
         }
@@ -202,9 +215,36 @@ export function VideoGuard({
     }
   };
 
-  // 4. Tab Visibility Monitoring (Pause and protect when tab is genuinely backgrounded)
+  // 4. Tab Visibility & Window Focus Monitoring (Pause and protect when tab is backgrounded or when snipping tools steal focus)
   useEffect(() => {
     if (disabled) return;
+
+    const isTouch =
+      typeof navigator !== "undefined" &&
+      (navigator.maxTouchPoints > 0 ||
+        /Android|iPhone|iPad|iPod/i.test(navigator.userAgent));
+
+    const handleWindowBlur = () => {
+      if (isTouch) return;
+      // YouTube/VdoCipher iframes steal window focus on load. That is not a tab
+      // switch — treating it as one paints a black overlay and the video never starts.
+      requestAnimationFrame(() => {
+        const active = document.activeElement;
+        if (active instanceof HTMLIFrameElement && wrapRef.current?.contains(active)) return;
+        if (document.visibilityState === "visible" && active instanceof HTMLIFrameElement) return;
+        setIsTabHidden(true);
+        pauseAllVideos();
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+          navigator.clipboard.writeText("").catch(() => {});
+        }
+      });
+    };
+
+    const handleWindowFocus = () => {
+      if (document.hasFocus()) {
+        setIsTabHidden(false);
+      }
+    };
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === "hidden") {
@@ -212,24 +252,25 @@ export function VideoGuard({
         pauseAllVideos();
         void reportViolation("TAB_SWITCH", "User switched away from tab");
       } else {
-        setIsTabHidden(false);
+        handleWindowFocus();
       }
     };
 
+    window.addEventListener("blur", handleWindowBlur);
+    window.addEventListener("focus", handleWindowFocus);
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
+      window.removeEventListener("blur", handleWindowBlur);
+      window.removeEventListener("focus", handleWindowFocus);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [reportViolation, pauseAllVideos, disabled]);
 
-  if (disabled) {
-    return <div className="relative w-full">{children}</div>;
-  }
-
   return (
     <div
-      onContextMenu={handleContextMenu}
+      ref={wrapRef}
+      onContextMenu={disabled ? undefined : handleContextMenu}
       className="relative select-none w-full"
       style={{ userSelect: "none", WebkitUserSelect: "none" }}
     >
@@ -243,25 +284,31 @@ export function VideoGuard({
       `}</style>
 
       {/* Main Video Content */}
-      <div className={hasViolation ? "filter blur-lg pointer-events-none opacity-20" : ""}>
+      <div className={!disabled && hasViolation ? "invisible pointer-events-none" : ""}>
         {children}
       </div>
 
-      {/* Tab Hidden Blur Overlay */}
-      {isTabHidden && !hasViolation && (
-        <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-md z-40 flex flex-col items-center justify-center p-6 text-center text-white">
+      {/* Tab Hidden Blur Overlay — 100% solid black barrier to block all snipping tools */}
+      {!disabled && isTabHidden && !hasViolation && (
+        <div
+          className="absolute inset-0 bg-black z-50 flex flex-col items-center justify-center p-6 text-center text-white select-none cursor-pointer"
+          onClick={() => setIsTabHidden(false)}
+          role="button"
+          tabIndex={0}
+        >
           <div className="w-12 h-12 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center text-2xl mb-3">
             ⏸️
           </div>
           <h3 className="text-lg font-bold">تم إيقاف المشاهدة مؤقتاً</h3>
           <p className="text-slate-400 text-xs mt-1 max-w-sm">
-            تم التوقف تلقائياً عند مغادرة الصفحة للحفاظ على رصيد المشاهدة الخاص بك.
+            تم التوقف وتعتيم الشاشة تلقائياً عند مغادرة الصفحة لحماية المحتوى ورصيد المشاهدة.
           </p>
+          <p className="text-sky-400 text-xs mt-3 font-bold">اضغط هنا للمتابعة</p>
         </div>
       )}
 
       {/* Security Violation Modal Alert */}
-      {hasViolation && (
+      {!disabled && hasViolation && (
         <div className="fixed inset-0 z-[9999] bg-slate-950/95 backdrop-blur-xl flex flex-col items-center justify-center p-6 text-center text-white dir-rtl">
           <div className="max-w-md w-full bg-slate-900 border border-rose-500/40 rounded-3xl p-8 space-y-6 shadow-2xl shadow-rose-950/50">
             <div className="w-16 h-16 rounded-2xl bg-rose-500/20 border border-rose-500/30 flex items-center justify-center mx-auto text-3xl animate-bounce">

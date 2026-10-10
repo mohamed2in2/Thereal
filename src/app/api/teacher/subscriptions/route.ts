@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
+import { isTeacherLike, actingTeacherId } from "@/lib/teacher-scope";
 import { prisma } from "@/lib/prisma";
+import { getPlanMonths } from "@/lib/subscription-terms";
+import { termForSale, yearEndFor, applyTeacherTerms } from "@/lib/teacher-terms";
 
 export async function GET(req: NextRequest) {
   try {
     const session = await getSession();
-    if (!session || (session.role !== "teacher" && session.role !== "admin" && session.role !== "superadmin")) {
+    if (!session || (!isTeacherLike(session.role) && session.role !== "admin" && session.role !== "superadmin")) {
       return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
     }
 
@@ -15,11 +18,11 @@ export async function GET(req: NextRequest) {
     const track = searchParams.get("track");
     const query = searchParams.get("q");
 
-    const teacherId = session.id;
+    const teacherId = actingTeacherId(session);
 
     const where: any = {
       teacherId,
-      ...(session.role === "teacher" ? { student: { accountMode: { not: "TESTER" } } } : {}),
+      ...(isTeacherLike(session.role) ? { student: { accountMode: { not: "TESTER" } } } : {}),
     };
 
     if (stage) where.educationalStage = stage;
@@ -63,7 +66,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const session = await getSession();
-    if (!session || (session.role !== "teacher" && session.role !== "admin" && session.role !== "superadmin")) {
+    if (!session || (!isTeacherLike(session.role) && session.role !== "admin" && session.role !== "superadmin")) {
       return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
     }
 
@@ -76,21 +79,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "حساب تجريبي — لا يمكن تسجيل مشتركين يدويين" }, { status: 403 });
     }
 
-    const { studentEmailOrPhone, planType, planLabel, educationalStage, languageTrack } = await req.json().catch(() => ({}));
+    const { studentEmailOrPhone, planType, planLabel, educationalStage, languageTrack, monthNumber, courseId, courseIds } = await req.json().catch(() => ({}));
 
-    if (!studentEmailOrPhone || !planType) {
-      return NextResponse.json({ error: "بيانات الطالب ونوع الباقة مطلوبة" }, { status: 400 });
+    if (!studentEmailOrPhone) {
+      return NextResponse.json({ error: "بيانات الطالب مطلوبة (البريد أو الهاتف)" }, { status: 400 });
     }
 
+    const resolvedPlanType = planType || "monthly";
     const validPlanTypes = ["monthly", "termly", "yearly"];
-    if (!validPlanTypes.includes(planType)) {
+    if (!validPlanTypes.includes(resolvedPlanType)) {
       return NextResponse.json({ error: "نوع الباقة غير صحيح" }, { status: 400 });
     }
 
     // Find student by email or phone (excluding testers from teacher discovery)
     const student = await prisma.user.findFirst({
       where: {
-        ...(session.role === "teacher" ? { accountMode: { not: "TESTER" } } : {}),
+        ...(isTeacherLike(session.role) ? { accountMode: { not: "TESTER" } } : {}),
         OR: [
           { email: String(studentEmailOrPhone).trim().toLowerCase() },
           { phone: String(studentEmailOrPhone).trim() },
@@ -103,16 +107,11 @@ export async function POST(req: NextRequest) {
     }
 
     const profile = await prisma.teacherProfile.findUnique({
-      where: { teacherId: session.id },
+      where: { teacherId: actingTeacherId(session) },
       select: { priceMonthly: true, priceTermly: true, priceYearly: true, stagePricing: true, priceLanguagesMonthly: true, priceLanguagesTermly: true, priceLanguagesYearly: true },
     });
 
-    const monthsMap: Record<string, number> = {
-      monthly: 1,
-      termly: 3,
-      yearly: 6,
-    };
-    const months = monthsMap[planType] || 1;
+    const months = getPlanMonths(planType);
 
     let subPrice = 0;
     if (planType === "monthly") subPrice = profile?.priceMonthly ?? 0;
@@ -163,8 +162,21 @@ export async function POST(req: NextRequest) {
 
     const trackedLang = isLanguages ? "languages" : "arabic";
 
+    const monthNames: Record<number, string> = {
+      1: "الأول",
+      2: "الثاني",
+      3: "الثالث",
+      4: "الرابع",
+      5: "الخامس",
+      6: "السادس",
+      7: "السابع",
+      8: "الثامن",
+    };
+    const targetMonth = Number(monthNumber) >= 1 ? Number(monthNumber) : 1;
+    const monthName = monthNames[targetMonth] || String(targetMonth);
+
     const labelMap: Record<string, string> = {
-      monthly: `اشتراك شهري (${isLanguages ? "لغات" : "عربي"})`,
+      monthly: `اشتراك الشهر ${monthName} (${isLanguages ? "لغات" : "عربي"})`,
       termly: `اشتراك ترم كامل (${isLanguages ? "لغات" : "عربي"})`,
       yearly: `اشتراك سنوي (${isLanguages ? "لغات" : "عربي"})`,
     };
@@ -174,11 +186,11 @@ export async function POST(req: NextRequest) {
       where: {
         studentId_teacherId_planType: {
           studentId: student.id,
-          teacherId: session.id,
+          teacherId: actingTeacherId(session),
           planType,
         },
       },
-      select: { expiresAt: true, status: true },
+      select: { expiresAt: true, status: true, termNumbers: true },
     });
 
     const now = new Date();
@@ -187,20 +199,38 @@ export async function POST(req: NextRequest) {
         ? existingSub.expiresAt
         : now;
 
-    const expiresAt = new Date(baseDate);
+    let expiresAt = new Date(baseDate);
     expiresAt.setMonth(expiresAt.getMonth() + months);
+
+    // Teacher-defined terms: record which term was granted and end it on the
+    // teacher's date. No-op when the teacher has not set up terms for this grade.
+    const saleTerm = planType === "termly" ? await termForSale(actingTeacherId(session), targetStage) : null;
+    const yearEnd = planType === "yearly" ? await yearEndFor(actingTeacherId(session), targetStage) : null;
+    const { termNumbers, expiresAt: termExpiresAt } = applyTeacherTerms(existingSub, saleTerm, yearEnd, now);
+    if (termExpiresAt) expiresAt = termExpiresAt;
+
+    let finalTermNumbers: number[] = [];
+    if (planType === "monthly") {
+      if (existingSub && existingSub.status === "active" && existingSub.termNumbers && existingSub.termNumbers.length > 0) {
+        finalTermNumbers = [...new Set([...existingSub.termNumbers, targetMonth])].sort((a, b) => a - b);
+      } else {
+        finalTermNumbers = [targetMonth];
+      }
+    } else if (termNumbers && termNumbers.length > 0) {
+      finalTermNumbers = termNumbers;
+    }
 
     const sub = await prisma.teacherSubscription.upsert({
       where: {
         studentId_teacherId_planType: {
           studentId: student.id,
-          teacherId: session.id,
+          teacherId: actingTeacherId(session),
           planType,
         },
       },
       create: {
         studentId: student.id,
-        teacherId: session.id,
+        teacherId: actingTeacherId(session),
         planType,
         planLabel: planLabel || labelMap[planType] || "اشتراك معلم",
         amount: subPrice,
@@ -212,8 +242,10 @@ export async function POST(req: NextRequest) {
         paymentSource: "MANUAL",
         status: "active",
         expiresAt,
+        termNumbers: finalTermNumbers,
       },
       update: {
+        termNumbers: finalTermNumbers,
         planLabel: planLabel || labelMap[planType] || "اشتراك معلم",
         amount: subPrice,
         educationalStage: targetStage,
@@ -227,6 +259,44 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    // Direct Course Enrollment: if courseId or courseIds are supplied, directly enroll student
+    const targetCourseIds: string[] = Array.isArray(courseIds)
+      ? courseIds.filter(Boolean)
+      : typeof courseId === "string" && courseId.trim()
+      ? [courseId.trim()]
+      : [];
+
+    const enrolledCoursesList: string[] = [];
+    for (const cId of targetCourseIds) {
+      const courseOwner = await prisma.course.findUnique({
+        where: { id: cId },
+        select: { teacherId: true, title: true },
+      });
+      if (
+        courseOwner &&
+        (courseOwner.teacherId === actingTeacherId(session) ||
+          session.role === "admin" ||
+          session.role === "superadmin")
+      ) {
+        await prisma.courseEnrollment.upsert({
+          where: {
+            studentId_courseId: {
+              studentId: student.id,
+              courseId: cId,
+            },
+          },
+          create: {
+            studentId: student.id,
+            courseId: cId,
+            fulfillmentSource: "ADMIN",
+            amountPaid: 0,
+          },
+          update: {},
+        });
+        enrolledCoursesList.push(courseOwner.title);
+      }
+    }
+
     // Write audit log entry
     const { logAdminAction } = await import("@/lib/admin-auth");
     await logAdminAction({
@@ -235,10 +305,10 @@ export async function POST(req: NextRequest) {
       action: "MANUAL_TEACHER_SUBSCRIPTION",
       targetType: "STUDENT",
       targetId: student.id,
-      targetName: `طالب: ${student.name} - باقة: ${planType} (${subPrice} EGP)`,
+      targetName: `طالب: ${student.name} - باقة: ${resolvedPlanType} (${subPrice} EGP)${enrolledCoursesList.length > 0 ? ` - كورسات: ${enrolledCoursesList.join(", ")}` : ""}`,
     }).catch(() => {});
 
-    return NextResponse.json({ success: true, subscription: sub });
+    return NextResponse.json({ success: true, subscription: sub, enrolledCourses: enrolledCoursesList });
   } catch (error) {
     console.error("[teacher/subscriptions POST] error:", error);
     return NextResponse.json({ error: "حدث خطأ أثناء إضافة الطالب" }, { status: 500 });
@@ -248,7 +318,7 @@ export async function POST(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   try {
     const session = await getSession();
-    if (!session || (session.role !== "teacher" && session.role !== "admin" && session.role !== "superadmin")) {
+    if (!session || (!isTeacherLike(session.role) && session.role !== "admin" && session.role !== "superadmin")) {
       return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
     }
 
@@ -269,7 +339,7 @@ export async function DELETE(req: NextRequest) {
     }
 
     // Security check: teacher can only delete subscriptions for their own account unless admin/superadmin
-    if (session.role === "teacher" && sub.teacherId !== session.id) {
+    if (isTeacherLike(session.role) && sub.teacherId !== actingTeacherId(session)) {
       return NextResponse.json({ error: "غير مصرح لك بحذف هذا الاشتراك" }, { status: 403 });
     }
 

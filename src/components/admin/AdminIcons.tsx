@@ -56,6 +56,17 @@ export function IconPlus({ className }: IconProps) {
   );
 }
 
+export function IconDownload({ className }: IconProps) {
+  return (
+    <svg className={className} {...base}>
+      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+      <polyline points="7 10 12 15 17 10" />
+      <line x1="12" y1="15" x2="12" y2="3" />
+    </svg>
+  );
+}
+
+
 export function IconKey({ className }: IconProps) {
   return (
     <svg className={className} {...base}>
@@ -193,6 +204,23 @@ export function IconClose({ className }: IconProps) {
   return (
     <svg className={className} {...base}>
       <path d="M18 6L6 18M6 6l12 12" />
+    </svg>
+  );
+}
+
+export function IconEdit({ className }: IconProps) {
+  return (
+    <svg className={className} {...base}>
+      <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+      <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+    </svg>
+  );
+}
+
+export function IconCheck({ className }: IconProps) {
+  return (
+    <svg className={className} {...base}>
+      <polyline points="20 6 9 17 4 12" />
     </svg>
   );
 }
@@ -370,6 +398,7 @@ export const SECTION_ICONS: Record<string, (p: IconProps) => React.ReactElement>
   courses: IconBook,
   "quiz-results": IconClipboard,
   "create-course": IconPlus,
+  terms: IconBook,
   create: IconPlus,
   codes: IconKey,
   students: IconUsers,
@@ -389,7 +418,11 @@ export const SECTION_ICONS: Record<string, (p: IconProps) => React.ReactElement>
   homework: IconFile,
   review: IconClipboard,
   wallet: IconDollar,
+  testers: IconShield,
+  "center-passes": IconKey,
   // ── AI Section ──
+  "ai-copilot": IconBrain,
+  "ai-studio": IconBrain,
   "ai-overview": IconBrain,
   "ai-live": IconActivity,
   "ai-requests": IconChat,

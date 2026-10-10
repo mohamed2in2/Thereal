@@ -1,15 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getConfigBool } from "@/lib/config";
 import { evaluateTerminalWithAI } from "@/lib/ai-service";
 import { checkHomeworkAccess } from "@/lib/authorization";
 import path from "path";
 import fs from "fs/promises";
+import { blockSupportView } from "@/lib/support-auth";
 import {
   canAccessContent,
+  canReplaceRejectedHomeworkUpload,
+  contentDeniedPayload,
   ContentType,
-  recordContentCompleted,
+  HOMEWORK_REVIEW_REQUESTED_STATUS,
+  syncHomeworkContentProgress,
 } from "@/lib/content-access-engine";
+import { scoreHomeworkExam } from "@/lib/homework-regrade";
+import { answersToOriginal, questionsInAttempt } from "@/lib/attempt-presentation";
+import {
+  ensureHomeworkExamView,
+  homeworkExamOpenedAt,
+  homeworkPresentationOptions,
+} from "@/lib/homework-exam-view";
 
 /** Normalize output: collapse whitespace, trim lines, lowercase */
 function normalizeOutput(s: string): string {
@@ -27,6 +39,10 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getSession();
+  // Defence in depth behind the proxy guard: never let a support agent act as
+  // the student on grades, progress or money.
+  const supportBlocked = blockSupportView(session);
+  if (supportBlocked) return supportBlocked;
   if (!session || session.role !== "student")
     return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
 
@@ -40,7 +56,10 @@ export async function POST(
   if (!hw || !hw.isPublished)
     return NextResponse.json({ error: "الواجب غير موجود" }, { status: 404 });
 
-  if (hw.dueAt && new Date() > hw.dueAt) {
+  // Homework stays open by default (homework_deadline_disabled). dueAt remains
+  // the date shown to the student and the one late-submission reporting uses;
+  // this switch only decides whether the server hard-refuses a late submit.
+  if (hw.dueAt && new Date() > hw.dueAt && !(await getConfigBool("homework_deadline_disabled"))) {
     return NextResponse.json({ error: "انتهى موعد تسليم الواجب" }, { status: 400 });
   }
 
@@ -55,37 +74,54 @@ export async function POST(
     sourceId: homeworkId,
     title: hw.title,
   });
-  if ("requiredItem" in access) {
-    return NextResponse.json(
-      {
-        error: `يجب إكمال «${access.requiredItem.title}» أولًا.`,
-        code: access.code,
-        requiredItem: access.requiredItem,
-      },
-      { status: 403 }
-    );
-  }
+  const denied = contentDeniedPayload(access);
+  if (denied) return NextResponse.json(denied.body, { status: denied.status });
 
-  // Prevent re-submission
+  // One graded attempt unless the teacher/assistant reopened it.
+  // The deadline never substitutes for this lock: a student who submits late
+  // still gets a score, and cannot submit again without allowRetake.
   const existing = await prisma.homeworkSubmission.findUnique({
     where: { homeworkId_studentId: { homeworkId, studentId: session.id } },
+    include: { review: { select: { id: true, verdict: true } } },
   });
-  if (existing)
+  // A rejected file can be replaced only after the teacher or assistant
+  // opened another attempt. Keep the previous review row so the rejection
+  // stays visible; the new قيد المراجعة upload opens the next item again.
+  const afterRejection =
+    existing?.status === "failed" || existing?.review?.verdict === "failed";
+  // Upload may already have written a قيد المراجعة row (file persist). Allow
+  // this follow-up submit to finalize the same attempt instead of 409.
+  const uploadResubmit =
+    hw.type === "upload" &&
+    !!existing &&
+    (existing.status === "pending" || existing.status === HOMEWORK_REVIEW_REQUESTED_STATUS) &&
+    !existing.allowRetake;
+  if (
+    existing &&
+    !canReplaceRejectedHomeworkUpload(hw.type, existing.status, existing.allowRetake) &&
+    !uploadResubmit
+  ) {
     return NextResponse.json(
-      { error: "لقد أرسلت هذا الواجب بالفعل", alreadySubmitted: true, submission: existing },
+      { error: "تم احتساب درجتك مرة واحدة. لا يمكن إعادة الاختبار.", alreadySubmitted: true, submission: existing },
       { status: 409 }
     );
+  }
 
   const body = (await req.json()) as {
     submittedOutput?: string; // terminal
     fileUrl?: string;         // upload
     fileName?: string;        // upload
-    answers?: Record<string, string>; // MCQ: { questionId: "A"|"B"|"C"|"D" }
+    answers?: Record<string, string>; // MCQ: letter the student saw, A/B/C/D
+    focusLosses?: number;     // exam: times the page lost focus while solving
   };
 
   let status = "pending";
   let score: number | null = null;
   let totalQ: number | null = null;
+  let storedAnswers = body.answers ? JSON.stringify(body.answers) : null;
+  let presentationJson: string | null = null;
+  let focusLosses: number | null = null;
+  let startedAt: Date | null = null;
 
   // ── Terminal ──────────────────────────────────────────────────────────────
   if (hw.type === "terminal") {
@@ -109,7 +145,7 @@ export async function POST(
         status = aiResult.passed ? "passed" : "failed";
       } catch {
         // AI unavailable → flag for manual review
-        status = "review_requested";
+        status = HOMEWORK_REVIEW_REQUESTED_STATUS;
       }
     }
   }
@@ -132,7 +168,9 @@ export async function POST(
       return NextResponse.json({ error: "الملف المشار إليه غير موجود على السيرفر، يرجى إعادة رفعه" }, { status: 400 });
     }
 
-    status = "pending"; // teacher reviews manually
+    // PDF / file homework waits for the teacher ("قيد المراجعة").
+    // Global rule: this status is COMPLETED progress and unlocks the next item.
+    status = HOMEWORK_REVIEW_REQUESTED_STATUS;
   }
 
   // ── Exam (MCQ) ────────────────────────────────────────────────────────────
@@ -140,14 +178,35 @@ export async function POST(
     if (!body.answers || Object.keys(body.answers).length === 0)
       return NextResponse.json({ error: "يجب الإجابة على الأسئلة" }, { status: 400 });
 
-    const questions = hw.questions;
-    let correct = 0;
-    for (const q of questions) {
-      if (body.answers[q.id] === q.correctAnswer) correct++;
+    // Grade against the order this student was shown. Creating it here only
+    // happens when the page never saved one; the same helper is what GET uses,
+    // and it will not replace an order already on screen.
+    const presentation = await ensureHomeworkExamView(
+      session.id,
+      homeworkId,
+      hw.questions,
+      !!existing?.allowRetake,
+      homeworkPresentationOptions(hw)
+    );
+    // A bank draw grades only the questions this student was given; answers
+    // sent for any other id are dropped rather than trusted.
+    const attemptQuestions = questionsInAttempt(hw.questions, presentation);
+    const allowedIds = new Set(attemptQuestions.map((q) => q.id));
+    const originalAnswers = Object.fromEntries(
+      Object.entries(answersToOriginal(body.answers, presentation)).filter(([id]) => allowedIds.has(id))
+    );
+    presentationJson = JSON.stringify(presentation);
+    storedAnswers = JSON.stringify(originalAnswers);
+    const graded = scoreHomeworkExam(attemptQuestions, originalAnswers);
+    totalQ = graded.totalQ;
+    score = graded.score;
+    status = graded.status;
+    // Integrity signals for the teacher. The count comes from the student's
+    // browser, so it is a hint, never a grade input; clamp it to sane values.
+    if (typeof body.focusLosses === "number" && Number.isFinite(body.focusLosses)) {
+      focusLosses = Math.max(0, Math.min(10_000, Math.floor(body.focusLosses)));
     }
-    totalQ = questions.length;
-    score = totalQ > 0 ? Math.round((correct / totalQ) * 100) : 0;
-    status = score >= 50 ? "passed" : "failed";
+    startedAt = await homeworkExamOpenedAt(session.id, homeworkId);
   }
 
   // ── Link (no submission needed) ───────────────────────────────────────────
@@ -158,30 +217,67 @@ export async function POST(
   let submission;
   try {
     submission = await prisma.$transaction(async (tx) => {
-      const savedSubmission = await tx.homeworkSubmission.create({
-        data: {
-          homeworkId,
-          studentId:       session.id,
-          answers:         body.answers ? JSON.stringify(body.answers) : null,
-          score,
-          totalQ,
-          submittedOutput: body.submittedOutput ?? null,
-          fileUrl:         body.fileUrl ?? null,
-          fileName:        body.fileName ?? null,
-          status,
-        },
-      });
-      await recordContentCompleted(
+      let savedSubmission;
+      if (existing) {
+        if (existing.review && !(hw.type === "upload" && afterRejection)) {
+          await tx.homeworkReview.delete({ where: { submissionId: existing.id } });
+        }
+        savedSubmission = await tx.homeworkSubmission.update({
+          where: { id: existing.id },
+          data: {
+            answers:         storedAnswers,
+            presentation:    presentationJson,
+            score,
+            totalQ,
+            submittedOutput: body.submittedOutput ?? null,
+            fileUrl:         body.fileUrl ?? null,
+            fileName:        body.fileName ?? null,
+            status,
+            allowRetake:     false,
+            focusLosses,
+            startedAt,
+            completedAt:     new Date(),
+          },
+        });
+      } else {
+        savedSubmission = await tx.homeworkSubmission.create({
+          data: {
+            homeworkId,
+            studentId:       session.id,
+            answers:         storedAnswers,
+            presentation:    presentationJson,
+            score,
+            totalQ,
+            submittedOutput: body.submittedOutput ?? null,
+            fileUrl:         body.fileUrl ?? null,
+            fileName:        body.fileName ?? null,
+            status,
+            allowRetake:     false,
+            focusLosses,
+            startedAt,
+          },
+        });
+      }
+      await syncHomeworkContentProgress(
         session.id,
         { type: ContentType.HOMEWORK, sourceId: homeworkId, title: hw.title },
-        { score, completedAt: savedSubmission.completedAt },
+        status,
+        {
+          score,
+          completedAt: savedSubmission.completedAt,
+          hasUploadedFile: Boolean(body.fileUrl || savedSubmission.fileUrl),
+        },
         tx
       );
       return savedSubmission;
     });
-  } catch (error: any) {
-    if (error?.code === "P2002") {
-      return NextResponse.json({ error: "لقد أرسلت هذا الواجب بالفعل", alreadySubmitted: true }, { status: 409 });
+  } catch (error: unknown) {
+    const err = error as { code?: string };
+    if (err?.code === "P2002") {
+      return NextResponse.json(
+        { error: "تم احتساب درجتك مرة واحدة. لا يمكن إعادة الاختبار.", alreadySubmitted: true },
+        { status: 409 }
+      );
     }
     throw error;
   }

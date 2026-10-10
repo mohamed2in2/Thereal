@@ -10,6 +10,8 @@ import { CourseFeedbackForm } from "@/components/ai/CourseFeedbackForm";
 import { SecurePlayer } from "@/components/ui/SecurePlayer";
 import { SkeletonCard } from "@/components/ui/Skeleton";
 import { clientErrorMessage } from "@/lib/client-error-message";
+import { safeJsonLd } from "@/lib/jsonld";
+import { KeyRound } from "lucide-react";
 
 type CoursePreview = {
   id: string;
@@ -32,6 +34,9 @@ type CoursePreview = {
   hasAccess: boolean;
   allowDirectInstall: boolean;
   isOwnerTeacher?: boolean;
+  deliveryMode?: string;
+  isRenewalRequired?: boolean;
+  renewalMonth?: number | null;
 };
 
 function buildWhatsAppUrl(phone: string, message: string) {
@@ -90,8 +95,27 @@ export default function CourseProductPage() {
   const [walletModal, setWalletModal] = useState<{ reference: string; instructions: string; methodLabel: string; amount: number } | null>(null);
   const [openFolders, setOpenFolders] = useState<Record<string, boolean>>({});
   // Free/demo inline player
-  const [demo, setDemo] = useState<{ title: string; embedUrl: string; provider?: string } | null>(null);
+  const [demo, setDemo] = useState<{
+    title: string;
+    embedUrl: string;
+    provider?: string;
+    drm?: {
+      token: string;
+      licenseServers: { widevine: string; playready: string; fairplay: string; fairplayCertUrl?: string };
+      clearKeys?: Record<string, string>;
+    } | null;
+  } | null>(null);
   const [demoLoading, setDemoLoading] = useState<string | null>(null);
+  const [isCenterMode] = useState(() => {
+    if (typeof window === "undefined") return false;
+    const host = window.location.hostname;
+    return (
+      host.startsWith("center.") ||
+      host.includes("center.code-up.tech") ||
+      window.location.search.includes("center=1") ||
+      document.cookie.includes("center_mode=1")
+    );
+  });
 
   const countdown = useCountdown(course?.discountExpiresAt ?? null);
 
@@ -109,7 +133,7 @@ export default function CourseProductPage() {
       const res = await fetch(`/api/videos/${video.id}/watch`, { method: "POST", credentials: "include" });
       const data = await res.json();
       if (res.ok && data.embedUrl) {
-        setDemo({ title: video.title, embedUrl: data.embedUrl, provider: data.provider });
+        setDemo({ title: video.title, embedUrl: data.embedUrl, provider: data.provider, drm: data.drm || null });
       } else {
         toastError(clientErrorMessage(res.status, data));
       }
@@ -301,7 +325,7 @@ export default function CourseProductPage() {
           id="course-schema"
           type="application/ld+json"
           dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
+            __html: safeJsonLd({
               "@context": "https://schema.org",
               "@type": "Course",
               "name": course.title,
@@ -347,7 +371,13 @@ export default function CourseProductPage() {
             <div className="flex flex-wrap gap-2 mb-4">
               <span className={`text-xs px-3 py-1 rounded-full font-medium ${subjectClass}`}>{course.subject}</span>
               <span className="text-xs px-3 py-1 rounded-full bg-white/10 border border-white/15">{STAGE_LABELS[course.educationalStage] || course.educationalStage}</span>
-              {!course.isPaid && <span className="text-xs px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 font-bold">مجاني</span>}
+              {course.hasAccess ? (
+                <span className="text-xs px-3 py-1 rounded-full bg-emerald-500/25 border border-emerald-400/50 text-emerald-300 font-bold flex items-center gap-1">
+                  ✓ في مكتبتك (لديك صلاحية)
+                </span>
+              ) : !course.isPaid ? (
+                <span className="text-xs px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 font-bold">مجاني</span>
+              ) : null}
             </div>
             <h1 className="text-3xl md:text-4xl font-black leading-tight mb-4">{course.title}</h1>
             {course.description && <p className="text-white/80 text-base leading-relaxed mb-6">{course.description}</p>}
@@ -366,6 +396,37 @@ export default function CourseProductPage() {
 
           {/* Left: content overview */}
           <div className="lg:col-span-2 space-y-6">
+            {/* Renewal Banner for Old Subscribers */}
+            {!course.hasAccess && course.isRenewalRequired && (
+              <div className="p-4 sm:p-5 rounded-2xl border border-amber-500/40 bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-transparent flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
+                <div className="flex items-center gap-3.5">
+                  <span className="w-11 h-11 rounded-2xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-md shadow-amber-500/30 text-xl font-black">
+                    ⚡
+                  </span>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-500 dark:text-amber-300">
+                        مشترك سابق لدى المعلم ⚡
+                      </span>
+                      <h3 className="text-sm font-extrabold text-gray-900 dark:text-white">
+                        مطلوب تجديد الاشتراك ({course.renewalMonth ? `الشهر ${course.renewalMonth}` : "الشهر الجديد"})
+                      </h3>
+                    </div>
+                    <p className="text-xs text-gray-600 dark:text-gray-300 mt-1 leading-relaxed">
+                      أنت مشترك سابق لدى أستاذ {course.teacher.name}. هذا الكورس متاح ضمن باقة {course.renewalMonth ? `الشهر ${course.renewalMonth}` : "الشهر التالي"}، يمكنك التجديد الآن بضغطة واحدة من رصيد محفظتك وفتحه فوراً.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => router.push(`/choose-course?teacherId=${course.teacher.id}`)}
+                  className="px-5 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white font-black text-xs flex items-center justify-center gap-2 shadow-md shadow-amber-500/20 whitespace-nowrap transition-all cursor-pointer shrink-0"
+                >
+                  <span>تجديد الاشتراك الآن ⚡</span>
+                </button>
+              </div>
+            )}
+
             {/* Free / demo videos — watchable without enrollment */}
             {course.freeVideos && course.freeVideos.length > 0 && !course.hasAccess && (
               <div className="bg-white dark:bg-gray-800 rounded-2xl border border-emerald-500/30 shadow-sm overflow-hidden">
@@ -452,8 +513,23 @@ export default function CourseProductPage() {
               )}
               <div className="p-6 space-y-5">
 
-                {/* Price display */}
-                {!course.isPaid ? (
+                {/* Price display / In-Library status */}
+                {course.hasAccess ? (
+                  <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/25 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-emerald-500/20 text-emerald-500 flex items-center justify-center shrink-0">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+                    </div>
+                    <div>
+                      <p className="font-black text-emerald-600 dark:text-emerald-400 text-base">في مكتبتك (لديك صلاحية)</p>
+                      <p className="text-xs text-gray-600 dark:text-gray-300">أنت مشترك بالفعل ولديك صلاحية كاملة للوصول إلى كل محتويات هذا الكورس.</p>
+                    </div>
+                  </div>
+                ) : isCenterMode || course.deliveryMode === "CENTER" ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl font-black text-amber-500 dark:text-amber-400">🏛️ حصة سنتر حضوري</span>
+                    <span className="text-xs bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 px-2.5 py-0.5 rounded-full font-bold">تفعيل بالكود فقط</span>
+                  </div>
+                ) : !course.isPaid ? (
                   <div className="flex items-center gap-2">
                     <span className="text-3xl font-black text-emerald-600 dark:text-emerald-400">مجاني</span>
                     <span className="text-xs bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded-full font-medium">بالكامل</span>
@@ -483,17 +559,73 @@ export default function CourseProductPage() {
                   <div className="space-y-2">
                     <button
                       onClick={() => router.push(`/courses/${course.id}/learn`)}
-                      className={`w-full py-3 rounded-xl text-white font-bold text-base transition-colors ${
-                        course.isOwnerTeacher ? "bg-sky-600 hover:bg-sky-500" : "bg-emerald-600 hover:bg-emerald-700"
+                      className={`w-full py-3.5 rounded-xl text-white font-bold text-base transition-all shadow-md flex items-center justify-center gap-2 ${
+                        course.isOwnerTeacher
+                          ? "bg-sky-600 hover:bg-sky-500 shadow-sky-600/20"
+                          : "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/20"
                       }`}
                     >
-                      {course.isOwnerTeacher ? "👁️ معاينة الكورس كمعلّم ←" : "ادخل الكورس الآن ←"}
+                      {course.isOwnerTeacher ? "👁️ معاينة الكورس كمعلّم ←" : "الدخول ومتابعة التعلم (في مكتبتك) ←"}
                     </button>
+                    {user?.role === "student" && !course.isOwnerTeacher && (
+                      <button
+                        onClick={() => router.push(`/courses/${course.id}/progress`)}
+                        className="w-full py-2.5 rounded-xl text-sm font-bold border border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/10 transition-colors"
+                      >
+                        📊 متابعة تقدمي مع {course.teacher.name}
+                      </button>
+                    )}
                     {course.isOwnerTeacher && (
                       <p className="text-xs text-center text-sky-500 font-bold bg-sky-500/10 py-1.5 px-2 rounded-lg">
                         أنت أستاذ هذا الكورس — يمكنك معاينته ودخوله مباشرة مجاناً دون الحاجة للدفع.
                       </p>
                     )}
+                  </div>
+                ) : isCenterMode || course.deliveryMode === "CENTER" ? (
+                  /* Center Mode — exclusively unlock via Access Code, no prices or payment gateways */
+                  <div className="p-4 sm:p-5 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center border border-amber-500/30">
+                        <KeyRound className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-black text-amber-300">تفعيل الحصة بكود السنتر</h4>
+                        <p className="text-[11px] text-slate-400">ينزل الكورس مباشرة في مكتبتك بمجرد إدخال الكود</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2.5">
+                      <input
+                        type="text"
+                        value={code}
+                        onChange={(e) => setCode(e.target.value.toUpperCase())}
+                        onKeyDown={(e) => e.key === "Enter" && applyCode()}
+                        placeholder="أدخل كود السنتر (المسلّم لك في القاعة)"
+                        className="w-full px-4 py-3 rounded-xl border border-amber-500/40 bg-slate-900 text-center font-mono text-base font-bold tracking-widest text-amber-300 outline-none focus:border-amber-400 transition-all placeholder:text-slate-500 placeholder:text-xs placeholder:font-sans placeholder:tracking-normal"
+                        dir="ltr"
+                      />
+
+                      <button
+                        onClick={applyCode}
+                        disabled={applying || !code.trim()}
+                        className="w-full py-3 rounded-xl text-slate-950 font-black text-sm transition-all disabled:opacity-50 cursor-pointer shadow-lg bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 flex items-center justify-center gap-2"
+                      >
+                        {applying ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
+                            <span>جارٍ التفعيل...</span>
+                          </>
+                        ) : (
+                          <span>تفعيل الكورس وإضافته لمكتبتي فوراً 🚀</span>
+                        )}
+                      </button>
+
+                      {!user && (
+                        <p className="text-[11px] text-center text-slate-400">
+                          يلزم <button onClick={() => router.push(`/login?redirect_url=/courses/${courseId}`)} className="text-amber-400 font-bold underline">تسجيل الدخول</button> أولاً لحفظ الكورس في حسابك
+                        </p>
+                      )}
+                    </div>
                   </div>
                 ) : (!course.isPaid || course.effectivePrice === 0) ? (
                   /* Free course — always direct install, no code needed */
@@ -520,6 +652,25 @@ export default function CourseProductPage() {
                 ) : (
                   /* Paid course — wallet / fawry / balance / whatsapp / code choices */
                   <div className="space-y-3">
+                    {!course.hasAccess && course.isRenewalRequired && (
+                      <div className="p-3.5 rounded-xl border border-amber-500/40 bg-amber-500/10 space-y-2.5">
+                        <div className="flex items-center gap-2 text-xs font-bold text-amber-500 dark:text-amber-400">
+                          <span>⚡</span>
+                          <span>مطلوب تجديد الاشتراك (الشهر {course.renewalMonth || 2})</span>
+                        </div>
+                        <p className="text-[11px] text-gray-600 dark:text-gray-300 leading-relaxed">
+                          أنت مشترك في الشهر السابق. لتفعيل هذا الكورس ومتابعة دروسه، جدد اشتراكك الآن:
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => router.push(`/choose-course?teacherId=${course.teacher.id}`)}
+                          className="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white font-black text-xs flex items-center justify-center gap-2 shadow-md shadow-amber-500/20 transition-all cursor-pointer"
+                        >
+                          <span>تجديد الاشتراك للشهر {course.renewalMonth || 2} ⚡</span>
+                        </button>
+                      </div>
+                    )}
+
                     {/* Pay mode toggle */}
                     <div className="grid grid-cols-5 gap-1 p-1 rounded-xl" style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}>
                       <button onClick={() => { setPayMode("wallet"); setSelectedWalletMethod("vf_cash"); }}
@@ -559,7 +710,7 @@ export default function CourseProductPage() {
                               {[
                                 { id: "vf_cash", label: "فودافون كاش", color: "#E60000" },
                               ].map(m => (
-                                <button key={m.id} type="button" onClick={() => setSelectedWalletMethod(m.id as any)}
+                                <button key={m.id} type="button" onClick={() => setSelectedWalletMethod(m.id as "vf_cash")}
                                   className="py-2 px-1 rounded-lg text-xs font-bold border cursor-pointer transition-all text-center flex items-center justify-center gap-1"
                                   style={{
                                     borderColor: selectedWalletMethod === m.id ? m.color : "var(--border)",
@@ -679,7 +830,7 @@ export default function CourseProductPage() {
                           )}
                         </button>
                         {!user && <p className="text-xs text-center" style={{ color: "var(--ink-3)" }}><button onClick={() => router.push(`/login?redirect_url=/courses/${courseId}`)} className="underline" style={{ color: "var(--brand)" }}>سجّل الدخول</button> أولاً</p>}
-                        <p className="text-xs text-center" style={{ color: "var(--ink-3)" }}>يمكنك إضافة رصيد من قسم "رصيدي" في حسابك</p>
+                        <p className="text-xs text-center" style={{ color: "var(--ink-3)" }}>يمكنك إضافة رصيد من قسم &quot;رصيدي&quot; في حسابك</p>
                       </>
                     )}
 
@@ -822,7 +973,13 @@ export default function CourseProductPage() {
                 <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M18 6L6 18M6 6l12 12" /></svg>
               </button>
             </div>
-            <SecurePlayer embedUrl={demo.embedUrl} title={demo.title} watermark={user?.phone || user?.name || ""} provider={demo.provider} />
+            <SecurePlayer
+              embedUrl={demo.embedUrl}
+              title={demo.title}
+              watermark={user?.phone || user?.name || ""}
+              provider={demo.provider}
+              drm={demo.drm || undefined}
+            />
           </div>
         </div>
       )}

@@ -1,8 +1,10 @@
 import { logAdminAction } from "@/lib/admin-auth";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
+import { isTeacherLike, actingTeacherId, hasAssistantPermission } from "@/lib/teacher-scope";
 import { prisma } from "@/lib/prisma";
 import { buildCourseSlug } from "@/lib/course-slug";
+import { inferCoursePlacement } from "@/lib/teacher-terms";
 
 const MAX_TITLE_LENGTH = 100;
 const MAX_SUBJECT_LENGTH = 50;
@@ -21,12 +23,12 @@ function isValidUrl(url: string): boolean {
 
 export async function GET() {
   const session = await getSession();
-  if (!session || session.role !== "teacher") {
+  if (!session || !isTeacherLike(session.role)) {
     return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
   }
 
   const courses = await prisma.course.findMany({
-    where: { teacherId: session.id },
+    where: { teacherId: actingTeacherId(session) },
     include: {
       _count: {
         select: {
@@ -46,7 +48,12 @@ export async function GET() {
     orderBy: { createdAt: "desc" },
   });
 
-  return NextResponse.json({ courses });
+  const teacher = await prisma.user.findUnique({
+    where: { id: actingTeacherId(session) },
+    select: { name: true },
+  });
+
+  return NextResponse.json({ courses, teacherName: teacher?.name || "" });
 }
 
 export async function POST(req: NextRequest) {
@@ -65,8 +72,11 @@ export async function POST(req: NextRequest) {
         });
       } catch (e) {}
     }
-    if (!session || session.role !== "teacher") {
+    if (!session || !isTeacherLike(session.role)) {
       return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
+    }
+    if (!hasAssistantPermission(session, "createCourses")) {
+      return NextResponse.json({ error: "المدرّس لم يمنحك صلاحية إنشاء كورسات" }, { status: 403 });
     }
 
     const body = await req.json();
@@ -126,13 +136,27 @@ export async function POST(req: NextRequest) {
     // Check for duplicate course title for this teacher
     const existingCourse = await prisma.course.findFirst({
       where: {
-        teacherId: session.id,
+        teacherId: actingTeacherId(session),
         title: title,
       },
     });
 
     if (existingCourse) {
       return NextResponse.json({ error: "يوجد كورس بنفس العنوان لديك" }, { status: 400 });
+    }
+
+    const deliveryModeRaw = typeof body.deliveryMode === "string" ? body.deliveryMode.toUpperCase().trim() : "ONLINE";
+    const deliveryMode = ["ONLINE", "CENTER", "BOTH"].includes(deliveryModeRaw) ? deliveryModeRaw : "ONLINE";
+
+    let bookingKind: string | null = typeof body.bookingKind === "string" ? body.bookingKind.trim() : null;
+    let bookingTerm: number | null = typeof body.bookingTerm === "number" ? body.bookingTerm : null;
+
+    if (!bookingKind) {
+      const inferred = inferCoursePlacement(title);
+      if (inferred) {
+        bookingKind = inferred.bookingKind;
+        bookingTerm = inferred.bookingTerm;
+      }
     }
 
     const course = await prisma.course.create({
@@ -142,8 +166,11 @@ export async function POST(req: NextRequest) {
         description: description || null,
         thumbnailUrl: thumbnailUrl || null,
         educationalStage,
-        teacherId: session.id,
+        teacherId: actingTeacherId(session),
         contactPhone: contactPhone || null,
+        deliveryMode,
+        bookingKind,
+        bookingTerm,
       },
     });
 

@@ -73,7 +73,9 @@ export function ContentFlowManager({ courseId }: ContentFlowManagerProps) {
           setFolders(data.folders || []);
           setPrerequisites(data.prerequisites || []);
 
-          if (!data.sequentialAccess && (!data.prerequisites || data.prerequisites.length === 0)) {
+          if (["free", "per_folder", "course", "custom"].includes(data.contentFlowMode)) {
+            setFlowMode(data.contentFlowMode);
+          } else if (!data.sequentialAccess && (!data.prerequisites || data.prerequisites.length === 0)) {
             setFlowMode("free");
           } else {
             setFlowMode("per_folder");
@@ -110,7 +112,9 @@ export function ContentFlowManager({ courseId }: ContentFlowManagerProps) {
           setItems(data.items);
           setFolders(data.folders || []);
           setPrerequisites(data.prerequisites || []);
-          if (!data.sequentialAccess && (!data.prerequisites || data.prerequisites.length === 0)) {
+          if (["free", "per_folder", "course", "custom"].includes(data.contentFlowMode)) {
+            setFlowMode(data.contentFlowMode);
+          } else if (!data.sequentialAccess && (!data.prerequisites || data.prerequisites.length === 0)) {
             setFlowMode("free");
           } else {
             setFlowMode("per_folder");
@@ -264,9 +268,16 @@ export function ContentFlowManager({ courseId }: ContentFlowManagerProps) {
   const handleSave = async () => {
     setSaving(true);
     try {
+      const contentOrders: Record<string, string[]> = {};
+      Object.entries(itemsByFolder).forEach(([folderId, folderData]) => {
+        if (folderId === "unassigned") return;
+        contentOrders[folderId] = folderData.items.map((item) => item.id);
+      });
+
       const bodyData: Record<string, unknown> = {
         mode: flowMode,
         sequentialAccess: flowMode !== "free",
+        contentOrders,
       };
 
       if (flowMode === "free") {

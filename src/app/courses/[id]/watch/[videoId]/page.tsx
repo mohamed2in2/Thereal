@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { SecurePlayer } from "@/components/ui/SecurePlayer";
+import { usePlaybackDiagnostics } from "@/lib/player-diagnostics";
 import { VideoGuard } from "@/components/ui/VideoGuard";
 import { AILectureNotesModal } from "@/components/player/AILectureNotesModal";
 
@@ -29,6 +30,8 @@ interface WatchSessionData {
   usedWatches: number;
   teacherSlug?: string;
   studentPlan?: string;
+  studentName?: string;
+  studentPhone?: string;
 }
 
 function formatCountdown(expiresAt: string) {
@@ -82,6 +85,8 @@ export default function VideoWatchPage() {
   const [countdown, setCountdown] = useState("");
   const [iframeSrc, setIframeSrc] = useState("");
   const [wmLabel, setWmLabel] = useState("");
+  const [studentName, setStudentName] = useState("");
+  const [studentPhone, setStudentPhone] = useState("");
   const [resumeSeconds, setResumeSeconds] = useState(0);
   const [resumeLoaded, setResumeLoaded] = useState(false);
   const [showNotesModal, setShowNotesModal] = useState(false);
@@ -89,6 +94,10 @@ export default function VideoWatchPage() {
   // unprotected Google Drive path stays in SecurePlayer for staff preview, but
   // nothing in the student player may switch it on.
   const directDriveMode = false;
+
+  // Measures the two faults students report by phone — a second, lagging
+  // voice and heavy rebuffering — so they show up as data instead of anecdote.
+  usePlaybackDiagnostics(videoId);
   const [drmConfig, setDrmConfig] = useState<{
     token?: string;
     licenseServers?: { widevine?: string; playready?: string; fairplay?: string; fairplayCertUrl?: string };
@@ -235,6 +244,14 @@ export default function VideoWatchPage() {
       });
       const data = await res.json();
 
+      console.log("[center-video-access] watch page play", {
+        status: res.status,
+        code: data.code,
+        error: data.error,
+        videoId,
+        courseId,
+        subscription: data.studentPlan || null,
+      });
       if (!res.ok) {
         if (data.code === "VPN_DETECTED" || data.vpnDetected) {
           router.push(`/vpn-check?redirect_url=${encodeURIComponent(window.location.pathname)}`);
@@ -276,8 +293,12 @@ export default function VideoWatchPage() {
         usedWatches: data.usedWatches,
         teacherSlug: data.teacherSlug,
         studentPlan: data.studentPlan,
+        studentName: data.studentName,
+        studentPhone: data.studentPhone,
       });
 
+      if (data.studentName) setStudentName(data.studentName);
+      if (data.studentPhone) setStudentPhone(data.studentPhone);
       if (data.watermark) {
         setWmLabel(data.watermark);
       }
@@ -383,11 +404,7 @@ export default function VideoWatchPage() {
   if (error || !session) {
     const isQuotaExceeded = errorCode === "NO_WATCHES_REMAINING" || error?.includes("استنفدت");
     const isDrmOrDeviceError =
-      errorCode === "DRM_NOT_SUPPORTED" ||
-      errorCode === "UNSUPPORTED_DEVICE" ||
-      error?.includes("غير مدعوم") ||
-      error?.includes("تابلت الوزاره") ||
-      error?.toLowerCase().includes("drm");
+      errorCode === "DRM_NOT_SUPPORTED" || errorCode === "UNSUPPORTED_DEVICE";
 
     return (
       <div className="min-h-screen bg-[#020617] flex flex-col items-center justify-center p-6" dir="rtl">
@@ -603,7 +620,7 @@ export default function VideoWatchPage() {
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-4 h-4">
                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
               </svg>
-              <span>مشاهدة خاصة بك فقط</span>
+              <span>TOPTEIR</span>
             </div>
           </div>
 
@@ -618,8 +635,7 @@ export default function VideoWatchPage() {
             <div
               className="relative overflow-hidden rounded-[1.5rem] border border-white/10 bg-[#0a0f1e] shadow-2xl"
             >
-              {/* Top gradient + overlays */}
-            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-transparent z-10 pointer-events-none" />
+
 
             {/* Live badge */}
             {!isSessionExpired && (
@@ -669,13 +685,14 @@ export default function VideoWatchPage() {
             {/* The player — provider-aware, watermark-safe in fullscreen, protected by VideoGuard */}
             {iframeSrc && resumeLoaded ? (
               <VideoGuard
-                studentName={wmLabel}
-                studentPhone={wmLabel}
+                studentName={studentName || session?.studentName || wmLabel || "طالب المنصة"}
+                studentPhone={studentPhone || session?.studentPhone || wmLabel || "01012345678"}
                 videoId={videoId}
                 onExit={handleReturn}
-                disabled={directDriveMode}
+                disabled={directDriveMode || session?.video.videoProvider === "youtube"}
               >
                 <SecurePlayer
+                  videoId={videoId}
                   embedUrl={iframeSrc}
                   title={session.video.title}
                   watermark={wmLabel}

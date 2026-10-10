@@ -4,8 +4,18 @@ import React, { useState, useRef, useEffect } from "react";
 import { VideoWatermark } from "./VideoWatermark";
 import { YouTubeSecurePlayer } from "./YouTubeSecurePlayer";
 import { DrmPlayer } from "./DrmPlayer";
+import { useApplyPlaybackRate, usePlaybackRate } from "./VideoSpeedMenu";
+import { VideoControlBar } from "./VideoControlBar";
 import { useFullscreen } from "./useFullscreen";
 import { extractYouTubeVideoId } from "@/lib/youtube";
+import {
+  type VideoQualityOption,
+  DEFAULT_QUALITY_OPTIONS,
+  nearestReadyQuality,
+  readStoredQuality,
+  storeQuality,
+  connectionLooksSlow,
+} from "./VideoQualityMenu";
 
 function extractDriveFileId(url: string): string | null {
   if (!url) return null;
@@ -58,7 +68,7 @@ function IframeSecureEmbed({
 }: CommonEmbedProps & { provider?: string }) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const vdoPlayerRef = useRef<VdoPlayerInstance | null>(null);
-  const [drmError, setDrmError] = useState<string | null>(null);
+  const [playerError, setPlayerError] = useState<{ kind: "drm" | "playback"; message: string } | null>(null);
 
   // Resume playback for Bunny & VdoCipher
   useEffect(() => {
@@ -121,7 +131,10 @@ function IframeSecureEmbed({
           });
 
           player.video?.addEventListener("error", () => {
-            setDrmError("استخدم جهاز اخر او تابلت الوزاره لان جهازك غير مدعوم");
+            setPlayerError({
+              kind: "playback",
+              message: "تعذر تشغيل الفيديو. تحقّق من الاتصال ثم أعد المحاولة.",
+            });
           });
         }
       };
@@ -137,7 +150,10 @@ function IframeSecureEmbed({
             (typeof data?.message === "string" && /drm|widevine|not supported|license/i.test(data.message))
           ) {
             console.warn("[SecurePlayer] VdoCipher DRM error detected:", data);
-            setDrmError("استخدم جهاز اخر او تابلت الوزاره لان جهازك غير مدعوم");
+            setPlayerError({
+              kind: "drm",
+              message: "استخدم جهاز اخر او تابلت الوزاره لان جهازك غير مدعوم",
+            });
           }
         } catch {}
       };
@@ -191,24 +207,38 @@ function IframeSecureEmbed({
         style={{ border: "none" }}
         draggable={false}
       />
-      {drmError && (
+      {playerError && (
         <div className="absolute inset-0 bg-slate-950/95 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center z-50 dir-rtl animate-in fade-in duration-300">
-          <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 mb-4 shadow-lg shadow-amber-500/10 text-3xl">
-            📱
+          <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-4 shadow-lg text-3xl ${
+            playerError.kind === "drm"
+              ? "bg-amber-500/10 border border-amber-500/30 text-amber-400 shadow-amber-500/10"
+              : "bg-rose-500/10 border border-rose-500/30 text-rose-400 shadow-rose-500/10"
+          }`}>
+            {playerError.kind === "drm" ? "📱" : "⚠️"}
           </div>
-          <h3 className="text-lg font-black text-white mb-2">تنبيه توافق الجهاز (DRM)</h3>
-          <div className="bg-amber-500/10 border border-amber-500/25 rounded-2xl p-4 max-w-md w-full mb-5 shadow-inner text-center">
-            <p className="text-sm md:text-base font-black text-amber-300 leading-relaxed">
-              استخدم جهاز اخر او تابلت الوزاره لان جهازك غير مدعوم
+          <h3 className="text-lg font-black text-white mb-2">
+            {playerError.kind === "drm" ? "تنبيه توافق الجهاز (DRM)" : "تعذر تشغيل الفيديو"}
+          </h3>
+          <div className={`border rounded-2xl p-4 max-w-md w-full mb-5 shadow-inner text-center ${
+            playerError.kind === "drm"
+              ? "bg-amber-500/10 border-amber-500/25"
+              : "bg-slate-800/60 border-slate-700"
+          }`}>
+            <p className={`text-sm md:text-base font-black leading-relaxed ${
+              playerError.kind === "drm" ? "text-amber-300" : "text-slate-200"
+            }`}>
+              {playerError.message}
             </p>
-            <p className="text-xs text-slate-300 mt-2.5 leading-relaxed">
-              هذا الدرس محمي بأحدث تقنيات التشفير العتادية العالمية (DRM)، وبعض معالجات الهواتف لا تدعم هذا المستوى الأمني. يمكنك المتابعة بدون أي مشكلة من تابلت المدرسة أو أي جهاز كمبيوتر أو لابتوب.
-            </p>
+            {playerError.kind === "drm" && (
+              <p className="text-xs text-slate-300 mt-2.5 leading-relaxed">
+                هذا الدرس محمي بتشفير DRM. إذا لم يعمل على هذا الجهاز جرّب متصفحاً حديثاً أو جهازاً آخر.
+              </p>
+            )}
           </div>
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={() => setDrmError(null)}
+              onClick={() => setPlayerError(null)}
               className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl transition-all cursor-pointer border border-slate-700"
             >
               إعادة المحاولة
@@ -229,6 +259,18 @@ function IframeSecureEmbed({
 
 /**
  * Direct Video Player (MP4 / WebM / local streaming endpoint).
+ *
+ * Native (alasly) lectures are a single file, not an adaptive ladder, so a
+ * 1080p recording is a ~5 Mbit/s stream with nothing to fall back to when the
+ * connection cannot carry it. When smaller renditions have been generated the
+ * quality menu appears and re-requests the same lesson with ?q=<height>; the
+ * position is carried across the switch so it feels like changing quality
+ * rather than restarting the lesson.
+ *
+ * Once a lesson has its AES-128 HLS package the server refuses students the
+ * MP4, so a Native lesson waits for the /qualities probe before loading
+ * anything and then plays the encrypted stream: hls.js where MSE exists,
+ * Safari's own HLS on iPhone. The quality menu then switches HLS levels.
  */
 function DirectVideoEmbed({
   embedUrl,
@@ -237,6 +279,11 @@ function DirectVideoEmbed({
   onEnded,
   onProgress,
   onError,
+  isFullscreen,
+  onToggleFullscreen,
+  paused = false,
+  hideControls = false,
+  maxAllowedSecond = null,
 }: {
   embedUrl: string;
   onPlay?: () => void;
@@ -244,39 +291,249 @@ function DirectVideoEmbed({
   onEnded?: () => void;
   onProgress?: (seconds: number) => void;
   onError?: () => void;
+  isFullscreen?: boolean;
+  onToggleFullscreen?: () => void;
+  paused?: boolean;
+  hideControls?: boolean;
+  maxAllowedSecond?: number | null;
 }) {
-  const [deviceError, setDeviceError] = useState(false);
-  const isMobile =
-    typeof window !== "undefined" &&
-    (/Android|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-     (navigator.maxTouchPoints > 0 && window.innerWidth <= 768));
+  const [playbackError, setPlaybackError] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const prevPausedRef = useRef(paused);
+
+  // Sync external paused prop (pauses when question modal opens, resumes when answered)
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+
+    if (paused) {
+      if (!v.paused) {
+        v.pause();
+      }
+    } else if (prevPausedRef.current && !paused) {
+      if (v.paused && !v.ended) {
+        void v.play().catch(() => {});
+      }
+    }
+    prevPausedRef.current = paused;
+  }, [paused]);
+
+  // Playback speed — remembered per browser; re-applied after a quality swap
+  // because changing `src` resets the element's playbackRate to 1.
+  const [playbackRate, setPlaybackRate] = usePlaybackRate();
+  useApplyPlaybackRate(videoRef, playbackRate);
+  // Native Drive / alasly always shows Auto · 360p · 480p · 720p. The /qualities
+  // probe fills in file sizes once renditions exist; the button must not wait.
+  const isNativeStream = embedUrl.startsWith("/api/videos/stream/");
+  const [qualities, setQualities] = useState<VideoQualityOption[]>(
+    isNativeStream ? DEFAULT_QUALITY_OPTIONS : []
+  );
+  const [quality, setQuality] = useState<number | null>(() => {
+    if (!embedUrl.startsWith("/api/videos/stream/")) return null;
+    const stored = readStoredQuality();
+    return stored === undefined ? null : stored;
+  });
+  // Position + play state to restore on the other side of a quality switch.
+  const resumeRef = useRef<{ time: number; playing: boolean } | null>(null);
+  // Native lessons: undefined while probing, then the encrypted master
+  // playlist URL or null (plain MP4). Nothing loads until it is known.
+  const [hlsUrl, setHlsUrl] = useState<string | null | undefined>(isNativeStream ? undefined : null);
+  const hlsRef = useRef<import("hls.js").default | null>(null);
+  // HLS level index per height, for the quality menu.
+  const hlsLevelsRef = useRef<Map<number, number>>(new Map());
+  // Bumped by "retry": the error screen unmounts the <video>, so the stream must be rebuilt.
+  const [hlsAttempt, setHlsAttempt] = useState(0);
+
+  const streamPath = isNativeStream ? embedUrl.split("?")[0] : "";
+
+  useEffect(() => {
+    if (!streamPath) {
+      setQualities([]);
+      setHlsUrl(null);
+      return;
+    }
+    setQualities(DEFAULT_QUALITY_OPTIONS);
+    setHlsUrl(undefined);
+    let cancelled = false;
+    fetch(`${streamPath}/qualities`, { credentials: "same-origin" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { qualities?: VideoQualityOption[]; hlsUrl?: string | null } | null) => {
+        if (cancelled) return;
+        if (data?.hlsUrl) {
+          // Encrypted lesson: the HLS effect below owns qualities from here.
+          const token = new URL(embedUrl, window.location.origin).searchParams.get("token");
+          setHlsUrl(token ? `${data.hlsUrl}?token=${encodeURIComponent(token)}` : data.hlsUrl);
+          return;
+        }
+        setHlsUrl(null);
+        const list =
+          data?.qualities && data.qualities.length >= 2 ? data.qualities : DEFAULT_QUALITY_OPTIONS;
+        setQualities(list);
+
+        // Only ever land on a tier that is built. The remembered choice stays
+        // in storage untouched, so it applies once that tier is ready.
+        const switchTo = (height: number | null) => {
+          setQuality((prev) => {
+            if (prev === height) return prev;
+            const v = videoRef.current;
+            resumeRef.current = v ? { time: v.currentTime, playing: !v.paused } : null;
+            return height;
+          });
+        };
+        const stored = readStoredQuality();
+        if (stored !== undefined) {
+          switchTo(nearestReadyQuality(list, stored));
+          return;
+        }
+        // Nobody who is struggling with the connection goes hunting for a
+        // settings button, so start them low when the browser says the link is
+        // weak. They can always raise it, and the choice is then remembered.
+        if (connectionLooksSlow()) {
+          switchTo(nearestReadyQuality(list, 0));
+        }
+      })
+      .catch(() => {
+        // A player that cannot list qualities still offers the default ladder.
+        if (!cancelled) setHlsUrl(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [streamPath, embedUrl]);
+
+  // ── Encrypted HLS playback ──
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!hlsUrl || !v) return;
+    let destroyed = false;
+    let networkRetries = 0;
+
+    (async () => {
+      const Hls = (await import("hls.js")).default;
+      if (destroyed) return;
+      if (!Hls.isSupported()) {
+        // iPhone Safari: native HLS fetches the AES key itself (same origin,
+        // session cookie + token in the key URI). Levels are not selectable.
+        if (v.canPlayType("application/vnd.apple.mpegurl")) {
+          setQualities([DEFAULT_QUALITY_OPTIONS[0]]);
+          setQuality(null);
+          v.src = hlsUrl;
+        } else {
+          setPlaybackError(true);
+        }
+        return;
+      }
+
+      // Workers would need a blob: worker-src in the CSP; main thread is fine
+      // for one 720p stream.
+      const hls = new Hls({ enableWorker: false, maxBufferLength: 30 });
+      hlsRef.current = hls;
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        const byHeight = new Map<number, number>();
+        hls.levels.forEach((l, i) => {
+          if (l.height) byHeight.set(l.height, i);
+        });
+        hlsLevelsRef.current = byHeight;
+        const list: VideoQualityOption[] = [
+          DEFAULT_QUALITY_OPTIONS[0],
+          ...[...byHeight.keys()]
+            .sort((a, b) => a - b)
+            .map((h) => ({ height: h, label: `${h}p`, note: DEFAULT_QUALITY_OPTIONS.find((o) => o.height === h)?.note, ready: true })),
+        ];
+        setQualities(list);
+        const stored = readStoredQuality();
+        const wanted =
+          stored !== undefined ? nearestReadyQuality(list, stored) : connectionLooksSlow() ? nearestReadyQuality(list, 0) : null;
+        setQuality(wanted);
+        hls.currentLevel = wanted === null ? -1 : byHeight.get(wanted) ?? -1;
+      });
+      hls.on(Hls.Events.ERROR, (_e, data) => {
+        if (!data.fatal) return;
+        if (data.type === Hls.ErrorTypes.NETWORK_ERROR && networkRetries++ < 3) {
+          hls.startLoad();
+        } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+          hls.recoverMediaError();
+        } else {
+          hls.destroy();
+          hlsRef.current = null;
+          onError?.();
+          setPlaybackError(true);
+        }
+      });
+      hls.loadSource(hlsUrl);
+      hls.attachMedia(v);
+    })();
+
+    return () => {
+      destroyed = true;
+      hlsRef.current?.destroy();
+      hlsRef.current = null;
+    };
+    // onError is a parent callback; re-creating the stream on its identity would restart playback.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hlsUrl, hlsAttempt]);
+
+  // HLS (or still probing) → no src prop; hls.js / Safari attach the stream.
+  const src =
+    hlsUrl !== null
+      ? undefined
+      : quality === null
+        ? embedUrl
+        : `${embedUrl}${embedUrl.includes("?") ? "&" : "?"}q=${quality}`;
+
+  const changeQuality = (height: number | null) => {
+    if (hlsRef.current) {
+      storeQuality(height);
+      setQuality(height);
+      hlsRef.current.currentLevel = height === null ? -1 : hlsLevelsRef.current.get(height) ?? -1;
+      return;
+    }
+    const v = videoRef.current;
+    resumeRef.current = v ? { time: v.currentTime, playing: !v.paused } : null;
+    storeQuality(height);
+    setPlaybackError(false);
+    setQuality(height);
+  };
 
   const handleVideoError = () => {
     onError?.();
-    if (isMobile) {
-      setDeviceError(true);
+    setPlaybackError(true);
+  };
+
+  const handleLoadedMetadata = () => {
+    const resume = resumeRef.current;
+    if (!resume) return;
+    resumeRef.current = null;
+    const v = videoRef.current;
+    if (!v) return;
+    try {
+      if (resume.time > 0) v.currentTime = resume.time;
+      if (resume.playing) void v.play();
+    } catch {
+      // seeking can fail while the new source is still opening; playback just
+      // starts from the beginning rather than breaking
     }
   };
 
-  if (deviceError) {
+  if (playbackError) {
     return (
       <div className="absolute inset-0 bg-slate-950/95 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center z-50 dir-rtl animate-in fade-in duration-300">
-        <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 mb-4 shadow-lg shadow-amber-500/10 text-3xl">
-          📱
+        <div className="w-16 h-16 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 mb-4 shadow-lg shadow-rose-500/10 text-3xl">
+          ⚠️
         </div>
-        <h3 className="text-lg font-black text-white mb-2">تنبيه توافق الجهاز (DRM)</h3>
-        <div className="bg-amber-500/10 border border-amber-500/25 rounded-2xl p-4 max-w-md w-full mb-5 shadow-inner text-center">
-          <p className="text-sm md:text-base font-black text-amber-300 leading-relaxed">
-            استخدم جهاز اخر او تابلت الوزاره لان جهازك غير مدعوم
-          </p>
-          <p className="text-xs text-slate-300 mt-2.5 leading-relaxed">
-            هذا الدرس محمي بأنظمة تشفير DRM ولا يعمل على بعض الهواتف غير المعتمدة. يمكنك المتابعة بشكل طبيعي عبر تابلت المدرسة أو أي لابتوب أو كمبيوتر.
+        <h3 className="text-lg font-black text-white mb-2">تعذر تشغيل الفيديو</h3>
+        <div className="bg-slate-800/60 border border-slate-700 rounded-2xl p-4 max-w-md w-full mb-5 shadow-inner text-center">
+          <p className="text-sm text-slate-200 leading-relaxed">
+            فشل تحميل المشغل. تحقّق من الاتصال ثم أعد المحاولة. هذه الحماية ليست نظام DRM.
           </p>
         </div>
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={() => setDeviceError(false)}
+            onClick={() => {
+              setPlaybackError(false);
+              setHlsAttempt((n) => n + 1);
+            }}
             className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl transition-all cursor-pointer border border-slate-700"
           >
             إعادة المحاولة
@@ -294,19 +551,49 @@ function DirectVideoEmbed({
   }
 
   return (
-    <video
-      src={embedUrl}
-      controls
-      controlsList="nodownload noplaybackrate"
-      disablePictureInPicture
-      playsInline
-      className="absolute inset-0 w-full h-full object-contain"
-      onPlay={() => onPlay?.()}
-      onPause={() => onPause?.()}
-      onEnded={() => onEnded?.()}
-      onError={handleVideoError}
-      onTimeUpdate={(e) => onProgress?.((e.target as HTMLVideoElement).currentTime)}
-    />
+    <>
+      {/* Native chrome is off: VideoControlBar owns play/seek/mute/quality/speed/fullscreen. */}
+      <video
+        ref={videoRef}
+        src={src}
+        controlsList="nodownload noplaybackrate"
+        disablePictureInPicture
+        playsInline
+        className="absolute inset-0 w-full h-full object-contain cursor-pointer"
+        onClick={(e) => {
+          if (paused) return;
+          const v = e.currentTarget;
+          if (v.paused || v.ended) void v.play().catch(() => {});
+          else v.pause();
+        }}
+        onPlay={() => onPlay?.()}
+        onPause={() => onPause?.()}
+        onEnded={() => onEnded?.()}
+        onError={handleVideoError}
+        onLoadedMetadata={handleLoadedMetadata}
+        onSeeking={(e) => {
+          const v = e.currentTarget;
+          if (!maxAllowedSecond) return;
+          if (v.currentTime > maxAllowedSecond + 1) { // +1 سماح
+            v.currentTime = maxAllowedSecond;
+            v.pause();
+          }
+        }}
+        onTimeUpdate={(e) => onProgress?.((e.target as HTMLVideoElement).currentTime)}
+      />
+      <VideoControlBar
+        videoRef={videoRef}
+        playbackRate={playbackRate}
+        onPlaybackRateChange={setPlaybackRate}
+        qualities={qualities}
+        quality={quality}
+        onQualityChange={isNativeStream ? changeQuality : undefined}
+        isFullscreen={isFullscreen}
+        onToggleFullscreen={onToggleFullscreen}
+        hideControls={hideControls}
+        maxAllowedSecond={maxAllowedSecond}
+      />
+    </>
   );
 }
 
@@ -330,10 +617,14 @@ export interface SecurePlayerProps {
   onProgress?: (seconds: number) => void;
   onPause?: () => void;
   onPlay?: () => void;
+  onDrmDetected?: (drm: import("./DrmPlayer").DeviceDrmInfo) => void;
   className?: string;
   paused?: boolean;
   noNativeSecurity?: boolean;
+  hideControls?: boolean;
+  maxAllowedSecond?: number | null;
   children?: React.ReactNode;
+  videoId?: string;
 }
 
 /**
@@ -351,42 +642,71 @@ export function SecurePlayer({
   onProgress,
   onPause,
   onPlay,
+  onDrmDetected,
   className = "",
   paused = false,
   noNativeSecurity = false,
+  hideControls = false,
+  maxAllowedSecond = null,
   children,
+  videoId,
 }: SecurePlayerProps) {
   const driveFileId = extractDriveFileId(embedUrl);
-  const [useDriveDirect, setUseDriveDirect] = useState(noNativeSecurity);
+  const [useDriveDirect] = useState(noNativeSecurity);
   const [isBlackoutActive, setIsBlackoutActive] = useState(false);
   const { ref: wrapRef, isFs, cssFs, toggle: toggleFs } = useFullscreen<HTMLDivElement>();
+
+  const resolvedVideoId =
+    videoId ||
+    (embedUrl ? embedUrl.match(/\/videos\/(?:stream|hls)?\/([^/?#]+)/)?.[1] : undefined);
 
   // Visibility and security guards
   useEffect(() => {
     if (noNativeSecurity || useDriveDirect) return;
 
+    let blackoutTimer: NodeJS.Timeout | null = null;
+    const triggerBlackout = (durationMs = 5000) => {
+      setIsBlackoutActive(true);
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+        navigator.clipboard.writeText("").catch(() => {});
+      }
+      if (blackoutTimer) clearTimeout(blackoutTimer);
+      blackoutTimer = setTimeout(() => {
+        if (document.hasFocus()) {
+          setIsBlackoutActive(false);
+        }
+      }, durationMs);
+    };
+
     const handleKeyDown = (e: KeyboardEvent) => {
       const k = e.key;
       const lowerK = k.toLowerCase();
-      const isPrtScn = k === "PrintScreen" || e.code === "PrintScreen";
+      const isPrtScn = k === "PrintScreen" || e.code === "PrintScreen" || e.keyCode === 44;
       const isMeta =
         e.metaKey ||
         (typeof e.getModifierState === "function" &&
           (e.getModifierState("Meta") || e.getModifierState("OS")));
 
-      const isWinSnipping = isMeta && e.shiftKey && lowerK === "s";
-      const isWinGameBar = isMeta && lowerK === "g";
+      // Physical KeyS or Arabic "س"
+      const isKeyS = lowerK === "s" || lowerK === "س" || e.code === "KeyS" || e.keyCode === 83;
+      // Physical KeyG or Arabic "ل"
+      const isKeyG = lowerK === "g" || lowerK === "ل" || e.code === "KeyG" || e.keyCode === 71;
+      // Physical KeyR or Arabic "ق"
+      const isKeyR = lowerK === "r" || lowerK === "ق" || e.code === "KeyR" || e.keyCode === 82;
+
+      const isWinSnipping = isMeta && e.shiftKey && isKeyS;
+      const isWinGameBar = isMeta && (isKeyG || (e.altKey && isKeyR));
       const isMacScreenshot = isMeta && e.shiftKey && ["3", "4", "5", "#", "$", "%"].includes(k);
-      const isBrowserScreenshot = e.ctrlKey && e.shiftKey && lowerK === "s";
+      const isBrowserScreenshot = (e.ctrlKey || isMeta) && e.shiftKey && isKeyS;
       const isDevTools =
         k === "F12" ||
-        (e.ctrlKey && e.shiftKey && (lowerK === "i" || lowerK === "j" || lowerK === "c")) ||
-        (e.ctrlKey && lowerK === "u");
+        ((e.ctrlKey || isMeta) && e.shiftKey && (lowerK === "i" || lowerK === "j" || lowerK === "c" || lowerK === "ه" || lowerK === "ـ" || lowerK === "ؤ")) ||
+        ((e.ctrlKey || isMeta) && (lowerK === "u" || lowerK === "ع"));
 
       if (isPrtScn || isWinSnipping || isWinGameBar || isMacScreenshot || isBrowserScreenshot || isDevTools) {
-        if (isPrtScn || isWinSnipping || isMacScreenshot) {
+        if (isPrtScn || isWinSnipping || isMacScreenshot || isBrowserScreenshot) {
           e.preventDefault();
-          e.stopPropagation();
+          triggerBlackout(5000);
         }
         if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
           navigator.clipboard.writeText("").catch(() => {});
@@ -395,49 +715,60 @@ export function SecurePlayer({
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.key === "PrintScreen" || e.code === "PrintScreen") {
+      const k = e.key;
+      const lowerK = k.toLowerCase();
+      const isKeyS = lowerK === "s" || lowerK === "س" || e.code === "KeyS" || e.keyCode === 83;
+      const isPrtScn = k === "PrintScreen" || e.code === "PrintScreen" || e.keyCode === 44;
+      if (isPrtScn || isKeyS) {
         if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
           navigator.clipboard.writeText("").catch(() => {});
         }
       }
     };
 
+    const isTouch =
+      typeof navigator !== "undefined" &&
+      (navigator.maxTouchPoints > 0 || /Android|iPhone|iPad/i.test(navigator.userAgent));
+
+    const handleBlur = () => {
+      if (isTouch) return;
+      triggerBlackout(5000);
+    };
+
+    const handleFocus = () => {
+      if (blackoutTimer) clearTimeout(blackoutTimer);
+      setTimeout(() => {
+        if (document.hasFocus()) {
+          setIsBlackoutActive(false);
+        }
+      }, 350);
+    };
+
     const handleVisibilityChange = () => {
-      setIsBlackoutActive(document.hidden);
+      if (document.hidden) {
+        setIsBlackoutActive(true);
+      } else {
+        handleFocus();
+      }
     };
 
     window.addEventListener("keydown", handleKeyDown, true);
     window.addEventListener("keyup", handleKeyUp, true);
+    window.addEventListener("blur", handleBlur);
+    window.addEventListener("focus", handleFocus);
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
+      if (blackoutTimer) clearTimeout(blackoutTimer);
       window.removeEventListener("keydown", handleKeyDown, true);
       window.removeEventListener("keyup", handleKeyUp, true);
+      window.removeEventListener("blur", handleBlur);
+      window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [noNativeSecurity, useDriveDirect]);
 
-  // 1. Axinom Hardware Multi-DRM Player
-  if (provider === "axinom") {
-    return (
-      <DrmPlayer
-        manifestUrl={embedUrl}
-        drmToken={drm?.token}
-        licenseServers={drm?.licenseServers}
-        clearKeys={drm?.clearKeys}
-        initialPosition={startSeconds}
-        watermark={watermark}
-        title={title}
-        onTimeUpdate={onProgress}
-        onEnded={onEnded}
-        onPause={onPause}
-        onPlay={onPlay}
-        paused={paused}
-      />
-    );
-  }
-
-  // 2. YouTube Hardened Embed
+  // 1. YouTube Hardened Embed
   if (provider === "youtube") {
     const id = extractYouTubeVideoId(embedUrl) || embedUrl.match(/\/embed\/([^?/]+)/)?.[1] || "";
     if (id) {
@@ -452,6 +783,8 @@ export function SecurePlayer({
           onPause={onPause}
           onPlay={onPlay}
           paused={paused}
+          hideControls={hideControls}
+          maxAllowedSecond={maxAllowedSecond}
         >
           {children}
         </YouTubeSecurePlayer>
@@ -464,6 +797,9 @@ export function SecurePlayer({
     embedUrl.includes(".mp4") ||
     embedUrl.includes(".webm") ||
     embedUrl.includes(".mov");
+
+  // These two surfaces render our own control bar (with fullscreen inside it).
+  const hasOwnControlBar = provider === "axinom" || (!(driveFileId && useDriveDirect) && isDirectVideo);
 
   return (
     <div
@@ -479,7 +815,28 @@ export function SecurePlayer({
       onContextMenu={(e) => e.preventDefault()}
     >
       {/* ── Video / Iframe Surface ── */}
-      {driveFileId && useDriveDirect ? (
+      {provider === "axinom" ? (
+        <div className="absolute inset-0 w-full h-full">
+          <DrmPlayer
+            manifestUrl={embedUrl}
+            drmToken={drm?.token}
+            licenseServers={drm?.licenseServers}
+            clearKeys={drm?.clearKeys}
+            initialPosition={startSeconds}
+            title={title}
+            onTimeUpdate={onProgress}
+            onEnded={onEnded}
+            onPause={onPause}
+            onPlay={onPlay}
+            onDrmDetected={onDrmDetected}
+            paused={paused}
+            isFullscreen={isFs}
+            onToggleFullscreen={toggleFs}
+            hideControls={hideControls}
+            maxAllowedSecond={maxAllowedSecond}
+          />
+        </div>
+      ) : driveFileId && useDriveDirect ? (
         <iframe
           src={`https://drive.google.com/file/d/${driveFileId}/preview`}
           title={title}
@@ -494,11 +851,11 @@ export function SecurePlayer({
           onPause={onPause}
           onEnded={onEnded}
           onProgress={onProgress}
-          onError={() => {
-            if (driveFileId) {
-              setUseDriveDirect(true);
-            }
-          }}
+          isFullscreen={isFs}
+          onToggleFullscreen={toggleFs}
+          paused={paused}
+          hideControls={hideControls}
+          maxAllowedSecond={maxAllowedSecond}
         />
       ) : (
         <IframeSecureEmbed
@@ -526,12 +883,14 @@ export function SecurePlayer({
       )}
 
       {/* ── Unified Forensic Watermark ── */}
-      <VideoWatermark label={watermark} />
+      <VideoWatermark label={watermark} videoId={resolvedVideoId} />
 
       {/* Interactive overlays & modals */}
       {children}
 
-      {/* ── Fullscreen Toggle Button ── */}
+      {/* ── Fullscreen Toggle Button — iframe providers only; the HTML5 players
+           (axinom / direct) carry it inside their own VideoControlBar. ── */}
+      {!hasOwnControlBar && !hideControls && (
       <button
         type="button"
         onClick={toggleFs}
@@ -548,6 +907,7 @@ export function SecurePlayer({
           </svg>
         )}
       </button>
+      )}
     </div>
   );
 }

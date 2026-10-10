@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
+import { isTeacherLike, actingTeacherId } from "@/lib/teacher-scope";
 import { verifyVdoCipherSecurityPassword, logAdminAction } from "@/lib/admin-auth";
+
+import { isDrmAuthorized } from "@/lib/drm-auth";
 
 /**
  * Verifies the VdoCipher access password (vdocipher_security_password / VDOCIPHER_SECURITY_PASSWORD)
@@ -9,19 +12,17 @@ import { verifyVdoCipherSecurityPassword, logAdminAction } from "@/lib/admin-aut
 export async function POST(req: NextRequest) {
   try {
     const session = await getSession();
-    if (!session || (session.role !== "teacher" && session.role !== "superadmin" && session.role !== "admin")) {
+    if (!session || (!isTeacherLike(session.role) && session.role !== "superadmin" && session.role !== "admin")) {
       return NextResponse.json({ error: "غير مصرح لك بالوصول" }, { status: 401 });
     }
 
     const body = (await req.json().catch(() => ({}))) as { password?: string };
     const password = (body.password || "").trim();
 
-    if (!password) {
-      return NextResponse.json({ ok: false, error: "يرجى إدخال كلمة مرور حماية VdoCipher" }, { status: 400 });
-    }
+    const isValid = password ? await verifyVdoCipherSecurityPassword(password) : false;
+    const authorized = isDrmAuthorized(session) || isValid;
 
-    const isValid = await verifyVdoCipherSecurityPassword(password);
-    if (!isValid) {
+    if (!authorized) {
       return NextResponse.json({ ok: false, error: "كلمة مرور حماية VdoCipher غير صحيحة" }, { status: 401 });
     }
 

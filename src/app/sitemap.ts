@@ -10,7 +10,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   let courses: { id: string; slug: string | null; updatedAt: Date }[] = [];
   try {
     courses = await prisma.course.findMany({
-      where: { teacher: { isDeleted: false, isDemo: false } },
+      // baseUrl is the online site, so never advertise centre-only courses here —
+      // otherwise Google indexes them and online students land on centre content.
+      where: {
+        teacher: { isDeleted: false, isDemo: false },
+        deliveryMode: { in: ["ONLINE", "BOTH"] },
+      },
       select: { id: true, slug: true, updatedAt: true },
     });
   } catch (error) {
@@ -66,12 +71,19 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // are private, auth-gated pages and must not be advertised to crawlers.
   const staticRoutes = ([
     { url: baseUrl, changeFrequency: "daily", priority: 1.0 },
+    { url: `${baseUrl}/about`, changeFrequency: "monthly", priority: 1.0 },
+    { url: `${baseUrl}/qureo`, changeFrequency: "monthly", priority: 1.0 },
+    { url: `${baseUrl}/teachers`, changeFrequency: "daily", priority: 0.95 },
     { url: `${baseUrl}/curriculum`, changeFrequency: "weekly", priority: 1.0 },
     { url: `${baseUrl}/curriculum/programming-and-ai`, changeFrequency: "weekly", priority: 1.0 },
     { url: `${baseUrl}/courses`, changeFrequency: "daily", priority: 0.9 },
     { url: `${baseUrl}/plans`, changeFrequency: "daily", priority: 0.9 },
     { url: `${baseUrl}/leaderboard`, changeFrequency: "daily", priority: 0.8 },
     { url: `${baseUrl}/payment-methods`, changeFrequency: "monthly", priority: 0.8 },
+    { url: `${baseUrl}/faq`, changeFrequency: "weekly", priority: 0.95 },
+    { url: `${baseUrl}/llms.txt`, changeFrequency: "weekly", priority: 0.7 },
+    { url: `${baseUrl}/llms-full.txt`, changeFrequency: "weekly", priority: 0.6 },
+    { url: `${baseUrl}/geo-keywords.txt`, changeFrequency: "monthly", priority: 0.2 },
     { url: `${baseUrl}/environments`, changeFrequency: "weekly", priority: 0.8 },
     { url: `${baseUrl}/environments/programming`, changeFrequency: "weekly", priority: 0.8 },
     { url: `${baseUrl}/environments/programming/python`, changeFrequency: "weekly", priority: 0.7 },

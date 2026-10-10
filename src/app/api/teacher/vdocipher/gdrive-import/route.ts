@@ -1,4 +1,4 @@
-import { createWriteStream, openAsBlob } from "node:fs";
+import { createWriteStream, openAsBlob, existsSync, mkdirSync } from "node:fs";
 import { stat, unlink } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -22,6 +22,7 @@ import {
   decryptVdoCipherSecret,
 } from "@/lib/vdocipher-accounts";
 import { isAuthorizedStaffUpload } from "@/lib/preview-auth";
+import { isDrmAuthorized, isDrmRequestAuthorized } from "@/lib/drm-auth";
 
 const activeImportsByStaff = new Map<string, number>();
 const hourlyImportsByStaff = new Map<string, { count: number; resetAt: number }>();
@@ -98,8 +99,8 @@ export async function POST(req: NextRequest) {
 
     if (!isAuthorizedStaffUpload(session) || !session?.id) {
       return NextResponse.json(
-        { error: "غير مصرح لك بالوصول. يتطلب استيراد الفيديوهات تسجيل الدخول بحساب معلم أو مسؤول." },
-        { status: 403 }
+        { error: "غير مصرح لك بالوصول. تسجيل الدخول كمعلم أو مشرف مطلوب." },
+        { status: 401 }
       );
     }
 
@@ -122,7 +123,17 @@ export async function POST(req: NextRequest) {
       durationMinutes?: number;
       maxWatchesPerUser?: number;
       publishAt?: string | null;
+      drmPassword?: string;
     };
+
+    const drmPass = req.headers.get("x-drm-password") || body.drmPassword || "";
+    const isAuthorized = await isDrmRequestAuthorized(session, drmPass);
+    if (!isAuthorized) {
+      return NextResponse.json(
+        { error: "كلمة مرور حماية DRM غير صحيحة أو مطلوبة للتشفير" },
+        { status: 403 }
+      );
+    }
 
     const rawUrl = body.url || body.driveUrl || "";
     const fileId = extractGoogleDriveFileId(rawUrl);
@@ -249,7 +260,9 @@ export async function POST(req: NextRequest) {
       throw new Error(`فشل تنزيل الفيديو من Google Drive (${gdriveRes.status})`);
     }
 
-    tempPath = path.join(os.tmpdir(), `codeup-vdocipher-${randomUUID()}.mp4`);
+    const tempDir = path.resolve(process.cwd(), "uploads", "temp");
+    if (!existsSync(tempDir)) mkdirSync(tempDir, { recursive: true });
+    tempPath = path.join(tempDir, `codeup-vdocipher-${randomUUID()}.mp4`);
     await pipeline(
       Readable.fromWeb(gdriveRes.body as Parameters<typeof Readable.fromWeb>[0]),
       createWriteStream(tempPath)

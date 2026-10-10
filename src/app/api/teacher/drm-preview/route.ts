@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
+import { isTeacherLike, actingTeacherId } from "@/lib/teacher-scope";
 import { createAxinomDrmToken } from "@/lib/axinom";
 import { prisma } from "@/lib/prisma";
 import { decryptVdoCipherSecret, generateAccountOtp, selectBestAccountForUpload } from "@/lib/vdocipher-accounts";
@@ -83,7 +84,7 @@ export async function POST(req: NextRequest) {
     if (targetTeacherId) {
       const isSuperadminOrAdmin = session?.role === "superadmin" || session?.role === "admin";
       const isOwnerTeacher =
-        session?.role === "teacher" && targetTeacherId === session?.id;
+        session?.role === "teacher" && targetTeacherId === actingTeacherId(session);
 
       if (!isSuperadminOrAdmin && !isOwnerTeacher) {
         return NextResponse.json(
@@ -178,7 +179,8 @@ export async function POST(req: NextRequest) {
     // 2 hours expiration = 7200 seconds
     const EXPIRES_IN_SECONDS = 2 * 60 * 60;
 
-    const drmResult = createAxinomDrmToken({
+    const { mintAxinomTokenWithPool } = await import("@/lib/axinom-pool");
+    const drmResult = await mintAxinomTokenWithPool({
       videoId: assetId,
       userId: studentIdentifier,
       expiresInSeconds: EXPIRES_IN_SECONDS,

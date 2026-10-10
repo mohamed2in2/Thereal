@@ -1,7 +1,10 @@
 import { logAdminAction } from "@/lib/admin-auth";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
+import { isTeacherLike, actingTeacherId, hasAssistantPermission } from "@/lib/teacher-scope";
 import { prisma } from "@/lib/prisma";
+import { FolderContentType } from "@/generated/prisma";
+import { appendFolderContent } from "@/lib/folder-content-order";
 
 export async function POST(
   req: NextRequest,
@@ -21,8 +24,11 @@ export async function POST(
         });
       } catch (e) {}
     }
-  if (!session || session.role !== "teacher") {
+  if (!session || !isTeacherLike(session.role)) {
     return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
+  }
+  if (!hasAssistantPermission(session, "editCourses")) {
+    return NextResponse.json({ error: "المدرّس لم يمنحك صلاحية تعديل الكورسات" }, { status: 403 });
   }
 
   try {
@@ -41,7 +47,7 @@ export async function POST(
     const folder = await prisma.folder.findFirst({
       where: {
         id: folderId,
-        course: { teacherId: session.id },
+        course: { teacherId: actingTeacherId(session) },
       },
     });
 
@@ -60,6 +66,8 @@ export async function POST(
         order: materialCount,
       },
     });
+
+    await appendFolderContent(folderId, FolderContentType.ATTACHMENT, material.id);
 
     return NextResponse.json({ success: true, material });
   } catch (error) {

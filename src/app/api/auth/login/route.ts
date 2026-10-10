@@ -65,6 +65,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "استخدم لوحة الإدارة لتسجيل الدخول" }, { status: 403 });
     }
 
+    if (user.accountMode === "CENTER_ID") {
+      return NextResponse.json(
+        {
+          error: "هذا حساب رقم تعريفي. سجّل الدخول من center.code-up.tech عبر Get by ID.",
+          code: "CENTER_ID_LOGIN",
+        },
+        { status: 403 }
+      );
+    }
+
     await clearFailedLogins(user.id);
 
     // ── Device lock: bind the account to a limited number of devices ──────────
@@ -108,9 +118,10 @@ export async function POST(req: NextRequest) {
     await setAuthCookie(token);
     if (isNew) await setDeviceCookie(deviceId);
 
-    // Points Logic: Award daily login points
-    const { awardDailyLoginPoints } = await import("@/lib/points");
-    await awardDailyLoginPoints(user.id);
+    // Daily login streak points — same logic as /api/auth/me, so a login and the
+    // page's /me calls can't award the day twice.
+    const { checkAndUpdateStreak } = await import("@/lib/streak-middleware");
+    await checkAndUpdateStreak(user.id).catch((err) => console.error("Login streak update failed:", err));
 
     return NextResponse.json({ user: { id: user.id, name: user.name, role: user.role } });
   } catch (err) {

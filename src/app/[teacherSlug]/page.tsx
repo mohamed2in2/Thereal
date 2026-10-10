@@ -2,14 +2,22 @@ import { cache } from "react";
 import type { CSSProperties } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { isCenterHost, deliveryModeFilter } from "@/lib/center-mode";
 import { RESERVED_SLUGS } from "@/lib/slug";
+import { safeJsonLd } from "@/lib/jsonld";
 import { BookingButton } from "@/components/teacher/BookingModal";
 import { SubscriptionStatusBadge } from "@/components/teacher/SubscriptionStatusBadge";
 import { SetTeacherRefCookie } from "@/components/teacher/SetTeacherRefCookie";
+import { TeacherCoursesSection } from "@/components/teacher/TeacherCoursesSection";
 
-export const revalidate = 60; // Cache page for 60s for lightning fast <10ms loads
+// Rendered per request rather than ISR-cached: the course list depends on which
+// site (code-up.tech vs center.code-up.tech) is being viewed, and Next keys the
+// ISR cache by path only — a cached centre render would otherwise be served to
+// online students. Correctness beats the cached <10ms load here.
+export const dynamic = "force-dynamic";
 
 import { getSession } from "@/lib/auth";
 
@@ -19,6 +27,7 @@ const getProfile = cache(async (slug: string) => {
   const isSuperadmin = session?.role === "superadmin";
   const isTester = session?.accountMode === "TESTER";
   const canSeeDemo = isSuperadmin || isTester;
+  const isCenter = isCenterHost(await headers());
   return prisma.teacherProfile.findFirst({
     where: {
       slug,
@@ -29,6 +38,11 @@ const getProfile = cache(async (slug: string) => {
       teacher: {
         include: {
           courses: {
+            // This profile renders on both code-up.tech and center.code-up.tech,
+            // so it must only list the courses belonging to the site being
+            // viewed — otherwise a CENTER course shows to online students here
+            // even though it is correctly hidden from the browse listing.
+            where: { deliveryMode: deliveryModeFilter(isCenter) },
             orderBy: { createdAt: "desc" },
             include: {
               folders: { include: { videos: { select: { id: true, isFree: true } } } },
@@ -45,7 +59,9 @@ export async function generateMetadata({ params }: { params: Promise<{ teacherSl
   const p = await getProfile(teacherSlug);
   if (!p) return { title: "صفحة غير موجودة — Code-UP" };
   const name = p.displayName ?? p.teacher.name;
-  const description = p.bio ?? `كورسات وشروحات الأستاذ ${name} على منصة Code-UP التعليمية`;
+  const description = p.bio
+    ? `${p.bio} — معلم على منصة Code-UP لشرح مادة البرمجة والذكاء الاصطناعي لطلاب البكالوريا في مصر.`
+    : `شروحات الأستاذ ${name} على منصة Code-UP لمادة البرمجة والذكاء الاصطناعي لطلاب البكالوريا والثانوية في مصر.`;
   const url = `https://code-up.tech/${p.slug}`;
   const avatar = isSafe(p.photoUrl) ? p.photoUrl! : "https://code-up.tech/logo.jpeg";
 
@@ -97,6 +113,14 @@ export default async function TeacherPage({ params }: { params: Promise<{ teache
     .flatMap((c) => c.folders.flatMap((f) => f.videos.map((v) => ({ ...v, courseId: c.id }))))
     .find((v) => v.isFree);
 
+  const overrides = await prisma.appSetting.findMany({
+    where: { key: { startsWith: "course_cat_" } },
+  });
+  const categoryMap: Record<string, string> = {};
+  for (const o of overrides) {
+    categoryMap[o.key.replace("course_cat_", "")] = o.value;
+  }
+
   let socials: { facebook?: string; youtube?: string; tiktok?: string } = {};
   try { socials = p.socials ? JSON.parse(p.socials) : {}; } catch { socials = {}; }
   const socialLinks = Object.entries(socials).filter(([, v]) => v) as [string, string][];
@@ -120,7 +144,7 @@ export default async function TeacherPage({ params }: { params: Promise<{ teache
         "@type": "BreadcrumbList",
         "itemListElement": [
           { "@type": "ListItem", "position": 1, "name": "الرئيسية", "item": "https://code-up.tech" },
-          { "@type": "ListItem", "position": 2, "name": "المعلمون", "item": "https://code-up.tech/courses" },
+          { "@type": "ListItem", "position": 2, "name": "المعلمون", "item": "https://code-up.tech/teachers" },
           { "@type": "ListItem", "position": 3, "name": name, "item": `https://code-up.tech/${p.slug}` }
         ]
       }
@@ -136,7 +160,7 @@ export default async function TeacherPage({ params }: { params: Promise<{ teache
     <main dir="rtl" style={theme} className="min-h-screen bg-[var(--bg)] text-[var(--ink)]">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: safeJsonLd(jsonLd) }}
       />
       <DemoBanner show={isDemo} />
       <SetTeacherRefCookie teacherId={p.teacherId} />
@@ -149,7 +173,7 @@ export default async function TeacherPage({ params }: { params: Promise<{ teache
           )}
           <span className="font-black text-white">{name}</span>
         </div>
-        <Link href="/courses" className="text-xs font-semibold text-white/70 hover:text-white transition-colors">كل الكورسات ←</Link>
+        <Link href="/teachers" className="text-xs font-semibold text-white/70 hover:text-white transition-colors">كل المعلمين ←</Link>
       </nav>
 
       {/* Banner */}
@@ -167,6 +191,9 @@ export default async function TeacherPage({ params }: { params: Promise<{ teache
         )}
         <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-balance">{name}</h1>
         {p.bio && <p className="text-[var(--ink-muted)] mt-3 leading-relaxed max-w-2xl mx-auto text-pretty">{p.bio}</p>}
+        <p className="text-[var(--ink-muted)] mt-3 text-sm leading-relaxed max-w-2xl mx-auto" data-geo-quote>
+          يقدّم الأستاذ {name} شروحه على منصة Code-UP لمادة البرمجة والذكاء الاصطناعي لطلاب البكالوريا والثانوية في مصر.
+        </p>
 
         {/* Social proof */}
         <div className="mt-5 flex items-center justify-center gap-2 flex-wrap">
@@ -218,51 +245,13 @@ export default async function TeacherPage({ params }: { params: Promise<{ teache
         )}
       </header>
 
-      {/* Courses */}
-      <section className="max-w-6xl mx-auto px-6 pb-20">
-        <h2 className="text-lg font-bold mb-5">الكورسات</h2>
-        {ordered.length === 0 ? (
-          <p className="text-center text-[var(--ink-muted)] py-12">لا توجد كورسات منشورة بعد.</p>
-        ) : (
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {ordered.map((c) => {
-              const featured = c.id === p.featuredCourseId;
-              const vCount = c.folders.reduce((b, f) => b + f.videos.length, 0);
-              return (
-                <Link key={c.id} href={`/courses/${c.id}`}
-                      className="group relative flex flex-col rounded-2xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden hover:shadow-xl transition-shadow">
-                  {featured && (
-                    <span className="absolute top-3 end-3 z-10 px-2.5 py-1 rounded-full text-[10px] font-bold text-white" style={{ background: "var(--accent)" }}>مميّز</span>
-                  )}
-                  <div className="relative h-40 bg-[var(--bg)] overflow-hidden">
-                    {isSafe(c.thumbnailUrl) ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={c.thumbnailUrl!} alt={c.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-[var(--ink-muted)]">
-                        <svg className="w-10 h-10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.4} aria-hidden><path d="M4 4h5l2 3h9a2 2 0 012 2v9a2 2 0 01-2 2H4a2 2 0 01-2-2V6a2 2 0 012-2z" /></svg>
-                      </div>
-                    )}
-                  </div>
-                  <div className="p-4 flex flex-col flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      {c.subject && <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[var(--border)] text-[var(--ink-muted)]">{c.subject}</span>}
-                      <span className="text-[11px] text-[var(--ink-muted)]">{STAGE_LABELS[c.educationalStage] ?? c.educationalStage}</span>
-                    </div>
-                    <h3 className="font-bold text-[var(--ink)] leading-snug line-clamp-2 flex-1">{c.title}</h3>
-                    <div className="flex items-center justify-between mt-3">
-                      <span className="text-xs text-[var(--ink-muted)]">{vCount} محاضرة</span>
-                      <span className="text-sm font-black" style={{ color: "var(--accent)" }}>
-                        {!c.isPaid ? "مجاني" : `${c.price ?? 0} جنيه`}
-                      </span>
-                    </div>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-        )}
-      </section>
+      {/* Courses Section with interactive filters, search, and strict priority ordering */}
+      <TeacherCoursesSection
+        courses={courses}
+        featuredCourseId={p.featuredCourseId}
+        categoryMap={categoryMap}
+        accentColor={p.accentColor ?? "#6366f1"}
+      />
 
       <footer className="border-t border-[var(--border)] py-6 text-center">
         <Link href="/" className="text-xs font-bold text-[var(--ink-muted)] hover:text-[var(--ink)] transition-colors">مدعوم من Code-UP</Link>

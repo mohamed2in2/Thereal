@@ -85,6 +85,24 @@ export function sha7nawyRefNote(reference: string): string {
 }
 
 /**
+ * The gateway's own transaction id, tagged into the pending row's note.
+ *
+ * Verification lookups only work with this id — our SH-... reference is not
+ * something the gateway's info endpoint recognises — so it has to be captured
+ * when the payment is created and carried on the ledger row.
+ */
+export function sha7nawyGatewayIdNote(gatewayId: string | number): string {
+  return `gwid:${gatewayId}`;
+}
+
+/** Reads the gateway transaction id back out of a pending row's note. */
+export function readSha7nawyGatewayId(note: string | null | undefined): string | null {
+  if (!note) return null;
+  const m = note.match(/\|gwid:([A-Za-z0-9_-]+)/);
+  return m ? m[1] : null;
+}
+
+/**
  * Calculates tax/fee on base payment amount based on the selected method config
  */
 export function calculateAmountWithTax(
@@ -138,6 +156,18 @@ export function validateVodafoneCashPhone(phone: string): boolean {
 export function validateEgyptianPhone(phone: string): boolean {
   const clean = normalizeEgyptianPhone(phone);
   return /^01[0125]\d{8}$/.test(clean);
+}
+
+/**
+ * True when the gateway says the number has no active wallet — e.g. Vodafone's
+ * "العميل غير مشترك", which is what comes back for a plain Vodafone line
+ * without Vodafone Cash, or a student typing their own number when the wallet
+ * is on a parent's line.
+ */
+export function isWalletNotRegisteredMessage(message: string): boolean {
+  return /غير\s*مشترك|مش\s*مشترك|غير\s*مسجل|لا\s*توجد\s*محفظة|not\s*(subscribed|registered)|unregistered|no\s*wallet|wallet\s*not\s*found/i.test(
+    message
+  );
 }
 
 /**
@@ -224,7 +254,18 @@ export async function createSha7nawyPayment(
       let rawMsg = String(data.message || data.error || "").trim();
       let normalizedMsg = rawMsg;
 
-      if (!rawMsg || rawMsg.toLowerCase().includes("provider error") || rawMsg.toLowerCase().includes("internal server error")) {
+      // Record every gateway rejection so wallet failures can be diagnosed later.
+      // Only the last 3 digits of the wallet number are kept.
+      console.warn(
+        `[Sha7nawy Create] Rejected (HTTP ${res.status}) method=${params.method} number=*******${cleanPhone.slice(-3)} message=${JSON.stringify(rawMsg)}`
+      );
+
+      if (isWalletNotRegisteredMessage(rawMsg)) {
+        normalizedMsg =
+          params.method === "vf_cash"
+            ? "الرقم ده مفيش عليه محفظة فودافون كاش مفعّلة. اكتب الرقم اللي عليه المحفظة (ممكن يكون رقم ولي الأمر)، أو ادفع بإنستاباي أو فوري."
+            : "الرقم ده مفيش عليه محفظة مفعّلة لطريقة الدفع دي. اكتب الرقم اللي عليه المحفظة، أو ادفع بإنستاباي أو فوري.";
+      } else if (!rawMsg || rawMsg.toLowerCase().includes("provider error") || rawMsg.toLowerCase().includes("internal server error")) {
         normalizedMsg = "خدمة الخصم التلقائي للمحفظة تواجه صيانة مؤقتة لدى شبكة الاتصالات. يمكنك استخدام إنستاباي (InstaPay) أو فوري لإتمام الدفع فوراً.";
       } else if (rawMsg.includes("Unauthorized") || rawMsg.includes("401")) {
         normalizedMsg = "بوابة الدفع قيد التحديث المؤقت. يرجى اختيار وسيلة دفع بديلة مثل إنستاباي أو فوري.";
@@ -302,12 +343,19 @@ export async function getSha7nawyPaymentInfo(transaction_id: string | number): P
   }
 
   try {
-    const res = await fetch(`${baseUrl}/api/payment/info/${transaction_id}`, {
+    // The gateway exposes this as a query parameter. The path form
+    // (/api/payment/info/{id}) is not a route on their side and answers with an
+    // HTML 404 from their nginx, which made every verification fail — and since
+    // verification is mandatory in the webhook, no Sha7nawy payment could ever
+    // be fulfilled. Pass the gateway's own numeric transaction id here (the `id`
+    // field of the create response), not our own SH-... reference.
+    const res = await fetch(`${baseUrl}/api/payment/info?transaction_id=${encodeURIComponent(String(transaction_id))}`, {
       method: "GET",
       headers: {
         "Accept": "application/json",
         "Authorization": secretKey,
       },
+      signal: AbortSignal.timeout(12000),
     });
 
     const data = await res.json().catch(() => ({}));

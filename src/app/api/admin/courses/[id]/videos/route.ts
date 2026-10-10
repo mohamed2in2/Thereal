@@ -1,7 +1,10 @@
 import { logAdminAction } from "@/lib/admin-auth";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
+import { isTeacherLike, actingTeacherId, hasAssistantPermission } from "@/lib/teacher-scope";
 import { prisma } from "@/lib/prisma";
+import { FolderContentType } from "@/generated/prisma";
+import { removeFolderContent } from "@/lib/folder-content-order";
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -19,8 +22,11 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
         });
       } catch (e) {}
     }
-    if (!session || session.role !== "teacher") {
+    if (!session || !isTeacherLike(session.role)) {
       return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
+    }
+    if (!hasAssistantPermission(session, "editCourses")) {
+      return NextResponse.json({ error: "المدرّس لم يمنحك صلاحية تعديل الكورسات" }, { status: 403 });
     }
 
     const { id: courseId } = await params;
@@ -32,7 +38,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
     // Verify course belongs to this teacher
     const course = await prisma.course.findFirst({
-      where: { id: courseId, teacherId: session.id },
+      where: { id: courseId, teacherId: actingTeacherId(session) },
     });
 
     if (!course) {
@@ -55,6 +61,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     await prisma.videoWatchSession.deleteMany({ where: { videoId } });
     await prisma.progress.deleteMany({ where: { videoId } });
     await prisma.video.delete({ where: { id: videoId } });
+    await removeFolderContent(FolderContentType.VIDEO, videoId);
 
     return NextResponse.json({ success: true, message: "تم حذف الفيديو بنجاح" });
   } catch (error) {

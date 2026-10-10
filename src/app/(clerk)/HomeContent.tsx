@@ -8,8 +8,10 @@ import { Footer } from "@/components/ui/Footer";
 import { HeroSection } from "@/components/home/HeroSection";
 import { FeaturesSection } from "@/components/home/FeaturesSection";
 import { ContactSection } from "@/components/home/ContactSection";
+import { CoursesShowcase } from "@/components/home/CoursesShowcase";
 import type { MeUser } from "@/lib/fetch-me";
 import type { SiteText } from "@/lib/site-text";
+import { safeJsonLd } from "@/lib/jsonld";
 
 /**
  * Client shell for the homepage. Site copy (`text`) is server-rendered and
@@ -44,23 +46,24 @@ export function HomeContent({ text }: { text: SiteText }) {
         id="organization-schema"
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify({
+          __html: safeJsonLd({
             "@context": "https://schema.org",
             "@type": "Organization",
             "name": "منصة Code-UP الكورسات",
             "alternateName": "Code-UP",
             "url": "https://code-up.tech",
             "logo": "https://code-up.tech/logo.jpeg",
-            "description": "منصة كورسات متكاملة للمتعلمين المصريين لمختلف الأعمار والمستويات. محاضرات فيديو، اختبارات تفاعلية، ومتابعة ذكية للتقدم التدريبي.",
+            "description": "منصة تعليمية مصرية لشرح البرمجة والذكاء الاصطناعي لطلاب البكالوريا والثانوية. محاضرات فيديو، محرر أكواد مدمج، ومتابعة ولي الأمر.",
             "contactPoint": {
               "@type": "ContactPoint",
-              "telephone": "+20-128-535-3604",
+              "telephone": "+20-111-880-2621",
               "contactType": "customer service",
               "areaServed": "EG",
               "availableLanguage": "Arabic"
             },
             "sameAs": [
-              "https://code-up.tech"
+              "https://www.facebook.com/CodeUpAcad",
+              "https://kemetcraft.me/"
             ]
           })
         }}
@@ -68,6 +71,7 @@ export function HomeContent({ text }: { text: SiteText }) {
       <Navbar user={user ? { name: user.name, role: user.role } : null} />
       <main className="flex-1">
         <HeroSection isLoggedIn={isLoggedIn} subtitle={text.hero_subtitle} />
+        <CoursesShowcase isLoggedIn={isLoggedIn} />
         <FeaturesSection />
 
         {/* ─── Parent Portal Banner ──────────────────────────────────── */}
@@ -88,7 +92,7 @@ export function HomeContent({ text }: { text: SiteText }) {
               }}
               onMouseEnter={(e) => {
                 (e.currentTarget as HTMLElement).style.borderColor = "var(--brand)";
-                (e.currentTarget as HTMLElement).style.boxShadow = "0 0 30px rgba(16,185,129,0.1), var(--shadow-sm)";
+                (e.currentTarget as HTMLElement).style.boxShadow = "0 0 30px var(--brand-soft), var(--shadow-sm)";
               }}
               onMouseLeave={(e) => {
                 (e.currentTarget as HTMLElement).style.borderColor = "var(--border)";
@@ -101,7 +105,6 @@ export function HomeContent({ text }: { text: SiteText }) {
                   style={{
                     background: "var(--brand-soft)",
                     border: "1px solid var(--brand)",
-                    boxShadow: "0 0 16px rgba(16,185,129,0.12)",
                   }}
                 >
                   <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="var(--brand)" strokeWidth={1.5} aria-hidden>
@@ -147,10 +150,11 @@ export function HomeContent({ text }: { text: SiteText }) {
                 <Link
                   href="/signup"
                   id="footer-cta-signup"
-                  className="group relative px-8 py-4 font-bold rounded-full text-base flex w-full sm:w-auto items-center justify-center overflow-hidden text-white hover:opacity-90 transition-opacity"
+                  className="group relative min-h-14 px-8 py-4 font-bold rounded-full text-base flex w-full sm:w-auto items-center justify-center overflow-hidden transition-colors hover:bg-[var(--brand-strong)]"
                   style={{
-                    background: "linear-gradient(135deg, #10B981, #14B8A6)",
-                    boxShadow: "0 8px 24px -8px rgba(16,185,129,0.4)",
+                    background: "var(--brand)",
+                    color: "var(--on-brand)",
+                    boxShadow: "0 8px 24px -10px var(--brand-shadow)",
                   }}
                 >
                   <span className="relative z-10">إنشاء حساب مجاني</span>

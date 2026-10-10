@@ -1,45 +1,194 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
+import { extractKpis } from "@/components/admin/superadmin/overview/kpis";
+import type { OverviewData } from "@/components/admin/superadmin/overview/types";
+import { persistOverviewSnapshot } from "@/lib/overview-snapshots";
 import { prisma } from "@/lib/prisma";
 import { getExpensesFromDb, getTeacherPercentagesFromDb } from "@/lib/money-control";
+import { bookingGrantsCourseAccess } from "@/lib/course-track";
+import { getPlanMonths } from "@/lib/subscription-terms";
+import { computeBookingIntelligence } from "@/lib/booking-intelligence";
+import {
+  describePaymentItem,
+  parsePaymentNoteMetadata,
+} from "@/lib/fulfillment";
 
 export const dynamic = "force-dynamic";
 
+const DEFAULT_PLAN_PRICES = { monthly: 180, termly: 750, yearly: 1200 } as const;
+
+const STAGE_LABELS: Record<string, string> = {
+  sec_1: "أولى بكالوريا",
+  sec_2: "ثانية بكالوريا",
+  sec_3: "ثالثة ثانوي",
+};
+
+type ProfilePricingInput = {
+  slug: string;
+  isPublished: boolean;
+  priceMonthly: number | null;
+  priceTermly: number | null;
+  priceYearly: number | null;
+  discountMonthly: number | null;
+  discountTermly: number | null;
+  discountYearly: number | null;
+  stagePricing: string | null;
+  enableLanguagesTrack: boolean;
+  priceLanguagesMonthly: number | null;
+  priceLanguagesTermly: number | null;
+  priceLanguagesYearly: number | null;
+} | null;
+
+/**
+ * Flatten a teacher's booking price configuration into one readable object:
+ * base plan prices (falling back to platform defaults), discounts, the
+ * languages-track surcharge, and any per-stage overrides.
+ */
+function buildPlanPricing(profile: ProfilePricingInput) {
+  const pick = (v: number | null | undefined, fallback: number) =>
+    typeof v === "number" && v > 0 ? v : fallback;
+
+  const base = {
+    monthly: pick(profile?.priceMonthly, DEFAULT_PLAN_PRICES.monthly),
+    termly: pick(profile?.priceTermly, DEFAULT_PLAN_PRICES.termly),
+    yearly: pick(profile?.priceYearly, DEFAULT_PLAN_PRICES.yearly),
+  };
+  const discounts = {
+    monthly: profile?.discountMonthly ?? 0,
+    termly: profile?.discountTermly ?? 0,
+    yearly: profile?.discountYearly ?? 0,
+  };
+  const languagesSurcharge = {
+    monthly: profile?.priceLanguagesMonthly ?? 0,
+    termly: profile?.priceLanguagesTermly ?? 0,
+    yearly: profile?.priceLanguagesYearly ?? 0,
+  };
+
+  const stages: Array<{
+    key: string;
+    label: string;
+    bookingEnabled: boolean;
+    monthly: number;
+    termly: number;
+    yearly: number;
+    languagesMonthly: number;
+    languagesTermly: number;
+    languagesYearly: number;
+  }> = [];
+
+  if (profile?.stagePricing) {
+    try {
+      const parsed = JSON.parse(profile.stagePricing) as Record<string, Record<string, unknown>>;
+      for (const [key, cfg] of Object.entries(parsed || {})) {
+        if (!cfg || typeof cfg !== "object") continue;
+        const num = (v: unknown, fallback: number) => (typeof v === "number" && v > 0 ? v : fallback);
+        const numOrZero = (v: unknown, fallback: number) => (typeof v === "number" ? v : fallback);
+        stages.push({
+          key,
+          label: STAGE_LABELS[key] ?? key,
+          bookingEnabled: cfg.bookingEnabled !== false,
+          monthly: num(cfg.priceMonthly, base.monthly),
+          termly: num(cfg.priceTermly, base.termly),
+          yearly: num(cfg.priceYearly, base.yearly),
+          languagesMonthly: numOrZero(cfg.priceLanguagesMonthly, languagesSurcharge.monthly),
+          languagesTermly: numOrZero(cfg.priceLanguagesTermly, languagesSurcharge.termly),
+          languagesYearly: numOrZero(cfg.priceLanguagesYearly, languagesSurcharge.yearly),
+        });
+      }
+    } catch {
+      /* malformed JSON → ignore stage overrides */
+    }
+  }
+
+  return {
+    hasProfile: Boolean(profile),
+    slug: profile?.slug ?? null,
+    isPublished: profile?.isPublished ?? false,
+    usesDefaults: !profile || [profile.priceMonthly, profile.priceTermly, profile.priceYearly].every((v) => !v),
+    base,
+    discounts,
+    enableLanguagesTrack: profile?.enableLanguagesTrack ?? true,
+    languagesSurcharge,
+    stages,
+  };
+}
+
+const CAIRO_TZ = "Africa/Cairo";
+
+function cairoDateKey(d: Date) {
+  return d.toLocaleDateString("en-CA", { timeZone: CAIRO_TZ });
+}
+
+function bucketSignupsByDay(createdAts: Date[]) {
+  const map = new Map<string, number>();
+  for (const d of createdAts) {
+    const key = cairoDateKey(d);
+    map.set(key, (map.get(key) || 0) + 1);
+  }
+  return [...map.entries()]
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .map(([date, count]) => ({ date, count }));
+}
+
 /** Superadmin-only: platform-wide overview stats. */
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const remember = req.nextUrl.searchParams.get("remember") === "1";
   const session = await getSession();
   if (!session || !["superadmin", "admin", "staff"].includes(session.role)) {
     return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
   }
 
+  const demoTour = session.demoTour === true;
+  const studentAudience = demoTour
+    ? { role: "student" as const, isDeleted: false, isDemo: true }
+    : { role: "student" as const, isDeleted: false, accountMode: { not: "TESTER" as const } };
+  const nestedStudent = demoTour
+    ? { role: "student" as const, isDemo: true }
+    : { role: "student" as const, isVirtual: false, accountMode: { not: "TESTER" as const } };
+  const teacherAudience = demoTour
+    ? { role: "teacher" as const, isDeleted: false, isDemo: true }
+    : { role: "teacher" as const, isDeleted: false, isDemo: false };
+
   try {
-    const [totalStudents, totalTeachers, teachers, walletDeposits, expenses, percentages, manualLogs, balanceTxs] = await Promise.all([
-      // Total active real students (not deleted, not QA tester)
-      prisma.user.count({
-        where: {
-          role: "student",
-          isDeleted: false,
-          accountMode: { not: "TESTER" },
-        },
+    const [studentCreatedAts, totalTeachers, teachers, walletDeposits, expenses, percentages, manualLogs, balanceTxs, courseExclusions, courseTrackRows] = await Promise.all([
+      // Real student accounts (not deleted, not QA tester) — used for the headline count and daily signups
+      prisma.user.findMany({
+        where: studentAudience,
+        select: { createdAt: true },
       }),
 
       // Total active teachers
-      prisma.user.count({ where: { role: "teacher", isDeleted: false } }),
+      prisma.user.count({ where: teacherAudience }),
 
       // Teachers with their courses, actual real student subscriptions, access codes, and enrollments
       prisma.user.findMany({
-        where: { role: "teacher", isDeleted: false },
+        where: teacherAudience,
         select: {
           id: true,
           name: true,
           email: true,
           createdAt: true,
+          teacherProfile: {
+            select: {
+              slug: true,
+              isPublished: true,
+              priceMonthly: true,
+              priceTermly: true,
+              priceYearly: true,
+              discountMonthly: true,
+              discountTermly: true,
+              discountYearly: true,
+              stagePricing: true,
+              enableLanguagesTrack: true,
+              priceLanguagesMonthly: true,
+              priceLanguagesTermly: true,
+              priceLanguagesYearly: true,
+            },
+          },
           teacherSubscriptions: {
             where: {
               status: "active",
-              student: {
-                accountMode: { not: "TESTER" },
-              },
+              student: nestedStudent,
             },
             select: {
               id: true,
@@ -53,6 +202,7 @@ export async function GET() {
               paymentSource: true,
               paymentRef: true,
               createdAt: true,
+              expiresAt: true,
               student: {
                 select: {
                   id: true,
@@ -72,8 +222,13 @@ export async function GET() {
               id: true,
               title: true,
               subject: true,
+              description: true,
+              deliveryMode: true,
               isPaid: true,
               price: true,
+              discountPercent: true,
+              discountExpiresAt: true,
+              createdAt: true,
               educationalStage: true,
               _count: {
                 select: {
@@ -81,6 +236,8 @@ export async function GET() {
                   enrollments: {
                     where: {
                       student: {
+                        role: "student",
+                        isVirtual: false,
                         accountMode: { not: "TESTER" },
                       },
                     },
@@ -90,19 +247,32 @@ export async function GET() {
               accessCodes: {
                 where: {
                   studentId: { not: null },
-                  student: {
-                    accountMode: { not: "TESTER" },
-                  },
+                  student: nestedStudent,
                 },
-                select: { id: true, studentId: true, isActive: true },
+                select: {
+                  id: true,
+                  studentId: true,
+                  isActive: true,
+                  usedAt: true,
+                  createdAt: true,
+                  student: { select: { id: true, name: true, phone: true } },
+                },
               },
               enrollments: {
                 where: {
-                  student: {
-                    accountMode: { not: "TESTER" },
-                  },
+                  student: nestedStudent,
                 },
-                select: { id: true, studentId: true, amountPaid: true },
+                select: {
+                  id: true,
+                  studentId: true,
+                  amountPaid: true,
+                  fulfillmentSource: true,
+                  createdAt: true,
+                  student: { select: { id: true, name: true, phone: true } },
+                },
+              },
+              folders: {
+                select: { id: true, name: true, monthIndex: true },
               },
             },
             orderBy: { createdAt: "desc" },
@@ -116,21 +286,19 @@ export async function GET() {
         where: {
           amount: { gt: 0 },
           type: { in: ["credit_sha7nawy_wallet", "credit_shakeout_wallet", "credit_code", "credit_admin"] },
-          user: {
-            accountMode: { not: "TESTER" },
-          },
+          user: nestedStudent,
         },
         select: { amount: true },
       }),
 
       // Platform Expenses
-      getExpensesFromDb(),
+      demoTour ? Promise.resolve([]) : getExpensesFromDb(),
 
       // Teacher Custom Platform Percentages (default 25%)
       getTeacherPercentagesFromDb(),
 
       // Activity logs for manual registrations
-      prisma.activityLog.findMany({
+      demoTour ? Promise.resolve([]) : prisma.activityLog.findMany({
         where: { action: "MANUAL_TEACHER_SUBSCRIPTION" },
         select: { targetId: true, adminName: true, createdAt: true },
         orderBy: { createdAt: "desc" },
@@ -140,11 +308,277 @@ export async function GET() {
       prisma.balanceTransaction.findMany({
         where: {
           type: { in: ["credit_sha7nawy_wallet", "credit_shakeout_wallet", "credit_sha7nawy_pending", "credit_shakeout_pending", "debit_purchase"] },
+          ...(demoTour ? { user: nestedStudent } : {}),
         },
         select: { userId: true, type: true, note: true, providerRef: true, createdAt: true },
         orderBy: { createdAt: "desc" },
       }),
+
+      // Course silent exclusion records (course_excluded_<courseId>_<studentId>)
+      prisma.appSetting.findMany({
+        where: { key: { startsWith: "course_excluded_" } },
+        select: { key: true, value: true },
+      }),
+
+      prisma.appSetting.findMany({
+        where: { key: { startsWith: "course_track_" } },
+        select: { key: true, value: true },
+      }),
     ]);
+
+    const totalStudents = studentCreatedAts.length;
+    const signupsByDay = bucketSignupsByDay(studentCreatedAts.map((s) => s.createdAt));
+
+    // Set of course exclusions: "<courseId>_<studentId>"
+    const excludedSet = new Set(
+      (courseExclusions || [])
+        .filter((e) => e.value === "true")
+        .map((e) => e.key.replace("course_excluded_", ""))
+    );
+    const trackOverride = new Map(
+      (courseTrackRows || []).map((row) => [row.key.slice("course_track_".length), row.value])
+    );
+
+    // ── Live bookings (teacher subscriptions) — the headline "right now" metric ──
+    const now = new Date();
+    const todayStart = new Date(now);
+    todayStart.setHours(0, 0, 0, 0);
+    const realStudentFilter = nestedStudent;
+
+    const [
+      bookingsActiveNow,
+      bookingsAddedToday,
+      bookingsActiveAgg,
+      activeBookingStudentRows,
+      uniquePaidBookingStudentRows,
+      pendingLedger,
+    ] = await Promise.all([
+      prisma.teacherSubscription.count({
+        where: { status: "active", expiresAt: { gt: now }, student: realStudentFilter },
+      }),
+      prisma.teacherSubscription.count({
+        where: { status: "active", createdAt: { gte: todayStart }, student: realStudentFilter },
+      }),
+      prisma.teacherSubscription.aggregate({
+        _sum: { amount: true },
+        where: { status: "active", expiresAt: { gt: now }, student: realStudentFilter },
+      }),
+      prisma.teacherSubscription.findMany({
+        where: { status: "active", expiresAt: { gt: now }, student: realStudentFilter },
+        distinct: ["studentId"],
+        select: { studentId: true },
+      }),
+      prisma.teacherSubscription.findMany({
+        where: { amount: { gt: 0 }, student: realStudentFilter },
+        distinct: ["studentId"],
+        select: { studentId: true },
+      }),
+      prisma.balanceTransaction.findMany({
+        where: {
+          type: { in: ["credit_shakeout_pending", "credit_sha7nawy_pending"] },
+          ...(demoTour ? { user: nestedStudent } : {}),
+        },
+        select: {
+          id: true,
+          userId: true,
+          type: true,
+          amount: true,
+          note: true,
+          createdAt: true,
+          user: { select: { id: true, name: true, phone: true } },
+        },
+        orderBy: { createdAt: "desc" },
+        take: 200,
+      }),
+    ]);
+
+    // Chase list: skip anyone who already has access (active booking or a paid course).
+    const pendingUserIds = [...new Set(pendingLedger.map((r) => r.userId))];
+    const alreadyHasAccessIds = new Set<string>();
+    if (pendingUserIds.length > 0) {
+      const [bookedRows, paidCourseRows] = await Promise.all([
+        prisma.teacherSubscription.findMany({
+          where: {
+            studentId: { in: pendingUserIds },
+            status: "active",
+            expiresAt: { gt: now },
+            student: realStudentFilter,
+          },
+          distinct: ["studentId"],
+          select: { studentId: true },
+        }),
+        prisma.courseEnrollment.findMany({
+          where: {
+            studentId: { in: pendingUserIds },
+            course: { isPaid: true },
+            student: realStudentFilter,
+          },
+          distinct: ["studentId"],
+          select: { studentId: true },
+        }),
+      ]);
+      for (const r of bookedRows) alreadyHasAccessIds.add(r.studentId);
+      for (const r of paidCourseRows) alreadyHasAccessIds.add(r.studentId);
+    }
+
+    const pendingByStudent = new Map<
+      string,
+      {
+        studentId: string;
+        name: string;
+        phone: string | null;
+        transactions: Array<{
+          id: string;
+          amount: number;
+          provider: "shakeout" | "sha7nawy";
+          itemLabel: string;
+          createdAt: string;
+        }>;
+      }
+    >();
+    for (const row of pendingLedger) {
+      if (alreadyHasAccessIds.has(row.userId)) continue;
+      const existing = pendingByStudent.get(row.userId) || {
+        studentId: row.userId,
+        name: row.user?.name || "طالب",
+        phone: row.user?.phone || parsePaymentNoteMetadata(row.note).phone || null,
+        transactions: [],
+      };
+      existing.transactions.push({
+        id: row.id,
+        amount: row.amount,
+        provider: row.type.includes("sha7nawy") ? "sha7nawy" : "shakeout",
+        itemLabel: describePaymentItem(row.note),
+        createdAt: row.createdAt.toISOString(),
+      });
+      pendingByStudent.set(row.userId, existing);
+    }
+    const pendingPayments = {
+      studentCount: pendingByStudent.size,
+      transactionCount: [...pendingByStudent.values()].reduce((s, st) => s + st.transactions.length, 0),
+      amountPending: [...pendingByStudent.values()].reduce(
+        (s, st) => s + st.transactions.reduce((a, t) => a + t.amount, 0),
+        0
+      ),
+      students: [...pendingByStudent.values()],
+    };
+
+    // ── Access monitor: recent grants & money movements with anomaly flags ──
+    const [recentEnrollments, recentSubs, recentDebits, payCodes, manualEnrollLogs] = await Promise.all([
+      prisma.courseEnrollment.findMany({
+        ...(demoTour ? { where: { student: nestedStudent } } : {}),
+        orderBy: { createdAt: "desc" },
+        take: 50,
+        select: {
+          id: true, createdAt: true, fulfillmentSource: true, amountPaid: true,
+          student: { select: { id: true, name: true } },
+          course: { select: { id: true, title: true, isPaid: true, price: true, teacherId: true, teacher: { select: { name: true } } } },
+        },
+      }),
+      prisma.teacherSubscription.findMany({
+        ...(demoTour ? { where: { student: nestedStudent } } : {}),
+        orderBy: { createdAt: "desc" },
+        take: 50,
+        select: {
+          id: true, createdAt: true, amount: true, planType: true, planLabel: true, paymentSource: true, status: true, expiresAt: true,
+          student: { select: { id: true, name: true } },
+          teacher: { select: { id: true, name: true } },
+        },
+      }),
+      prisma.balanceTransaction.findMany({
+        where: { type: { startsWith: "debit" } },
+        orderBy: { createdAt: "desc" },
+        take: 50,
+        select: { id: true, createdAt: true, type: true, amount: true, note: true, user: { select: { id: true, name: true } } },
+      }),
+      prisma.accessCode.findMany({
+        where: { code: { startsWith: "PAY-" }, isActive: true },
+        select: { studentId: true, courseId: true },
+      }),
+      prisma.activityLog.findMany({
+        where: { action: "SUPERADMIN_MANUAL_ENROLL" },
+        select: { targetId: true, targetName: true, createdAt: true },
+      }),
+    ]);
+
+    // studentId:teacherId pairs with an active subscription record (panel-trusted)
+    const subbedPairs = new Set<string>();
+    for (const t of teachers) {
+      for (const s of t.teacherSubscriptions || []) {
+        if (s.student?.id) subbedPairs.add(`${s.student.id}:${t.id}`);
+      }
+    }
+    const payCodePairs = new Set(payCodes.map((p) => `${p.studentId}:${p.courseId}`));
+    const manualLogSet = new Set(
+      manualEnrollLogs.map((l) => `${l.targetId}:${(l.targetName || "").replace(/^تسجيل الطالب:\s*/, "").split(" في كورس:")[0].trim()}`)
+    );
+
+    type MonitorEvent = {
+      kind: "subscription" | "enrollment" | "debit";
+      id: string;
+      studentName: string;
+      target: string;
+      amount: number;
+      source: string;
+      createdAt: string;
+      severity: "ok" | "warn" | "alert";
+      reason: string;
+    };
+
+    const monitorEvents: MonitorEvent[] = [];
+
+    for (const s of recentSubs) {
+      const zero = (s.amount || 0) === 0;
+      monitorEvents.push({
+        kind: "subscription",
+        id: s.id,
+        studentName: s.student?.name || "—",
+        target: `${s.teacher?.name || "—"} · ${s.planLabel || s.planType}`,
+        amount: s.amount || 0,
+        source: s.paymentSource || "MANUAL",
+        createdAt: s.createdAt.toISOString(),
+        severity: zero ? "warn" : "ok",
+        reason: zero ? "اشتراك بقيمة صفر — يحتاج مراجعة" : "حجز موثّق",
+      });
+    }
+
+    for (const e of recentEnrollments) {
+      const sId = e.student?.id || "";
+      const hasPanelLog = manualLogSet.has(`${e.course.id}:${(e.student?.name || "").trim()}`);
+      const hasSub = subbedPairs.has(`${sId}:${e.course.teacherId}`);
+      const hasPayCode = payCodePairs.has(`${sId}:${e.course.id}`);
+      const trusted = hasPanelLog || hasSub || hasPayCode || e.fulfillmentSource === "TESTER_BYPASS";
+      const via = hasPanelLog ? "تسجيل لوحة المشرف (موثّق)" : hasSub ? "مغطى باشتراك المعلم" : hasPayCode ? "شراء إلكتروني (PAY)" : e.fulfillmentSource === "TESTER_BYPASS" ? "حساب فحص" : null;
+      monitorEvents.push({
+        kind: "enrollment",
+        id: e.id,
+        studentName: e.student?.name || "—",
+        target: `${e.course.title} · ${e.course.teacher?.name || ""}`,
+        amount: e.amountPaid || 0,
+        source: e.fulfillmentSource,
+        createdAt: e.createdAt.toISOString(),
+        severity: trusted ? "ok" : "alert",
+        reason: trusted ? (via || "موثّق") : "تسجيل بدون دفع وبدون سجل لوحة — أنومالي!",
+      });
+    }
+
+    for (const d of recentDebits) {
+      monitorEvents.push({
+        kind: "debit",
+        id: d.id,
+        studentName: d.user?.name || "—",
+        target: d.note || d.type,
+        amount: d.amount,
+        source: d.type,
+        createdAt: d.createdAt.toISOString(),
+        severity: "ok",
+        reason: "حركة مالية",
+      });
+    }
+
+    monitorEvents.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    const accessMonitor = monitorEvents.slice(0, 40);
+    const accessMonitorAlertCount = monitorEvents.filter((e) => e.severity !== "ok").length;
 
     // Shape the data: compute per-course and per-teacher real reservations & revenue (excluding QA Testers)
     // Intelligent deduplication: If a student paid for a teacher subscription (e.g. monthly package),
@@ -159,14 +593,13 @@ export async function GET() {
       const realReservationsRevenue = paidSubs.reduce((sum, s) => sum + (s.amount || 0), 0);
 
       // Track subscriptions per student for this teacher to prevent double counting
-      // Monthly plan = 1 course slot, termly = 3 course slots, yearly = 6 course slots
+      // One course slot per booked month (monthly 1 / termly 4 / yearly 8).
       const studentSubsMap = new Map<string, Array<{ id: string; amount: number; planType: string; remainingSlots: number }>>();
       for (const sub of paidSubs) {
         const sId = sub.student?.id;
         if (!sId) continue;
         if (!studentSubsMap.has(sId)) studentSubsMap.set(sId, []);
-        const monthsMap: Record<string, number> = { monthly: 1, termly: 3, yearly: 6 };
-        const slots = monthsMap[sub.planType] || 1;
+        const slots = getPlanMonths(sub.planType);
         studentSubsMap.get(sId)!.push({
           id: sub.id,
           amount: sub.amount || 0,
@@ -179,22 +612,44 @@ export async function GET() {
       const uniquePaidStudentIds = new Set<string>();
       paidSubs.forEach((s) => s.student?.id && uniquePaidStudentIds.add(s.student.id));
 
+      const coursePayments: Array<{
+        id: string;
+        studentId: string;
+        studentName: string;
+        studentPhone: string;
+        courseId: string;
+        courseTitle: string;
+        amount: number;
+        coveredBySubscription: boolean;
+        source: string;
+        createdAt: string;
+      }> = [];
+
       const courseStats = t.courses.map((c) => {
         const totalCodes = c._count?.accessCodes || c.accessCodes.length;
         const usedCodes = c.accessCodes.length;
         const availableCodes = Math.max(0, totalCodes - usedCodes);
         const directEnrollments = (c.enrollments || []).length;
 
-        // Unique enrolled students in this course (query already filtered out TESTERs)
-        const codeStudents = (c.accessCodes || []).filter((ac) => !!ac.studentId);
-        const studentEnrollments = (c.enrollments || []).filter((e) => !!e.studentId);
+        // Unique enrolled students in this course (strictly real students, excluding teachers and preview)
+        const codeStudents = (c.accessCodes || []).filter((ac) => !!ac.studentId && ac.studentId !== t.id);
+        const studentEnrollments = (c.enrollments || []).filter((e) => !!e.studentId && e.studentId !== t.id);
 
         const enrolledStudentIds = new Set<string>();
         codeStudents.forEach((ac) => ac.studentId && enrolledStudentIds.add(ac.studentId));
         studentEnrollments.forEach((e) => e.studentId && enrolledStudentIds.add(e.studentId));
-        const totalEnrolled = Math.max(usedCodes + directEnrollments, enrolledStudentIds.size);
+
+        // Filter out students who were signed out / excluded by superadmin
+        for (const sId of Array.from(enrolledStudentIds)) {
+          if (excludedSet.has(`${c.id}_${sId}`)) {
+            enrolledStudentIds.delete(sId);
+          }
+        }
+
+        const totalEnrolled = enrolledStudentIds.size;
 
         const isCourseActuallyPaid = Boolean(c.isPaid && c.price && c.price > 0);
+        let bookingOnlyCount = 0;
         let courseCalculatedRevenue = 0;
         let coursePaidStudentsCount = 0;
         let courseCoveredBySubCount = 0;
@@ -203,25 +658,87 @@ export async function GET() {
           for (const studentId of enrolledStudentIds) {
             const subs = studentSubsMap.get(studentId);
             const availableSub = subs?.find((s) => s.remainingSlots > 0);
+            const directEnrollment = studentEnrollments.find((e) => e.studentId === studentId);
+            const codeRow = codeStudents.find((ac) => ac.studentId === studentId);
+            const studentName = directEnrollment?.student?.name || codeRow?.student?.name || "طالب";
+            const studentPhone = directEnrollment?.student?.phone || codeRow?.student?.phone || "—";
+            const createdAt = (
+              directEnrollment?.createdAt ||
+              codeRow?.usedAt ||
+              codeRow?.createdAt ||
+              new Date()
+            ).toISOString();
 
             if (availableSub) {
               // Covered by the student's monthly/term package: DO NOT count course price again!
               availableSub.remainingSlots -= 1;
               courseCoveredBySubCount += 1;
+              coursePayments.push({
+                id: `${c.id}_${studentId}_covered`,
+                studentId,
+                studentName,
+                studentPhone,
+                courseId: c.id,
+                courseTitle: c.title,
+                amount: 0,
+                coveredBySubscription: true,
+                source: "COVERED_BY_PACKAGE",
+                createdAt,
+              });
             } else {
               // Separate/independent course purchase beyond subscription:
-              const directEnrollment = studentEnrollments.find((e) => e.studentId === studentId);
               const directAmt = directEnrollment?.amountPaid;
               const effectivePrice = (directAmt !== undefined && directAmt > 0) ? directAmt : (c.price || 0);
 
               courseCalculatedRevenue += effectivePrice;
               coursePaidStudentsCount += 1;
               uniquePaidStudentIds.add(studentId);
+
+              let source = "PURCHASE";
+              if (directEnrollment?.fulfillmentSource === "ADMIN") source = "ADMIN";
+              else if (directEnrollment?.fulfillmentSource === "TESTER_BYPASS") source = "TESTER_BYPASS";
+              else if (directEnrollment?.fulfillmentSource === "PURCHASE") source = "PURCHASE";
+              else if (!directEnrollment && codeRow) source = "ACCESS_CODE";
+
+              coursePayments.push({
+                id: directEnrollment?.id || `${c.id}_${studentId}`,
+                studentId,
+                studentName,
+                studentPhone,
+                courseId: c.id,
+                courseTitle: c.title,
+                amount: effectivePrice,
+                coveredBySubscription: false,
+                source,
+                createdAt,
+              });
             }
+          }
+
+          const now = new Date();
+          for (const sub of paidSubs) {
+            if (sub.expiresAt && sub.expiresAt <= now) continue;
+            const sid = sub.student?.id;
+            if (!sid || sid === t.id || enrolledStudentIds.has(sid)) continue;
+            if (excludedSet.has(`${c.id}_${sid}`)) continue;
+            if (!bookingGrantsCourseAccess(c, sub.languageTrack, trackOverride.get(c.id), sub.planType)) continue;
+            bookingOnlyCount += 1;
+            coursePayments.push({
+              id: `${c.id}_${sid}_booking`,
+              studentId: sid,
+              studentName: sub.student?.name || sub.studentName || "طالب",
+              studentPhone: sub.student?.phone || sub.studentPhone || "—",
+              courseId: c.id,
+              courseTitle: c.title,
+              amount: 0,
+              coveredBySubscription: true,
+              source: "COVERED_BY_PACKAGE",
+              createdAt: sub.createdAt.toISOString(),
+            });
           }
         }
 
-        const paidStudents = isCourseActuallyPaid ? (coursePaidStudentsCount + courseCoveredBySubCount) : 0;
+        const paidStudents = isCourseActuallyPaid ? (coursePaidStudentsCount + courseCoveredBySubCount + bookingOnlyCount) : 0;
         const freeStudents = !isCourseActuallyPaid ? totalEnrolled : 0;
 
         return {
@@ -231,14 +748,16 @@ export async function GET() {
           educationalStage: c.educationalStage,
           isPaid: isCourseActuallyPaid,
           price: isCourseActuallyPaid ? (c.price ?? 0) : 0,
+          discountPercent: c.discountPercent ?? null,
+          createdAt: c.createdAt.toISOString(),
           totalCodes,
           usedCodes,
           availableCodes,
           directEnrollments,
-          enrolledStudents: totalEnrolled,
+          enrolledStudents: totalEnrolled + bookingOnlyCount,
           paidStudents,
           coursePaidStudentsCount,
-          courseCoveredBySubCount,
+          courseCoveredBySubCount: courseCoveredBySubCount + bookingOnlyCount,
           freeStudents,
           revenue: courseCalculatedRevenue,
         };
@@ -282,6 +801,7 @@ export async function GET() {
         platformPercentage,
         platformShare,
         teacherShare,
+        planPricing: buildPlanPricing(t.teacherProfile),
         subscriptions: activeSubs.map((s) => {
           const studentId = s.student?.id;
           const manualLog = manualLogs.find(
@@ -335,6 +855,9 @@ export async function GET() {
             createdAt: s.createdAt.toISOString(),
           };
         }),
+        coursePayments: coursePayments.sort(
+          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        ),
         courses: courseStats,
       };
     });
@@ -345,7 +868,50 @@ export async function GET() {
     const totalRealPaidReservations = teachersWithStats.reduce((s, t) => s + t.realPaidReservationsCount, 0);
     const totalCodesBooked = teachersWithStats.reduce((s, t) => s + t.totalCodes, 0);
     const totalCodesUsed = teachersWithStats.reduce((s, t) => s + t.usedCodes, 0);
-    const totalPaidStudentsAcrossPlatform = teachersWithStats.reduce((s, t) => s + t.totalPaidStudents, 0);
+
+    // Standalone single lessons and teaser courses to exclude from real curriculum metrics
+    const STANDALONE_COURSE_IDS = new Set([
+      "cmtqbw41d005qqwobfcrfg07c", // Abdelbaset Arabic Lesson 1
+      "cmtr54unr00wfqwwvtbvaxy8q", // Abdelbaset Lang Lesson 1
+      "cmta9me5r0007qxmwnnsq1cez", // Youssef Lang Lesson 1
+      "cmt45qxsf001oqx3e9jtlwny8", // Youssef Arabic Lesson 1
+      "cm6p4o8020003l8084z6rwe5g", // Foundation course (intro)
+      "cmtwyq8y60001l704a2qhh2s0", // Introduction course (intro)
+    ]);
+
+    // Strictly deduplicated unique student IDs in real paid courses (bookings EXCLUDED)
+    const platformUniquePaidStudents = new Set<string>();
+    const realCourseIds: string[] = [];
+    let totalCourseEnrollmentsCount = 0;
+
+    teachers.forEach((t) => {
+      t.courses.forEach((c) => {
+        if (c.isPaid && c.price && c.price > 0 && !STANDALONE_COURSE_IDS.has(c.id)) {
+          realCourseIds.push(c.id);
+          totalCourseEnrollmentsCount += (c.enrollments || []).length;
+          c.enrollments.forEach((e) => {
+            if (e.studentId) platformUniquePaidStudents.add(e.studentId);
+          });
+        }
+      });
+    });
+
+    // Count students who are actively consuming real course content (watched > 10s or finished)
+    const activeProgressWatchers = await prisma.progress.findMany({
+      where: {
+        video: { folder: { courseId: { in: realCourseIds } } },
+        OR: [
+          { watched: true },
+          { watchedSecondsTotal: { gt: 10 } },
+          { lastPositionSeconds: { gt: 10 } },
+        ],
+      },
+      select: { studentId: true },
+      distinct: ["studentId"],
+    });
+
+    const totalPaidStudentsAcrossPlatform = platformUniquePaidStudents.size;
+    const totalActiveContentConsumers = activeProgressWatchers.length;
     const teachersEarnedRevenue = teachersWithStats.reduce((s, t) => s + t.totalRevenue, 0);
     const totalPlatformShare = teachersWithStats.reduce((s, t) => s + t.platformShare, 0);
     const totalTeachersShare = teachersWithStats.reduce((s, t) => s + t.teacherShare, 0);
@@ -354,13 +920,79 @@ export async function GET() {
     const totalGatewayDeposits = walletDeposits.reduce((s, d) => s + d.amount, 0);
     const totalRevenue = Math.max(teachersEarnedRevenue, totalGatewayDeposits);
 
-    return NextResponse.json({
+    // Flat pricing table across all teachers (rendered at the bottom of the overview)
+    const coursesPricing = teachersWithStats.flatMap((t) =>
+      t.courses.map((c) => ({
+        id: c.id,
+        title: c.title,
+        subject: c.subject,
+        teacherName: t.name,
+        isPaid: c.isPaid,
+        price: c.price,
+        discountPercent: c.discountPercent,
+        enrolledStudents: c.enrolledStudents,
+        paidStudents: c.paidStudents,
+        coursePaidStudentsCount: c.coursePaidStudentsCount,
+        courseCoveredBySubCount: c.courseCoveredBySubCount,
+        freeStudents: c.freeStudents,
+        revenue: c.revenue,
+        usedCodes: c.usedCodes,
+        createdAt: c.createdAt,
+      }))
+    );
+
+    // Booking intelligence: what each student paid for in months, versus how many
+    // curriculum months their teacher has actually published. The difference is
+    // content the platform still owes, and the money attached to it is not yet earned.
+    const bookingIntelligence = computeBookingIntelligence(
+      teachers.map((t) => ({
+        id: t.id,
+        name: t.name,
+        subscriptions: (t.teacherSubscriptions || []).map((s) => ({
+          id: s.id,
+          studentId: s.student?.id ?? null,
+          studentName: s.studentName || s.student?.name || null,
+          studentPhone: s.studentPhone || s.student?.phone || null,
+          educationalStage: s.educationalStage || s.student?.educationalStage || null,
+          planType: s.planType,
+          amount: s.amount || 0,
+          createdAt: s.createdAt,
+          expiresAt: s.expiresAt,
+        })),
+        courses: (t.courses || []).map((c) => ({
+          id: c.id,
+          title: c.title,
+          isPaid: c.isPaid,
+          price: c.price,
+          folders: c.folders || [],
+        })),
+      })),
+      now
+    );
+
+    const payload = {
       totalStudents,
+      signupsByDay,
       totalTeachers,
       totalCourses,
       totalRealReservations,
       totalRealPaidReservations,
       totalPaidStudentsAcrossPlatform,
+      totalCourseEnrollmentsCount,
+      totalActiveContentConsumers,
+      bookings: {
+        activeNow: bookingsActiveNow,
+        activeStudents: activeBookingStudentRows.length,
+        uniquePaidStudents: uniquePaidBookingStudentRows.length,
+        addedToday: bookingsAddedToday,
+        revenueActive: bookingsActiveAgg._sum.amount || 0,
+        generatedAt: now.toISOString(),
+      },
+      pendingPayments,
+      bookingIntelligence,
+      coursesPricing,
+      accessMonitor,
+      accessMonitorAlertCount,
       totalCodesBooked,
       totalCodesUsed,
       teachersEarnedRevenue,
@@ -377,7 +1009,16 @@ export async function GET() {
         expensesCount: expenses.length,
       },
       teachers: teachersWithStats,
-    });
+    };
+
+    // Remember the exact board reading when the HQ page is opened (not on silent polls).
+    if (remember) {
+      void persistOverviewSnapshot(extractKpis(payload as OverviewData, now.toISOString()), "page_open").catch((err) => {
+        console.error("[superadmin/overview] snapshot save failed:", err);
+      });
+    }
+
+    return NextResponse.json(payload);
   } catch (error) {
     console.error("[superadmin/overview] error:", error);
     return NextResponse.json({ error: "حدث خطأ داخلي" }, { status: 500 });

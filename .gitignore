@@ -24,13 +24,17 @@
 .DS_Store
 *.pem
 
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
 # env files (secrets — never commit)
 .env
 .env.local
 .env.*.local
 !.env.example
-.tokens.json
-.tokens.*.json
 
 # vercel
 .vercel
@@ -50,7 +54,9 @@ prisma/backups/
 
 # WhatsApp Baileys Auth & Logs
 whatsapp-auth/
+whatsapp-auth-fallback/
 logs/
+
 
 # Python bytecode from the curriculum ingestion scripts
 __pycache__/
@@ -63,41 +69,19 @@ bin/
 .env.save
 .env.save.1
 .env.save.2
+# timestamped .env backups (.env.bak-<tag>-<date>) — these hold live secrets
+.env.bak*
 .eslintcache
 scratch/
 
-# Server Guardian & Watchdog
-/server-guardian/watchdog/watchdog-auth/
-/server-guardian/**/node_modules/
-
-# Dev/debug scripts committed to root — exclude from future commits
-create_exam.js
-create_exam.ts
-fix.js
-fix-ast.js
-fix-broken.js
-fix-broken4.js
-fix-folders.js
-fix-logs.js
-seed-data.js
-test-db.js
-test-payload.js
-test-payload2.js
-test-prisma.js
-test_claude.py
-prisma.config.ts.backup
-
-# Log / output files
-dev-server.log
-test-out.txt
-build-out.txt
-
-# Runtime state
-state.json
-
-# Debug session archives and large binary blobs
-*.zip
-*.deb
-*.deb.1
-*.deb.2
-
+# watchdog build-recovery working dirs (see scripts/server-watchdog.sh).
+# .next.last-good is the verified snapshot the self-heal restores from; the
+# others are transient staging dirs used during a snapshot/restore swap.
+/.next.last-good/
+/.next.last-good.tmp/
+/.next.last-good.old/
+/.next.restoring/
+/.next.broken/
+/.next.prev/
+/.next.previous/
+*.bak-*
